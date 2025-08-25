@@ -1,0 +1,61 @@
+     # .NET build output
+     bin/
+     obj/
+     
+     # Visual Studio files
+     .vs/
+     *.user
+     *.userosscache
+     *.suo
+     *.dbmdl
+     *.jfm
+     
+     # Build results
+     [Dd]ebug/
+     [Rr]elease/
+     x64/
+     x86/
+     [Aa][Rr][Mm]/
+     [Aa][Rr][Mm]64/
+     bld/
+     [Bb]in/
+     [Oo]bj/
+     [Ll]og/
+     
+     # NuGet packages
+     packages/
+     *.nupkg
+     
+     # Redis data files
+     *.rdb
+     
+     # Docker volumes
+     data/
+     
+     # Local settings
+     .env
+     appsettings.Development.json
+     
+     # Test results
+     *.VisualState.xml
+     TestResults/
+     
+     # Logs
+     *.log
+     logs/
+     
+     # JetBrains Rider
+     .idea/
+     *.sln.iml
+     
+     # NuGet Packages
+     *.nupkg
+     # The packages folder can be ignored because of Package Restore
+     **/[Pp]ackages/*
+     # except build/, which is used as an MSBuild target.
+     !**/[Pp]ackages/build/
+     # Uncomment if necessary however generally it will be regenerated when needed
+     #!**/[Pp]ackages/repositories.config
+     # NuGet v3's project.json files produces more ignorable files
+     *.nuget.props
+     *.nuget.targets

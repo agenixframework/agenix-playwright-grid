@@ -1,0 +1,58 @@
+{
+  "id": null,
+  "uid": "playwright-grid-ml",
+  "title": "Playwright Grid - MultiLabel",
+  "timezone": "browser",
+  "tags": ["playwright", "grid"],
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Pool Capacity vs Available",
+      "id": 1,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "worker_pool_capacity",
+          "legendFormat": "capacity {{node}}/{{label}}"
+        },
+        {
+          "refId": "B",
+          "expr": "worker_pool_available",
+          "legendFormat": "available {{node}}/{{label}}"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Borrow Requests per Minute",
+      "id": 2,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(worker_borrows_total[1m])",
+          "legendFormat": "borrows {{node}}/{{label}}"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Worker Health",
+      "id": 3,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"worker.*|hub\"}"
+        }
+      ]
+    }
+  ],
+  "templating": { "list": [] },
+  "annotations": { "list": [] }
+}

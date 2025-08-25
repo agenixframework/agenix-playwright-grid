@@ -1,0 +1,79 @@
+@page "/login"
+@using System.ComponentModel.DataAnnotations
+@inject NavigationManager Nav
+
+<div class="login-page d-flex align-items-center justify-content-center">
+    <div class="login-card card shadow-sm">
+        <div class="card-body p-4 p-md-5">
+            <div class="text-center mb-3">
+                <img src="images/logo.svg" alt="Playwright Grid" class="login-logo mb-2" />
+                <h5 class="mb-0">Sign in to Playwright Grid</h5>
+                <div class="text-muted small">Welcome back! Please enter your details.</div>
+            </div>
+
+            <EditForm Model="model" OnValidSubmit="OnSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <InputText id="email" class="form-control" @bind-Value="model.Email" />
+                    <ValidationMessage For="() => model.Email" />
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <label for="password" class="form-label mb-0">Password</label>
+                        <a href="#" class="small">Forgot password?</a>
+                    </div>
+                    <InputText id="password" type="password" class="form-control" @bind-Value="model.Password" />
+                    <ValidationMessage For="() => model.Password" />
+                </div>
+
+                <div class="d-flex align-items-center mb-3">
+                    <input id="remember" class="form-check-input me-2" type="checkbox" @bind="model.RememberMe" />
+                    <label for="remember" class="form-check-label">Remember me</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Sign in</button>
+
+                <div class="text-center text-muted small mt-3">or</div>
+
+                <button type="button" class="btn btn-outline-secondary w-100 mt-2" @onclick="DemoFill">
+                    Continue with Demo
+                </button>
+
+                <div class="text-center mt-3 small">
+                    Don’t have an account? <a href="#">Create one</a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel model = new();
+
+    private void DemoFill()
+    {
+        model.Email = "demo@example.com";
+        model.Password = "password";
+    }
+
+    private void OnSubmit()
+    {
+        // Mock submission: simply navigate to dashboard home
+        Nav.NavigateTo("/");
+    }
+
+    public class LoginModel
+    {
+        [Required, EmailAddress]
+        public string? Email { get; set; }
+
+        [Required, MinLength(4)]
+        public string? Password { get; set; }
+
+        public bool RememberMe { get; set; }
+    }
+}

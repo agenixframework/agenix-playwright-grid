@@ -1,0 +1,58 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlaywrightHub", "hub\PlaywrightHub.csproj", "{661C52BC-EC48-4D80-A305-AEB00B21C1DD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WorkerService", "worker\WorkerService.csproj", "{7BEA797A-4A42-49B7-9511-C50159DD7E89}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GridTests", "tests\GridTests.csproj", "{1A4E0977-15E3-497A-801A-26BCEDC9E783}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dashboard", "dashboard\Dashboard.csproj", "{F4A94B20-12B7-4F76-9213-5D341C60A5F9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WorkerService.Tests", "WorkerService.Tests\WorkerService.Tests.csproj", "{B3D7A30B-AB51-4B6C-8F7B-1D0C8D7D9870}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agenix.PlaywrightGrid.HubClient", "Agenix.PlaywrightGrid.HubClient\Agenix.PlaywrightGrid.HubClient.csproj", "{D9D3C0A1-8B2F-4B9E-AE3E-8A1BBF52D1A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dashboard.Tests", "Dashboard.Tests\Dashboard.Tests.csproj", "{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{661C52BC-EC48-4D80-A305-AEB00B21C1DD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{661C52BC-EC48-4D80-A305-AEB00B21C1DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{661C52BC-EC48-4D80-A305-AEB00B21C1DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{661C52BC-EC48-4D80-A305-AEB00B21C1DD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7BEA797A-4A42-49B7-9511-C50159DD7E89}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BEA797A-4A42-49B7-9511-C50159DD7E89}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BEA797A-4A42-49B7-9511-C50159DD7E89}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BEA797A-4A42-49B7-9511-C50159DD7E89}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1A4E0977-15E3-497A-801A-26BCEDC9E783}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A4E0977-15E3-497A-801A-26BCEDC9E783}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A4E0977-15E3-497A-801A-26BCEDC9E783}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A4E0977-15E3-497A-801A-26BCEDC9E783}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F4A94B20-12B7-4F76-9213-5D341C60A5F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F4A94B20-12B7-4F76-9213-5D341C60A5F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F4A94B20-12B7-4F76-9213-5D341C60A5F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F4A94B20-12B7-4F76-9213-5D341C60A5F9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B3D7A30B-AB51-4B6C-8F7B-1D0C8D7D9870}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3D7A30B-AB51-4B6C-8F7B-1D0C8D7D9870}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3D7A30B-AB51-4B6C-8F7B-1D0C8D7D9870}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B3D7A30B-AB51-4B6C-8F7B-1D0C8D7D9870}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9D3C0A1-8B2F-4B9E-AE3E-8A1BBF52D1A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9D3C0A1-8B2F-4B9E-AE3E-8A1BBF52D1A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9D3C0A1-8B2F-4B9E-AE3E-8A1BBF52D1A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9D3C0A1-8B2F-4B9E-AE3E-8A1BBF52D1A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

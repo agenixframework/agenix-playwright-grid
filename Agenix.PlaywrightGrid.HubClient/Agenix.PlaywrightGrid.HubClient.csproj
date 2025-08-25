@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageId>Agenix.PlaywrightGrid.HubClient</PackageId>
+    <AssemblyName>Agenix.PlaywrightGrid.HubClient</AssemblyName>
+    <RootNamespace>Agenix.PlaywrightGrid.HubClient</RootNamespace>
+    <Description>Client library for Agenix Playwright Grid that enables test runners to borrow, return, and manage browser sessions with resilient connection handling and detailed logging</Description>
+    <Title>Agenix Playwright Grid Client Library</Title>
+    <PackageTags>agenix;playwright;browser-automation;testing;grid;test-infrastructure;hubclient;dotnet;browser-testing;distributed-testing</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Polly" Version="7.2.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.6" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.6" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.45.0" />
+  </ItemGroup>
+</Project>

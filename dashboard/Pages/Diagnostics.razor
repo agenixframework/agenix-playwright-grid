@@ -1,0 +1,715 @@
+@page "/diagnostics"
+@using System.Net.Http
+@using System.Net.Http.Json
+@using Dashboard
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
+
+<style>
+    .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+    .status-online { background-color:#198754; }
+    .status-stale { background-color:#ffc107; }
+    .status-offline { background-color:#dc3545; }
+    .kv-list div { padding:2px 0; border-bottom:1px dashed rgba(0,0,0,.05); }
+</style>
+
+<div class="d-flex align-items-center my-3">
+    <h3 class="mb-0">Startup Diagnostics</h3>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Load">Refresh</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_data is null)
+{
+    <div class="alert alert-info">Loading diagnostics...</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        @{ var counts = GetWorkerStatusCounts(); }
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-1">
+                        <h6 class="mb-0 text-muted">Workers</h6>
+                    </div>
+                    <div class="d-flex align-items-baseline gap-3">
+                        <div>
+                            <div class="fs-4 fw-semibold">@(_data.Workers?.Count ?? 0)</div>
+                            <div class="text-muted small">Total</div>
+                        </div>
+                        <div class="small"><span class="status-dot status-online"></span><span class="text-muted">Online</span> <span class="fw-semibold">@counts.online</span></div>
+                        <div class="small"><span class="status-dot status-stale"></span><span class="text-muted">Stale</span> <span class="fw-semibold">@counts.stale</span></div>
+                        <div class="small"><span class="status-dot status-offline"></span><span class="text-muted">Offline</span> <span class="fw-semibold">@counts.offline</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-1">
+                        <h6 class="mb-0 text-muted">Hub</h6>
+                        <span class="badge bg-secondary ms-auto">@_data.HubConfig.Version</span>
+                    </div>
+                    <div class="small">Timeout: @_data.HubConfig.NodeTimeoutSeconds s</div>
+                    <div class="small">Now: @_data.Now.ToString("u")</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-1">
+                        <h6 class="mb-0 text-muted">Endpoints</h6>
+                    </div>
+                    <div class="small"><span class="text-muted">Redis:</span> @_data.HubConfig.RedisUrl</div>
+                    <div class="small"><span class="text-muted">Dashboard:</span> @_data.HubConfig.DashboardUrl</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-1">
+                        <h6 class="mb-0 text-muted">Borrowing</h6>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <span class="badge @( _data.HubConfig.BorrowTrailingFallback ? "bg-success" : "bg-light text-dark" )">Trailing Fallback</span>
+                        <span class="badge @( _data.HubConfig.BorrowPrefixExpand ? "bg-success" : "bg-light text-dark" )">Prefix Expand</span>
+                        <span class="badge @( _data.HubConfig.BorrowWildcards ? "bg-info" : "bg-light text-dark" )">Wildcards</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <h5 class="card-title mb-0">Hub Effective Config</h5>
+                        <span class="badge bg-secondary ms-auto">@_data.HubConfig.Version</span>
+                    </div>
+                    <div class="row g-2 small">
+                        <div class="col-6"><span class="text-muted">Redis:</span> @_data.HubConfig.RedisUrl</div>
+                        <div class="col-6"><span class="text-muted">Dashboard URL:</span> @_data.HubConfig.DashboardUrl</div>
+                        <div class="col-4"><span class="text-muted">Trailing Fallback:</span> @(_data.HubConfig.BorrowTrailingFallback ? "on" : "off")</div>
+                        <div class="col-4"><span class="text-muted">Prefix Expand:</span> @(_data.HubConfig.BorrowPrefixExpand ? "on" : "off")</div>
+                        <div class="col-4"><span class="text-muted">Wildcards:</span> @(_data.HubConfig.BorrowWildcards ? "on" : "off")</div>
+                        <div class="col-6"><span class="text-muted">Node Timeout (s):</span> @_data.HubConfig.NodeTimeoutSeconds</div>
+                        <div class="col-6"><span class="text-muted">Now (UTC):</span> @_data.Now.ToString("u")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <h5 class="card-title mb-0">Workers</h5>
+                        <span class="badge bg-info ms-auto">@(_data.Workers?.Count ?? 0)</span>
+                    </div>
+                    @if (_data.Workers is null || _data.Workers.Count == 0)
+                    {
+                        <div class="text-muted small">No recent workers registered.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Node</th>
+                                        <th>Status</th>
+                                        <th>Last Seen</th>
+                                        <th>Total</th>
+                                        <th>PW</th>
+                                        <th>Labels</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var w in _data.Workers.OrderByDescending(x => x.LastSeen))
+                                {
+                                    <tr>
+                                        <td><code>@w.Id</code></td>
+                                        <td>
+                                            @{ var st = GetWorkerStatus(w); }
+                                            <span class="status-dot @GetStatusCss(st)"></span>@GetStatusText(st)
+                                        </td>
+                                        <td>
+                                            <div class="small">@w.LastSeen.ToString("u")</div>
+                                            <div class="text-muted small">@FormatAgo(w.LastSeen)</div>
+                                        </td>
+                                        <td>@w.TotalBrowsers</td>
+                                        <td>@(string.IsNullOrWhiteSpace(w.PlaywrightVersion) ? "-" : w.PlaywrightVersion)</td>
+                                        <td>
+                                            @if (w.Labels is { Count: > 0 })
+                                            {
+                                                <span class="badge bg-light text-dark me-1" style="border:1px solid #ddd" title="@string.Join(',', w.Labels)">
+                                                    @string.Join(" · ", w.Labels)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex align-items-center mb-2">
+                <h5 class="card-title mb-0">Environment Variables (Dashboard)</h5>
+                <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="ReloadDashboardEnv">Refresh</button>
+            </div>
+            <div class="border rounded p-2 small" style="max-height: 300px; overflow:auto;">
+                @foreach (var kv in _allEnv.OrderBy(e => e.Key))
+                {
+                    <div><span class="text-muted">@kv.Key:</span> @MaskIfSecret(kv.Key, kv.Value)</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <h5 class="card-title mb-0">Environment Variables (Hub)</h5>
+                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="LoadHubEnv" disabled="@_hubEnvLoading">@(_hubEnvLoading ? "Loading..." : "Refresh")</button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_hubEnvError))
+                    {
+                        <div class="alert alert-warning small">@_hubEnvError</div>
+                    }
+                    else if (_hubEnv is null)
+                    {
+                        <div class="text-muted small">Hub environment not loaded yet.</div>
+                    }
+                    else
+                    {
+                        <div class="border rounded p-2 small" style="max-height: 300px; overflow:auto;">
+                            @foreach (var kv in _hubEnv.OrderBy(k => k.Key))
+                            {
+                                <div><span class="text-muted">@kv.Key:</span> @kv.Value</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <h5 class="card-title mb-0">Per-Worker Environment</h5>
+                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="LoadAllWorkersEnv" disabled="@_loadingAllWorkers">@(_loadingAllWorkers ? "Loading..." : "Load all")</button>
+                    </div>
+                    @if (_data?.Workers is null || _data.Workers.Count == 0)
+                    {
+                        <div class="text-muted small">No workers to display.</div>
+                    }
+                    else
+                    {
+                        <div class="accordion" id="workerEnvAccordion">
+                            @foreach (var w in _data.Workers.OrderBy(x => x.Id))
+                            {
+                                var collapseId = $"collapse_{w.Id}";
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading_@w.Id">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                                            <code>@w.Id</code>
+                                        </button>
+                                    </h2>
+                                    <div id="@collapseId" class="accordion-collapse collapse" data-bs-parent="#workerEnvAccordion">
+                                        <div class="accordion-body">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => LoadWorkerEnv(w.Id)" disabled="@_loadingWorkerEnv.Contains(w.Id)">
+                                                    @(_loadingWorkerEnv.Contains(w.Id) ? "Loading..." : "Load Env")
+                                                </button>
+                                                @if (_workerEnvErrors.TryGetValue(w.Id, out var err) && !string.IsNullOrEmpty(err))
+                                                {
+                                                    <span class="text-danger small ms-2">@err</span>
+                                                }
+                                            </div>
+                                            @if (_workerEnv.TryGetValue(w.Id, out var env) && env is not null)
+                                            {
+                                                <div class="border rounded p-2 small" style="max-height: 250px; overflow:auto;">
+                                                    @foreach (var kv in env.OrderBy(k => k.Key))
+                                                    {
+                                                        <div><span class="text-muted">@kv.Key:</span> @kv.Value</div>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-muted small">No data loaded.</div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private HubDiagnosticsDto? _data;
+    private string? _error;
+
+    private readonly string[] _knownHubKeys = new[]
+    {
+        "REDIS_URL",
+        "HUB_RUNNER_SECRET",
+        "HUB_NODE_SECRET",
+        "HUB_BORROW_TRAILING_FALLBACK",
+        "HUB_BORROW_PREFIX_EXPAND",
+        "HUB_BORROW_WILDCARDS"
+    };
+
+    private readonly string[] _knownWorkerKeys = new[]
+    {
+        "HUB_URL",
+        "REDIS_URL",
+        "NODE_ID",
+        "NODE_SECRET",
+        "POOL_CONFIG",
+        "NODE_REGION",
+        "PUBLIC_WS_HOST",
+        "PUBLIC_WS_PORT",
+        "PUBLIC_WS_SCHEME",
+        "PLAYWRIGHT_VERSION",
+        "CHROMIUM_ARGS",
+        "FIREFOX_ARGS",
+        "WEBKIT_ARGS"
+    };
+
+    private readonly string[] _knownDashboardKeys = new[]
+    {
+        "HUB_SIGNALR",
+        "HUB_RUNNER_SECRET",
+        "ASPNETCORE_ENVIRONMENT",
+        "ASPNETCORE_DETAILEDERRORS",
+        "DOTNET_ENVIRONMENT"
+    };
+
+    private HashSet<string> _allKnownKeys = new(StringComparer.OrdinalIgnoreCase);
+    private List<KeyValuePair<string, string>> _allEnv = new();
+    private Dictionary<string, string> _envMap = new(StringComparer.OrdinalIgnoreCase);
+
+    // Hub env cache
+    private Dictionary<string, string>? _hubEnv;
+    private bool _hubEnvLoading = false;
+    private string? _hubEnvError;
+
+    // Worker env caches
+    private readonly Dictionary<string, Dictionary<string, string>?> _workerEnv = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _loadingWorkerEnv = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _workerEnvErrors = new(StringComparer.OrdinalIgnoreCase);
+    private bool _loadingAllWorkers = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildEnvCache();
+        await Load();
+    }
+
+    private void BuildEnvCache()
+    {
+        _allKnownKeys = new HashSet<string>(_knownHubKeys.Concat(_knownWorkerKeys).Concat(_knownDashboardKeys), StringComparer.OrdinalIgnoreCase);
+        _allEnv.Clear();
+        _envMap.Clear();
+        foreach (System.Collections.DictionaryEntry de in Environment.GetEnvironmentVariables())
+        {
+            var key = de.Key?.ToString() ?? "";
+            var val = de.Value?.ToString() ?? "";
+            if (string.IsNullOrEmpty(key)) continue;
+            _envMap[key] = val;
+            _allEnv.Add(new KeyValuePair<string, string>(key, val));
+        }
+    }
+
+    private string? GetEnv(string key)
+    {
+        return _envMap.TryGetValue(key, out var v) ? v : Environment.GetEnvironmentVariable(key);
+    }
+
+    private static bool IsSecretKey(string key)
+    {
+        key = key.ToUpperInvariant();
+        return key.Contains("SECRET") || key.Contains("PASSWORD") || key.Contains("TOKEN");
+    }
+
+    private string MaskIfSecret(string key, string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        if (!IsSecretKey(key)) return value!;
+        return "***";
+    }
+
+    private string WhenMissing(string key)
+    {
+        var v = GetEnv(key);
+        return string.IsNullOrEmpty(v) ? "(not set)" : "";
+    }
+
+    private string DisplayValueWithSource(string key)
+    {
+        // Prefer Dashboard process env if present
+        var envVal = GetEnv(key);
+        if (!string.IsNullOrEmpty(envVal))
+        {
+            var masked = MaskIfSecret(key, envVal);
+            var shown = string.IsNullOrEmpty(masked) ? "(not set)" : masked;
+            return $"{shown} (dashboard)";
+        }
+
+        // Worker keys: show aggregated coverage across loaded worker envs
+        if (IsWorkerKey(key))
+        {
+            var (have, loaded, total) = GetWorkerKeyCoverage(key);
+            if (loaded > 0)
+            {
+                var sample = GetAnyWorkerValue(key);
+                var example = string.IsNullOrEmpty(sample) ? string.Empty : $" • example: {MaskIfSecret(key, sample)}";
+                return $"{have}/{loaded} workers{example}";
+            }
+            return "unknown (load worker env)";
+        }
+
+        // If Hub env was fetched, prefer it for Hub keys (includes secrets – keep masked)
+        if (IsHubKey(key) && _hubEnv is not null && _hubEnv.TryGetValue(key, out var hubEnvVal) && !string.IsNullOrEmpty(hubEnvVal))
+        {
+            var masked = MaskIfSecret(key, hubEnvVal);
+            var shown = string.IsNullOrEmpty(masked) ? "(not set)" : masked;
+            return $"{shown} (hub env)";
+        }
+
+        // Fallback to Hub effective config values exposed via /diagnostics (non-secret)
+        var hubVal = GetHubEffectiveValue(key);
+        if (!string.IsNullOrEmpty(hubVal))
+        {
+            var masked = MaskIfSecret(key, hubVal);
+            var shown = string.IsNullOrEmpty(masked) ? hubVal! : masked;
+            return $"{shown} (hub)";
+        }
+
+        return "(not set)";
+    }
+
+    private string? GetHubEffectiveValue(string key)
+    {
+        if (_data?.HubConfig is null) return null;
+        switch (key.ToUpperInvariant())
+        {
+            case "REDIS_URL":
+                return _data.HubConfig.RedisUrl;
+            case "HUB_BORROW_TRAILING_FALLBACK":
+                return _data.HubConfig.BorrowTrailingFallback ? "true" : "false";
+            case "HUB_BORROW_PREFIX_EXPAND":
+                return _data.HubConfig.BorrowPrefixExpand ? "true" : "false";
+            case "HUB_BORROW_WILDCARDS":
+                return _data.HubConfig.BorrowWildcards ? "true" : "false";
+            // Secrets are not exposed by hub diagnostics for safety
+            case "HUB_RUNNER_SECRET":
+            case "HUB_NODE_SECRET":
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    private enum NodeStatus { Online, Stale, Offline }
+
+    private NodeStatus GetWorkerStatus(WorkerStatusDto w)
+    {
+        var now = _data?.Now ?? DateTime.UtcNow;
+        var age = now - w.LastSeen;
+        var timeoutSeconds = Math.Max(_data?.HubConfig.NodeTimeoutSeconds ?? 60, 1);
+        var timeout = TimeSpan.FromSeconds(timeoutSeconds);
+        if (age <= TimeSpan.FromTicks(timeout.Ticks / 2)) return NodeStatus.Online;
+        if (age <= timeout) return NodeStatus.Stale;
+        return NodeStatus.Offline;
+    }
+
+    private string GetStatusCss(NodeStatus st) => st switch
+    {
+        NodeStatus.Online => "status-online",
+        NodeStatus.Stale => "status-stale",
+        _ => "status-offline"
+    };
+
+    private string GetStatusText(NodeStatus st) => st switch
+    {
+        NodeStatus.Online => "Online",
+        NodeStatus.Stale => "Stale",
+        _ => "Offline"
+    };
+
+    private (int online, int stale, int offline) GetWorkerStatusCounts()
+    {
+        int online = 0, stale = 0, offline = 0;
+        if (_data?.Workers is { Count: > 0 })
+        {
+            foreach (var w in _data.Workers)
+            {
+                switch (GetWorkerStatus(w))
+                {
+                    case NodeStatus.Online: online++; break;
+                    case NodeStatus.Stale: stale++; break;
+                    default: offline++; break;
+                }
+            }
+        }
+        return (online, stale, offline);
+    }
+
+    private string FormatAgo(DateTime dt)
+    {
+        var now = _data?.Now ?? DateTime.UtcNow;
+        var ts = now - dt;
+        if (ts.TotalSeconds < 60) return $"{(int)Math.Max(ts.TotalSeconds, 0)}s ago";
+        if (ts.TotalMinutes < 60) return $"{(int)ts.TotalMinutes}m ago";
+        if (ts.TotalHours < 24) return $"{(int)ts.TotalHours}h ago";
+        return $"{(int)ts.TotalDays}d ago";
+    }
+
+    private bool IsConfigured(string key)
+    {
+        var envVal = GetEnv(key);
+        if (!string.IsNullOrEmpty(envVal)) return true;
+        var hubVal = GetHubEffectiveValue(key);
+        return !string.IsNullOrEmpty(hubVal);
+    }
+
+    private async Task Load()
+    {
+        _error = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("hub");
+            var resp = await http.GetAsync("/diagnostics");
+            if (!resp.IsSuccessStatusCode)
+            {
+                var reason = $"HTTP {(int)resp.StatusCode}: {resp.ReasonPhrase}";
+                _error = $"Failed to load diagnostics. Ensure HUB_RUNNER_SECRET matches. {reason}";
+                _data = null;
+            }
+            else
+            {
+                _data = await resp.Content.ReadFromJsonAsync<HubDiagnosticsDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _data = null;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private sealed class EnvEnvelope
+    {
+        public Dictionary<string, string> env { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public string? nodeId { get; set; }
+        public DateTime now { get; set; }
+    }
+
+    private async Task LoadHubEnv()
+    {
+        _hubEnvError = null;
+        _hubEnvLoading = true;
+        try
+        {
+            var http = HttpFactory.CreateClient("hub");
+            var resp = await http.GetAsync("/diagnostics/env");
+            if (!resp.IsSuccessStatusCode)
+            {
+                _hubEnvError = $"HTTP {(int)resp.StatusCode}: {resp.ReasonPhrase}";
+                _hubEnv = null;
+            }
+            else
+            {
+                var env = await resp.Content.ReadFromJsonAsync<EnvEnvelope>();
+                _hubEnv = env?.env ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+        catch (Exception ex)
+        {
+            _hubEnvError = ex.Message;
+            _hubEnv = null;
+        }
+        finally
+        {
+            _hubEnvLoading = false;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadWorkerEnv(string nodeId)
+    {
+        _workerEnvErrors.Remove(nodeId);
+        _loadingWorkerEnv.Add(nodeId);
+        try
+        {
+            var http = HttpFactory.CreateClient("hub");
+            var resp = await http.GetAsync($"/diagnostics/worker-env/{Uri.EscapeDataString(nodeId)}");
+            if (!resp.IsSuccessStatusCode)
+            {
+                _workerEnvErrors[nodeId] = $"HTTP {(int)resp.StatusCode}: {resp.ReasonPhrase}";
+                _workerEnv[nodeId] = null;
+            }
+            else
+            {
+                var env = await resp.Content.ReadFromJsonAsync<EnvEnvelope>();
+                _workerEnv[nodeId] = env?.env ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+        catch (Exception ex)
+        {
+            _workerEnvErrors[nodeId] = ex.Message;
+            _workerEnv[nodeId] = null;
+        }
+        finally
+        {
+            _loadingWorkerEnv.Remove(nodeId);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ReloadDashboardEnv()
+    {
+        BuildEnvCache();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private enum ConfigState { Set, Partial, Missing, Unknown }
+
+    private bool IsHubKey(string key) => _knownHubKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+    private bool IsWorkerKey(string key) => _knownWorkerKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+    private bool IsDashboardKey(string key) => _knownDashboardKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+
+    private (int have, int loaded, int total) GetWorkerKeyCoverage(string key)
+    {
+        int total = _data?.Workers?.Count ?? 0;
+        int loaded = 0;
+        int have = 0;
+        if (_data?.Workers is { Count: > 0 })
+        {
+            foreach (var w in _data.Workers)
+            {
+                if (_workerEnv.TryGetValue(w.Id, out var env) && env is not null)
+                {
+                    loaded++;
+                    if (env.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v))
+                    {
+                        have++;
+                    }
+                }
+            }
+        }
+        return (have, loaded, total);
+    }
+
+    private string? GetAnyWorkerValue(string key)
+    {
+        if (_data?.Workers is null) return null;
+        foreach (var w in _data.Workers)
+        {
+            if (_workerEnv.TryGetValue(w.Id, out var env) && env is not null)
+            {
+                if (env.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v))
+                {
+                    return v;
+                }
+            }
+        }
+        return null;
+    }
+
+    private ConfigState GetConfigState(string key)
+    {
+        if (IsWorkerKey(key))
+        {
+            var (have, loaded, _) = GetWorkerKeyCoverage(key);
+            if (loaded == 0) return ConfigState.Unknown;
+            if (have * 2 > loaded) return ConfigState.Set;
+            if (have > 0) return ConfigState.Partial;
+            return ConfigState.Missing;
+        }
+
+        if (IsHubKey(key))
+        {
+            if (!string.IsNullOrEmpty(GetEnv(key))) return ConfigState.Set;
+            if (_hubEnv is not null && _hubEnv.TryGetValue(key, out var hv) && !string.IsNullOrEmpty(hv)) return ConfigState.Set;
+            if (!string.IsNullOrEmpty(GetHubEffectiveValue(key))) return ConfigState.Set;
+            return ConfigState.Missing;
+        }
+
+        if (IsDashboardKey(key))
+        {
+            return !string.IsNullOrEmpty(GetEnv(key)) ? ConfigState.Set : ConfigState.Missing;
+        }
+
+        return !string.IsNullOrEmpty(GetEnv(key)) ? ConfigState.Set : ConfigState.Unknown;
+    }
+
+    private string GetBadgeClass(ConfigState st) => st switch
+    {
+        ConfigState.Set => "bg-success",
+        ConfigState.Partial => "bg-warning text-dark",
+        ConfigState.Missing => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetBadgeText(ConfigState st) => st switch
+    {
+        ConfigState.Set => "Set",
+        ConfigState.Partial => "Partial",
+        ConfigState.Missing => "Missing",
+        _ => "Unknown"
+    };
+
+    private async Task LoadAllWorkersEnv()
+    {
+        if (_data?.Workers is null || _data.Workers.Count == 0) return;
+        _loadingAllWorkers = true;
+        await InvokeAsync(StateHasChanged);
+        var tasks = new List<Task>();
+        foreach (var w in _data.Workers)
+        {
+            tasks.Add(LoadWorkerEnv(w.Id));
+        }
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        finally
+        {
+            _loadingAllWorkers = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+
+}

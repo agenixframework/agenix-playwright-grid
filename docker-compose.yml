@@ -1,0 +1,159 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin  
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:9.5.5
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_LOG_LEVEL=debug
+    volumes:
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    restart: unless-stopped
+
+  hub:
+    build: ./hub
+    ports:
+      - "5100:5000"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8    
+    environment:
+      - REDIS_URL=redis:6379
+      - HUB_NODE_SECRET=node-secret
+      - HUB_RUNNER_SECRET=runner-secret
+      - HUB_RESULTS_BACKEND=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker1:
+    build:
+      context: ./worker
+      args:
+        PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
+    ports:
+      - "5200:5000"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - HUB_URL=http://hub:5000
+      - REDIS_URL=redis:6379
+      - NODE_ID=worker1
+      - NODE_SECRET=node-secret
+      - NODE_NODE_SECRET=node-node-secret
+      - POOL_CONFIG=AppB:Chromium:UAT=3
+      - PUBLIC_WS_HOST=127.0.0.1
+      - PUBLIC_WS_PORT=5200
+      - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+      - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb
+    depends_on:
+      redis:
+        condition: service_healthy
+      hub:
+        condition: service_healthy
+    shm_size: "1gb"
+    restart: unless-stopped
+
+  worker2:
+      build:
+        context: ./worker
+        args:
+          PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
+      ports:
+        - "5201:5000"
+      dns:
+        - 1.1.1.1
+        - 8.8.8.8
+      environment:
+        - HUB_URL=http://hub:5000
+        - REDIS_URL=redis:6379
+        - NODE_ID=worker2
+        - NODE_SECRET=node-secret
+        - NODE_NODE_SECRET=node-node-secret
+        - POOL_CONFIG=AppB:Chromium:UAT=3
+        - PUBLIC_WS_HOST=127.0.0.1
+        - PUBLIC_WS_PORT=5201
+        - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+        - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb
+      depends_on:
+        redis:
+          condition: service_healthy
+        hub:
+          condition: service_healthy
+      shm_size: "1gb"
+      restart: unless-stopped
+      
+      
+  worker3:
+    build:
+      context: ./worker
+      args:
+        PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
+    ports:
+      - "5202:5000"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - HUB_URL=http://hub:5000
+      - REDIS_URL=redis:6379
+      - NODE_ID=worker3
+      - NODE_SECRET=node-secret
+      - NODE_NODE_SECRET=node-node-secret
+      - POOL_CONFIG=AppB:Firefox:UAT=2,AppB:Webkit:UAT=2
+      - PUBLIC_WS_HOST=127.0.0.1
+      - PUBLIC_WS_PORT=5202
+      - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+      - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb
+    depends_on:
+      redis:
+        condition: service_healthy
+      hub:
+        condition: service_healthy
+    shm_size: "1gb"
+    restart: unless-stopped  
+      
+      
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3001:3001"
+    environment:
+      - HUB_SIGNALR=http://hub:5000/ws
+    depends_on:
+      - hub
+      - grafana
+    healthcheck:
+      test: [ "CMD", "curl", "-fsSL", "http://127.0.0.1:3001/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    
+  

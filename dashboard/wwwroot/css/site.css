@@ -1,0 +1,24 @@
+/* Dashboard custom theme overrides */
+:root{
+  --brand-color:#0d6efd;
+  --brand-text:#1f2937;
+  --brand-muted:#6b7280;
+  --surface:#ffffff;
+  --surface-alt:#f8fafc;
+  --border:#e5e7eb;
+}
+
+/* Navbar branding */
+.navbar-brand .brand-logo{height:28px;width:auto;display:block}
+.navbar-brand span{font-weight:600;color:var(--brand-text)}
+.navbar{background-color:var(--surface)}
+
+/* Right-side avatar */
+img.nav-avatar{height:28px;width:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border)}
+
+/* Cards */
+.card{border-color:var(--border)}
+.card .text-muted{color:var(--brand-muted)!important}
+
+/* Page spacing */
+.container{max-width:1200px}
