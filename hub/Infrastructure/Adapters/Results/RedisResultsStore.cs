@@ -30,21 +30,43 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         {
             return TimeSpan.FromDays(days);
         }
+
         return null;
     }
 
-    private static string RunKey(string runId) => $"results:run:{runId}";
+    private static string RunKey(string runId)
+    {
+        return $"results:run:{runId}";
+    }
+
     private static string RunsByStartKey => "results:runs:byStart";
-    private static string TestsKey(string runId) => $"results:tests:{runId}";
-    private static string CmdKey(string runId) => $"results:cmd:{runId}";
-    private static string CmdCountKey(string runId) => $"results:cmdcount:{runId}";
+
+    private static string TestsKey(string runId)
+    {
+        return $"results:tests:{runId}";
+    }
+
+    private static string CmdKey(string runId)
+    {
+        return $"results:cmd:{runId}";
+    }
+
+    private static string CmdCountKey(string runId)
+    {
+        return $"results:cmdcount:{runId}";
+    }
 
     private void TouchExpire(params RedisKey[] keys)
     {
-        if (_ttl is null) return;
+        if (_ttl is null)
+        {
+            return;
+        }
+
         foreach (var k in keys)
         {
-            try { db.KeyExpire(k, _ttl); } catch { }
+            try { db.KeyExpire(k, _ttl); }
+            catch { }
         }
     }
 
@@ -65,7 +87,11 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
     public async Task<ResultRunSummaryDto?> GetRunAsync(string runId)
     {
         var val = await db.StringGetAsync(RunKey(runId));
-        if (val.IsNullOrEmpty) return null;
+        if (val.IsNullOrEmpty)
+        {
+            return null;
+        }
+
         try
         {
             return JsonSerializer.Deserialize<ResultRunSummaryDto>(val!, JsonOpts);
@@ -76,13 +102,15 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         }
     }
 
-    public async Task<IReadOnlyList<ResultRunSummaryDto>> GetRunsAsync(int skip = 0, int take = 100, string? status = null, string? app = null, string? browser = null, string? env = null)
+    public async Task<IReadOnlyList<ResultRunSummaryDto>> GetRunsAsync(int skip = 0, int take = 100,
+        string? status = null, string? app = null, string? browser = null, string? env = null)
     {
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, 500);
 
         // Fast path: no filters -> page directly from ZSET
-        if (string.IsNullOrWhiteSpace(status) && string.IsNullOrWhiteSpace(app) && string.IsNullOrWhiteSpace(browser) && string.IsNullOrWhiteSpace(env))
+        if (string.IsNullOrWhiteSpace(status) && string.IsNullOrWhiteSpace(app) && string.IsNullOrWhiteSpace(browser) &&
+            string.IsNullOrWhiteSpace(env))
         {
             var end = skip + take - 1;
             var ids = await db.SortedSetRangeByRankAsync(RunsByStartKey, skip, end, Order.Descending);
@@ -108,22 +136,55 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         {
             var end = offset + pageSize - 1;
             var ids = await db.SortedSetRangeByRankAsync(RunsByStartKey, offset, end, Order.Descending);
-            if (ids.Length == 0) break;
+            if (ids.Length == 0)
+            {
+                break;
+            }
 
             var tasks = ids.Select(id => db.StringGetAsync(RunKey(id!))).ToArray();
             await Task.WhenAll(tasks);
             foreach (var val in tasks.Select(t => t.Result))
             {
-                if (val.IsNullOrEmpty) continue;
+                if (val.IsNullOrEmpty)
+                {
+                    continue;
+                }
+
                 var run = SafeDeserialize<ResultRunSummaryDto>(val!);
-                if (run is null) continue;
-                if (!string.IsNullOrWhiteSpace(status) && !string.Equals(run.Status, status, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!string.IsNullOrWhiteSpace(app) && !string.Equals(run.App, app, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!string.IsNullOrWhiteSpace(browser) && !string.Equals(run.Browser, browser, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!string.IsNullOrWhiteSpace(env) && !string.Equals(run.Env, env, StringComparison.OrdinalIgnoreCase)) continue;
+                if (run is null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(status) &&
+                    !string.Equals(run.Status, status, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(app) && !string.Equals(run.App, app, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(browser) &&
+                    !string.Equals(run.Browser, browser, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(env) && !string.Equals(run.Env, env, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 collected.Add(run);
-                if (collected.Count >= needed) break;
+                if (collected.Count >= needed)
+                {
+                    break;
+                }
             }
+
             offset += pageSize;
         }
 
@@ -135,10 +196,12 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         return result;
     }
 
-    public async Task<int> GetRunsCountAsync(string? status = null, string? app = null, string? browser = null, string? env = null)
+    public async Task<int> GetRunsCountAsync(string? status = null, string? app = null, string? browser = null,
+        string? env = null)
     {
         // Fast path when no filters: use ZCARD
-        if (string.IsNullOrWhiteSpace(status) && string.IsNullOrWhiteSpace(app) && string.IsNullOrWhiteSpace(browser) && string.IsNullOrWhiteSpace(env))
+        if (string.IsNullOrWhiteSpace(status) && string.IsNullOrWhiteSpace(app) && string.IsNullOrWhiteSpace(browser) &&
+            string.IsNullOrWhiteSpace(env))
         {
             var len = await db.SortedSetLengthAsync(RunsByStartKey);
             return (int)len;
@@ -152,22 +215,54 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         {
             var end = offset + pageSize - 1;
             var ids = await db.SortedSetRangeByRankAsync(RunsByStartKey, offset, end, Order.Descending);
-            if (ids.Length == 0) break;
+            if (ids.Length == 0)
+            {
+                break;
+            }
+
             var tasks = ids.Select(id => db.StringGetAsync(RunKey(id!))).ToArray();
             await Task.WhenAll(tasks);
             foreach (var val in tasks.Select(t => t.Result))
             {
-                if (val.IsNullOrEmpty) continue;
+                if (val.IsNullOrEmpty)
+                {
+                    continue;
+                }
+
                 var run = SafeDeserialize<ResultRunSummaryDto>(val!);
-                if (run is null) continue;
-                if (!string.IsNullOrWhiteSpace(status) && !string.Equals(run.Status, status, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!string.IsNullOrWhiteSpace(app) && !string.Equals(run.App, app, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!string.IsNullOrWhiteSpace(browser) && !string.Equals(run.Browser, browser, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!string.IsNullOrWhiteSpace(env) && !string.Equals(run.Env, env, StringComparison.OrdinalIgnoreCase)) continue;
+                if (run is null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(status) &&
+                    !string.Equals(run.Status, status, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(app) && !string.Equals(run.App, app, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(browser) &&
+                    !string.Equals(run.Browser, browser, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(env) && !string.Equals(run.Env, env, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 count++;
             }
+
             offset += pageSize;
         }
+
         return (int)count;
     }
 
@@ -193,17 +288,29 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         var list = new List<CommandLogEventDto>(vals.Length);
         foreach (var v in vals)
         {
-            if (v.IsNullOrEmpty) continue;
+            if (v.IsNullOrEmpty)
+            {
+                continue;
+            }
+
             var ev = SafeDeserialize<CommandLogEventDto>(v!);
-            if (ev is not null) list.Add(ev);
+            if (ev is not null)
+            {
+                list.Add(ev);
+            }
         }
+
         return list.OrderBy(e => e.TimestampUtc).ToList();
     }
 
     public async Task<int> GetCommandCountAsync(string runId)
     {
         var cnt = await db.StringGetAsync(CmdCountKey(runId));
-        if (!cnt.IsNullOrEmpty && int.TryParse(cnt!, out var parsed)) return parsed;
+        if (!cnt.IsNullOrEmpty && int.TryParse(cnt!, out var parsed))
+        {
+            return parsed;
+        }
+
         var llen = await db.ListLengthAsync(CmdKey(runId));
         return (int)llen;
     }
@@ -216,12 +323,13 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         TouchExpire(key);
     }
 
-    public async Task<IReadOnlyList<ResultTestCaseDto>> GetTestsAsync(string runId, int skip = 0, int take = 200, string? status = null)
+    public async Task<IReadOnlyList<ResultTestCaseDto>> GetTestsAsync(string runId, int skip = 0, int take = 200,
+        string? status = null)
     {
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, 1000);
         var vals = await db.HashValuesAsync(TestsKey(runId));
-        IEnumerable<ResultTestCaseDto> q = vals
+        var q = vals
             .Where(v => !v.IsNullOrEmpty)
             .Select(v => SafeDeserialize<ResultTestCaseDto>(v!))
             .Where(t => t is not null)
@@ -231,6 +339,7 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         {
             q = q.Where(t => string.Equals(t.Status, status, StringComparison.OrdinalIgnoreCase));
         }
+
         var list = q.OrderBy(t => t.Title).Skip(skip).Take(take).ToList();
         return list;
     }

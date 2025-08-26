@@ -28,7 +28,10 @@ public sealed record CommandLogEventDto
 {
     public string RunId { get; init; } = string.Empty;
     public DateTime TimestampUtc { get; init; } = DateTime.UtcNow;
-    public string Kind { get; init; } = string.Empty; // ServerLaunch|Borrow|Connect|Disconnect|Return|WSProxy|API|Trace|Custom
+
+    public string Kind { get; init; } =
+        string.Empty; // ServerLaunch|Borrow|Connect|Disconnect|Return|WSProxy|API|Trace|Custom
+
     public string Message { get; init; } = string.Empty;
     public Dictionary<string, string>? Props { get; init; }
     public string? TestId { get; init; }

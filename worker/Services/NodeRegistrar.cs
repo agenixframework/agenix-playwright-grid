@@ -18,12 +18,12 @@ public sealed class NodeRegistrar
     {
         var baseUrl = $"http://{Environment.GetEnvironmentVariable("HOSTNAME") ?? _options.NodeId}:5000";
         await _hub.RegisterAsync(
-            hubUrl: _options.HubUrl,
-            nodeSecret: _options.NodeSecret,
-            nodeId: _options.NodeId,
-            baseUrl: baseUrl,
-            apps: _options.PoolConfig.Keys.ToArray(),
-            capacity: _options.PoolConfig.Values.Sum(),
-            labels: _options.Labels.ToDictionary(k => k.Key, v => v.Value));
+            _options.HubUrl,
+            _options.NodeSecret,
+            _options.NodeId,
+            baseUrl,
+            _options.PoolConfig.Keys.ToArray(),
+            _options.PoolConfig.Values.Sum(),
+            _options.Labels.ToDictionary(k => k.Key, v => v.Value));
     }
 }

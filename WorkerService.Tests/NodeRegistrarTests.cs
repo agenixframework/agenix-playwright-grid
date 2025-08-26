@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,11 +20,9 @@ public class NodeRegistrarTests
             HubUrl = "http://hub:5000",
             NodeId = "node-xyz",
             NodeSecret = "secret",
-            Labels = new(System.StringComparer.OrdinalIgnoreCase)
-            {
-                ["region"] = "eu"
-            },
-            PoolConfig = new(System.StringComparer.OrdinalIgnoreCase)
+            Labels =
+                new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["region"] = "eu" },
+            PoolConfig = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
                 ["AppA:Chromium:Staging"] = 2,
                 ["AppB:Firefox:Prod"] = 1
@@ -45,9 +44,9 @@ public class NodeRegistrarTests
                     It.IsAny<string>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
-                    It.IsAny<System.Collections.Generic.IEnumerable<string>>(),
+                    It.IsAny<IEnumerable<string>>(),
                     It.IsAny<int>(),
-                    It.IsAny<System.Collections.Generic.IReadOnlyDictionary<string, string>>(),
+                    It.IsAny<IReadOnlyDictionary<string, string>>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
@@ -59,9 +58,10 @@ public class NodeRegistrarTests
                 "secret",
                 "node-xyz",
                 It.Is<string>(s => s == "http://my-host:5000"),
-                It.Is<System.Collections.Generic.IEnumerable<string>>(apps => apps.OrderBy(x => x).SequenceEqual(options.PoolConfig.Keys.OrderBy(x => x))),
+                It.Is<IEnumerable<string>>(apps =>
+                    apps.OrderBy(x => x).SequenceEqual(options.PoolConfig.Keys.OrderBy(x => x))),
                 It.Is<int>(cap => cap == options.PoolConfig.Values.Sum()),
-                It.Is<System.Collections.Generic.IReadOnlyDictionary<string, string>>(lbl => lbl["region"] == "eu"),
+                It.Is<IReadOnlyDictionary<string, string>>(lbl => lbl["region"] == "eu"),
                 It.IsAny<CancellationToken>()), Times.Once);
         }
         finally
@@ -84,9 +84,9 @@ public class NodeRegistrarTests
                     It.IsAny<string>(),
                     It.IsAny<string>(),
                     It.IsAny<string>(),
-                    It.IsAny<System.Collections.Generic.IEnumerable<string>>(),
+                    It.IsAny<IEnumerable<string>>(),
                     It.IsAny<int>(),
-                    It.IsAny<System.Collections.Generic.IReadOnlyDictionary<string, string>>(),
+                    It.IsAny<IReadOnlyDictionary<string, string>>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
@@ -98,9 +98,9 @@ public class NodeRegistrarTests
                 "secret",
                 "node-xyz",
                 It.Is<string>(s => s == "http://node-xyz:5000"),
-                It.IsAny<System.Collections.Generic.IEnumerable<string>>(),
+                It.IsAny<IEnumerable<string>>(),
                 It.Is<int>(cap => cap == 3),
-                It.Is<System.Collections.Generic.IReadOnlyDictionary<string, string>>(lbl => lbl["region"] == "eu"),
+                It.Is<IReadOnlyDictionary<string, string>>(lbl => lbl["region"] == "eu"),
                 It.IsAny<CancellationToken>()), Times.Once);
         }
         finally

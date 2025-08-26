@@ -45,7 +45,8 @@ public sealed class HubHttpClient : IHubClient
                 var text = await resp.Content.ReadAsStringAsync(ct);
                 if (resp.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[Register] {resp.StatusCode} {System.Text.Json.JsonSerializer.Serialize(body)}-> {url}");
+                    Console.WriteLine(
+                        $"[Register] {resp.StatusCode} {System.Text.Json.JsonSerializer.Serialize(body)}-> {url}");
                     return true;
                 }
 

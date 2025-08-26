@@ -6,5 +6,8 @@ namespace WorkerService;
 /// </summary>
 public static class Program
 {
-    public static Task Main(string[] args) => new Services.WorkerServiceRunner().RunAsync(args);
+    public static Task Main(string[] args)
+    {
+        return new Services.WorkerServiceRunner().RunAsync(args);
+    }
 }

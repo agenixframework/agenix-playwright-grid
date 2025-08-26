@@ -20,8 +20,8 @@ public class PoolManagerTests
         return new WorkerOptions
         {
             NodeId = "node-1",
-            Labels = new(StringComparer.OrdinalIgnoreCase) { ["region"] = "eu" },
-            PoolConfig = new(StringComparer.OrdinalIgnoreCase)
+            Labels = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["region"] = "eu" },
+            PoolConfig = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
                 ["AppA:Chromium:Staging"] = 0 // start from 0; tests will invoke WarmLabelAsync with counts we choose
             },
@@ -47,10 +47,12 @@ public class PoolManagerTests
 
         // Sidecar returns a dummy process and internal ws
         sidecar.Setup(s => s.StartAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => new SidecarStartResult(CreateDummyProcess(), "ws://internal:1234/abc", null, null, "chromium"));
+            .ReturnsAsync(() =>
+                new SidecarStartResult(CreateDummyProcess(), "ws://internal:1234/abc", null, null, "chromium"));
 
         // Redis pushes per created slot
-        db.Setup(d => d.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<When>(),
+                It.IsAny<CommandFlags>()))
             .ReturnsAsync(1);
         // After warm, ListLengthAsync is called once to update metric
         db.Setup(d => d.ListLengthAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
@@ -97,20 +99,26 @@ public class PoolManagerTests
         var listKeyAvail = "available:AppA:Chromium:Staging";
         var listKeyInuse = "inuse:AppA:Chromium:Staging";
 
-        var staleThisNode = $"{{\"nodeId\":\"{options.NodeId}\",\"browserId\":\"b1\",\"webSocketEndpoint\":\"ws://public/ws/b1\"}}";
-        var staleLocalhost = "{\"nodeId\":\"n2\",\"browserId\":\"b2\",\"webSocketEndpoint\":\"ws://localhost:1234/ws/b2\"}";
+        var staleThisNode =
+            $"{{\"nodeId\":\"{options.NodeId}\",\"browserId\":\"b1\",\"webSocketEndpoint\":\"ws://public/ws/b1\"}}";
+        var staleLocalhost =
+            "{\"nodeId\":\"n2\",\"browserId\":\"b2\",\"webSocketEndpoint\":\"ws://localhost:1234/ws/b2\"}";
         var goodItem = "{\"nodeId\":\"n3\",\"browserId\":\"b3\",\"webSocketEndpoint\":\"ws://ok/ws/b3\"}";
 
         // ListRangeAsync called for both keys
-        db.Setup(d => d.ListRangeAsync(It.Is<RedisKey>(k => k.ToString() == listKeyAvail), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.ListRangeAsync(It.Is<RedisKey>(k => k.ToString() == listKeyAvail), It.IsAny<long>(),
+                It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(new RedisValue[] { staleThisNode, goodItem });
-        db.Setup(d => d.ListRangeAsync(It.Is<RedisKey>(k => k.ToString() == listKeyInuse), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.ListRangeAsync(It.Is<RedisKey>(k => k.ToString() == listKeyInuse), It.IsAny<long>(),
+                It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(new RedisValue[] { staleLocalhost });
 
         // Expect removals for two stale entries
-        db.Setup(d => d.ListRemoveAsync(It.Is<RedisKey>(k => k.ToString() == listKeyAvail), It.Is<RedisValue>(v => v.ToString() == staleThisNode), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.ListRemoveAsync(It.Is<RedisKey>(k => k.ToString() == listKeyAvail),
+                It.Is<RedisValue>(v => v.ToString() == staleThisNode), It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(1);
-        db.Setup(d => d.ListRemoveAsync(It.Is<RedisKey>(k => k.ToString() == listKeyInuse), It.Is<RedisValue>(v => v.ToString() == staleLocalhost), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.ListRemoveAsync(It.Is<RedisKey>(k => k.ToString() == listKeyInuse),
+                It.Is<RedisValue>(v => v.ToString() == staleLocalhost), It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(1);
 
         var pool = new PoolManager(options, db.Object, metrics.Object, sidecar.Object);
@@ -127,7 +135,8 @@ public class PoolManagerTests
         var metrics = new Mock<IMetricsPort>(MockBehavior.Loose);
         var sidecar = new Mock<ISidecarLauncher>(MockBehavior.Loose);
 
-        db.Setup(d => d.ListLengthAsync(It.Is<RedisKey>(k => k.ToString() == "available:AppA:Chromium:Staging"), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.ListLengthAsync(It.Is<RedisKey>(k => k.ToString() == "available:AppA:Chromium:Staging"),
+                It.IsAny<CommandFlags>()))
             .ReturnsAsync(42);
 
         var pool = new PoolManager(options, db.Object, metrics.Object, sidecar.Object);
@@ -147,15 +156,20 @@ public class PoolManagerTests
         var sidecar = new Mock<ISidecarLauncher>(MockBehavior.Loose);
 
         // CleanupLabelListsAsync will call ListRangeAsync on both keys; return empty
-        db.Setup(d => d.ListRangeAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        db.Setup(d =>
+                d.ListRangeAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(Array.Empty<RedisValue>());
 
         // SetRemove and KeyDelete calls
-        db.Setup(d => d.SetRemoveAsync(It.Is<RedisKey>(k => k.ToString() == "nodes"), It.Is<RedisValue>(v => v.ToString() == options.NodeId), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.SetRemoveAsync(It.Is<RedisKey>(k => k.ToString() == "nodes"),
+                It.Is<RedisValue>(v => v.ToString() == options.NodeId), It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
-        db.Setup(d => d.KeyDeleteAsync(It.Is<RedisKey>(k => k.ToString() == $"node:{options.NodeId}"), It.IsAny<CommandFlags>()))
+        db.Setup(d =>
+                d.KeyDeleteAsync(It.Is<RedisKey>(k => k.ToString() == $"node:{options.NodeId}"),
+                    It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
-        db.Setup(d => d.KeyDeleteAsync(It.Is<RedisKey>(k => k.ToString() == $"node_alive:{options.NodeId}"), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.KeyDeleteAsync(It.Is<RedisKey>(k => k.ToString() == $"node_alive:{options.NodeId}"),
+                It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
 
         var pool = new PoolManager(options, db.Object, metrics.Object, sidecar.Object);

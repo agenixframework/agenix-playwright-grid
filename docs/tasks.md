@@ -56,7 +56,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 50. [ ] Add load/pressure test harness (NUnit category) with configurable CONCURRENCY/ITERATIONS and asserts on latency percentiles.
 51. [ ] Introduce a structured configuration guide (docs/configuration.md) with examples and common pitfalls.
 52. [ ] Add architecture diagrams (C4 model: Context, Container, Component) and sequence diagram for borrow/return.
-53. [ ] Create CONTRIBUTING.md (coding standards, commit messages, branching, PR checklist).
+53. [X] Create CONTRIBUTING.md (coding standards, commit messages, branching, PR checklist).
 54. [ ] Establish versioning and release notes; tag releases and publish Agenix.PlaywrightGrid.HubClient to NuGet.
 55. [ ] Add compatibility matrix documenting supported Playwright versions and Docker base image tags.
 56. [ ] Implement feature flags for borrow strategies and dashboard features to allow safe rollout.

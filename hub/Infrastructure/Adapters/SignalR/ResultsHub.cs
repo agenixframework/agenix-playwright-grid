@@ -22,6 +22,13 @@ public sealed class ResultsHub(IResultsStore store) : Hub<IResultsClient>
         await base.OnConnectedAsync();
     }
 
-    public Task JoinRun(string runId) => Groups.AddToGroupAsync(Context.ConnectionId, $"run:{runId}");
-    public Task LeaveRun(string runId) => Groups.RemoveFromGroupAsync(Context.ConnectionId, $"run:{runId}");
+    public Task JoinRun(string runId)
+    {
+        return Groups.AddToGroupAsync(Context.ConnectionId, $"run:{runId}");
+    }
+
+    public Task LeaveRun(string runId)
+    {
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, $"run:{runId}");
+    }
 }

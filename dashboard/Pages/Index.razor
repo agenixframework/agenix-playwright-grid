@@ -82,7 +82,8 @@ else
                                 <div class="d-flex align-items-center">
                                     @if (p.MaintenanceActive)
                                     {
-                                        <span class="badge bg-warning text-dark me-2" title="Borrowing paused; counts frozen">Maintenance</span>
+                                        <span class="badge bg-warning text-dark me-2"
+                                              title="Borrowing paused; counts frozen">Maintenance</span>
                                     }
                                     <span class="badge bg-secondary">@p.Total total</span>
                                     <button class="btn btn-sm btn-outline-warning ms-2"
@@ -91,7 +92,8 @@ else
                                             @onclick="() => RestartPool(p.Label)">
                                         @if (IsRestarting(p.Label))
                                         {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"
+                                                  aria-hidden="true"></span>
                                             <span>Restarting…</span>
                                         }
                                         else
@@ -231,7 +233,10 @@ else
         Proxy.Changed -= OnProxyChanged;
     }
 
-    private bool IsRestarting(string labelKey) => _restarting.Contains(labelKey);
+    private bool IsRestarting(string labelKey)
+    {
+        return _restarting.Contains(labelKey);
+    }
 
     private async Task RestartPool(string labelKey)
     {

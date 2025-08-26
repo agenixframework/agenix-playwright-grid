@@ -19,32 +19,50 @@ public sealed class RedisStateRepository : IStateRepository, IAsyncDisposable
     }
 
     public async Task ListRightPushAsync(string listKey, string itemJson)
-        => await _db.ListRightPushAsync(listKey, itemJson);
+    {
+        await _db.ListRightPushAsync(listKey, itemJson);
+    }
 
     public async Task<long> ListLengthAsync(string listKey)
-        => await _db.ListLengthAsync(listKey);
+    {
+        return await _db.ListLengthAsync(listKey);
+    }
 
     public async Task<IReadOnlyList<string>> ListRangeAsync(string listKey)
-        => (await _db.ListRangeAsync(listKey)).Select(rv => (string)rv).ToArray();
+    {
+        return (await _db.ListRangeAsync(listKey)).Select(rv => (string)rv).ToArray();
+    }
 
     public async Task<long> ListRemoveAsync(string listKey, string itemJson, long count = 0)
-        => await _db.ListRemoveAsync(listKey, itemJson, count);
+    {
+        return await _db.ListRemoveAsync(listKey, itemJson, count);
+    }
 
     public async Task HashSetAsync(string key, string field, string value)
-        => await _db.HashSetAsync(key, new HashEntry[] { new(field, value) });
+    {
+        await _db.HashSetAsync(key, new HashEntry[] { new(field, value) });
+    }
 
     public async Task SetAddAsync(string key, string member)
-        => await _db.SetAddAsync(key, member);
+    {
+        await _db.SetAddAsync(key, member);
+    }
 
     public async Task StringSetAsync(string key, string value, TimeSpan? expiry)
-        => await _db.StringSetAsync(key, value, expiry);
+    {
+        await _db.StringSetAsync(key, value, expiry);
+    }
 
     public async Task<bool> SetRemoveAsync(string key, string member)
-        => await _db.SetRemoveAsync(key, member);
+    {
+        return await _db.SetRemoveAsync(key, member);
+    }
 
     public async ValueTask DisposeAsync()
     {
-        try { await _mux.CloseAsync(); } catch { }
+        try { await _mux.CloseAsync(); }
+        catch { }
+
         _mux.Dispose();
     }
 }

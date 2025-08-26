@@ -64,15 +64,20 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                 {
                     var targetStr = db.StringGet($"maintenance:target:{label}");
                     long target = 0;
-                    if (!targetStr.IsNullOrEmpty) long.TryParse(targetStr.ToString(), out target);
+                    if (!targetStr.IsNullOrEmpty)
+                    {
+                        long.TryParse(targetStr.ToString(), out target);
+                    }
 
                     // Auto-clear maintenance if finished, but only after a short hold so UI can reflect maintenance state
                     var sinceStr = db.StringGet($"maintenance:since:{label}");
-                    DateTime.TryParse(sinceStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var since);
+                    DateTime.TryParse(sinceStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                        out var since);
                     var hold = TimeSpan.FromSeconds(10);
                     var canClear = since != default && DateTime.UtcNow - since >= hold;
 
-                    if (inuseLen == 0 && (availLen >= target || DateTime.UtcNow - since >= TimeSpan.FromMinutes(2)) && canClear)
+                    if (inuseLen == 0 && (availLen >= target || DateTime.UtcNow - since >= TimeSpan.FromMinutes(2)) &&
+                        canClear)
                     {
                         try
                         {
@@ -91,8 +96,15 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                     {
                         var sa = db.StringGet($"maintenance:snap_avail:{label}");
                         var si = db.StringGet($"maintenance:snap_inuse:{label}");
-                        if (!sa.IsNullOrEmpty && int.TryParse(sa.ToString(), out var saInt)) displayAvail = saInt;
-                        if (!si.IsNullOrEmpty && int.TryParse(si.ToString(), out var siInt)) displayInuse = siInt;
+                        if (!sa.IsNullOrEmpty && int.TryParse(sa.ToString(), out var saInt))
+                        {
+                            displayAvail = saInt;
+                        }
+
+                        if (!si.IsNullOrEmpty && int.TryParse(si.ToString(), out var siInt))
+                        {
+                            displayInuse = siInt;
+                        }
 
                         if (target > 0)
                         {
@@ -128,7 +140,8 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
             var pwVer = db.HashGet(key, "PlaywrightVersion");
 
             // Parse using round-trip ISO 8601 to preserve UTC
-            DateTime.TryParse(lastSeenStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var lastSeen);
+            DateTime.TryParse(lastSeenStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
+                out var lastSeen);
             var labelsDict = !labelsJson.IsNullOrEmpty
                 ? JsonSerializer.Deserialize<Dictionary<string, string>>(labelsJson.ToString()) ??
                   new Dictionary<string, string>()
@@ -147,7 +160,10 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
             // Only include workers that were seen recently to avoid showing stale/ghost nodes
             var isRecent = computedLastSeen != DateTime.MinValue &&
                            DateTime.UtcNow - computedLastSeen <= TimeSpan.FromMinutes(2);
-            if (!isRecent) continue;
+            if (!isRecent)
+            {
+                continue;
+            }
 
             workers.Add(new WorkerStatusDto
             {
@@ -170,7 +186,9 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                 using var doc = JsonDocument.Parse(json);
                 if (doc.RootElement.TryGetProperty("nodeId", out var nodeEl) &&
                     nodeEl.ValueKind == JsonValueKind.String)
+                {
                     return nodeEl.GetString();
+                }
             }
             catch
             {
@@ -187,12 +205,15 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                 using var doc = JsonDocument.Parse(json);
                 if (doc.RootElement.TryGetProperty("browserVersion", out var vEl) &&
                     vEl.ValueKind == JsonValueKind.String)
+                {
                     return vEl.GetString();
+                }
             }
             catch
             {
                 // ignore
             }
+
             return null;
         }
 
@@ -206,11 +227,17 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                 var s = item.ToString();
                 var nodeId = TryGetNodeId(s);
                 if (!string.IsNullOrEmpty(nodeId))
+                {
                     Bump(nodeId, label, false);
+                }
+
                 if (!browserVersionByLabel.ContainsKey(label))
                 {
                     var v = TryGetBrowserVersion(s);
-                    if (!string.IsNullOrWhiteSpace(v)) browserVersionByLabel[label] = v;
+                    if (!string.IsNullOrWhiteSpace(v))
+                    {
+                        browserVersionByLabel[label] = v;
+                    }
                 }
             }
         }
@@ -225,11 +252,17 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                 var s = item.ToString();
                 var nodeId = TryGetNodeId(s);
                 if (!string.IsNullOrEmpty(nodeId))
+                {
                     Bump(nodeId, label, true);
+                }
+
                 if (!browserVersionByLabel.ContainsKey(label))
                 {
                     var v = TryGetBrowserVersion(s);
-                    if (!string.IsNullOrWhiteSpace(v)) browserVersionByLabel[label] = v;
+                    if (!string.IsNullOrWhiteSpace(v))
+                    {
+                        browserVersionByLabel[label] = v;
+                    }
                 }
             }
         }
@@ -238,7 +271,9 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
         foreach (var p in pools)
         {
             if (browserVersionByLabel.TryGetValue(p.Label, out var ver))
+            {
                 p.BrowserVersion = ver;
+            }
         }
 
         var dto = new PoolStateDto
@@ -252,7 +287,11 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
 
         void Bump(string nodeId, string label, bool borrowed)
         {
-            if (!workerById.TryGetValue(nodeId, out var w)) return;
+            if (!workerById.TryGetValue(nodeId, out var w))
+            {
+                return;
+            }
+
             if (!w.Pools.TryGetValue(label, out var pc))
             {
                 pc = new PoolCounts();
@@ -260,7 +299,10 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
             }
 
             pc.Total++;
-            if (borrowed) pc.Borrowed++;
+            if (borrowed)
+            {
+                pc.Borrowed++;
+            }
         }
     }
 }

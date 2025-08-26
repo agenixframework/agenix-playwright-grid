@@ -36,9 +36,14 @@ internal sealed class SignalRClientService(
                 Task ClosedHandler(Exception ex)
                 {
                     if (ex != null)
+                    {
                         logger.LogWarning(ex, "SignalR connection closed.");
+                    }
                     else
+                    {
                         logger.LogWarning("SignalR connection closed.");
+                    }
+
                     closedTcs.TrySetResult(true);
                     return Task.CompletedTask;
                 }
@@ -62,7 +67,10 @@ internal sealed class SignalRClientService(
                 logger.LogWarning(ex, "Failed to start SignalR connection; will retry.");
             }
 
-            if (stoppingToken.IsCancellationRequested) break;
+            if (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
         }
@@ -70,7 +78,10 @@ internal sealed class SignalRClientService(
 
     private void EnsureHandlersWired(IPoolStateWriter writer)
     {
-        if (_poolStateSubscription != null) return; // already wired
+        if (_poolStateSubscription != null)
+        {
+            return; // already wired
+        }
 
         _poolStateSubscription = conn.On<PoolStateDto>(PoolStateMessageName, writer.Update);
     }

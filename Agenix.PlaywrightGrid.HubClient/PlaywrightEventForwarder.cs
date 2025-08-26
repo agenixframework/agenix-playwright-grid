@@ -47,11 +47,24 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
     /// <summary>
     /// Attaches event listeners to the given page and starts forwarding messages to the hub.
     /// </summary>
-    public static PlaywrightEventForwarder Attach(IPage page, HubClient client, string browserId, Options? options = null)
+    public static PlaywrightEventForwarder Attach(IPage page, HubClient client, string browserId,
+        Options? options = null)
     {
-        if (page is null) throw new ArgumentNullException(nameof(page));
-        if (client is null) throw new ArgumentNullException(nameof(client));
-        if (string.IsNullOrWhiteSpace(browserId)) throw new ArgumentNullException(nameof(browserId));
+        if (page is null)
+        {
+            throw new ArgumentNullException(nameof(page));
+        }
+
+        if (client is null)
+        {
+            throw new ArgumentNullException(nameof(client));
+        }
+
+        if (string.IsNullOrWhiteSpace(browserId))
+        {
+            throw new ArgumentNullException(nameof(browserId));
+        }
+
         return new PlaywrightEventForwarder(page, client, browserId, options ?? new Options());
     }
 
@@ -134,12 +147,36 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
 
     private void Detach()
     {
-        if (_onConsole is not null) _page.Console -= _onConsole;
-        if (_onPageError is not null) _page.PageError -= _onPageError;
-        if (_onRequest is not null) _page.Request -= _onRequest;
-        if (_onResponse is not null) _page.Response -= _onResponse;
-        if (_onRequestFinished is not null) _page.RequestFinished -= _onRequestFinished;
-        if (_onRequestFailed is not null) _page.RequestFailed -= _onRequestFailed;
+        if (_onConsole is not null)
+        {
+            _page.Console -= _onConsole;
+        }
+
+        if (_onPageError is not null)
+        {
+            _page.PageError -= _onPageError;
+        }
+
+        if (_onRequest is not null)
+        {
+            _page.Request -= _onRequest;
+        }
+
+        if (_onResponse is not null)
+        {
+            _page.Response -= _onResponse;
+        }
+
+        if (_onRequestFinished is not null)
+        {
+            _page.RequestFinished -= _onRequestFinished;
+        }
+
+        if (_onRequestFailed is not null)
+        {
+            _page.RequestFailed -= _onRequestFailed;
+        }
+
         _onConsole = null;
         _onPageError = null;
         _onRequest = null;
@@ -167,6 +204,9 @@ public static class PlaywrightEventForwarderExtensions
     /// <summary>
     /// Convenience extension to attach forwarding to a page.
     /// </summary>
-    public static PlaywrightEventForwarder ForwardApiLogs(this IPage page, HubClient client, string browserId, PlaywrightEventForwarder.Options? options = null)
-        => PlaywrightEventForwarder.Attach(page, client, browserId, options);
+    public static PlaywrightEventForwarder ForwardApiLogs(this IPage page, HubClient client, string browserId,
+        PlaywrightEventForwarder.Options? options = null)
+    {
+        return PlaywrightEventForwarder.Attach(page, client, browserId, options);
+    }
 }

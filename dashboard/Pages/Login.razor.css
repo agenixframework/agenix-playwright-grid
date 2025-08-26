@@ -1,14 +1,14 @@
-:root{
+:root {
   --login-bg: var(--surface-alt);
 }
 
-.login-page{
+.login-page {
   min-height: calc(100vh - 120px);
   padding: 24px;
   background: linear-gradient(180deg, var(--surface-alt), #eef2f7);
 }
 
-.login-card{
+.login-card {
   width: 100%;
   max-width: 420px;
   border: 1px solid var(--border);
@@ -16,17 +16,19 @@
   background: var(--surface);
 }
 
-.login-logo{
+.login-logo {
   height: 40px;
   width: auto;
 }
 
 /* Inputs and validation harmonized with Bootstrap */
-.validation-message, .validation-errors, .validation-summary-errors{
+.validation-message, .validation-errors, .validation-summary-errors {
   color: #dc3545;
   font-size: .875rem;
 }
 
-@media (max-width: 576px){
-  .login-card{ border-radius: 10px; }
+@media (max-width: 576px) {
+  .login-card {
+    border-radius: 10px;
+  }
 }

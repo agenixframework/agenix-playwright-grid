@@ -7,13 +7,13 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NUnit" Version="4.3.2" />
-    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Include="Moq" Version="4.20.70" />
-    <PackageReference Include="StackExchange.Redis" Version="2.6.90" />
+    <PackageReference Include="NUnit" Version="4.3.2"/>
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0"/>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+    <PackageReference Include="Moq" Version="4.20.70"/>
+    <PackageReference Include="StackExchange.Redis" Version="2.6.90"/>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\worker\WorkerService.csproj" />
+    <ProjectReference Include="..\worker\WorkerService.csproj"/>
   </ItemGroup>
 </Project>

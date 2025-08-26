@@ -17,5 +17,8 @@ public static class Program
     /// </summary>
     /// <param name="args">An array of command-line arguments passed to the application.</param>
     /// <returns>A task that represents the asynchronous operation of initializing and starting the application.</returns>
-    public static Task Main(string[] args) => HubServiceRunner.RunAsync(args);
+    public static Task Main(string[] args)
+    {
+        return HubServiceRunner.RunAsync(args);
+    }
 }

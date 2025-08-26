@@ -9,7 +9,12 @@ public interface ISidecarLauncher
     Task<SidecarStartResult> StartAsync(string browserType, CancellationToken ct = default);
 }
 
-public readonly record struct SidecarStartResult(Process proc, string ws, string? playwrightVersion, string? browserVersion, string browser);
+public readonly record struct SidecarStartResult(
+    Process proc,
+    string ws,
+    string? playwrightVersion,
+    string? browserVersion,
+    string browser);
 
 public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
 {
@@ -36,23 +41,37 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
             if (!string.IsNullOrWhiteSpace(dbg))
             {
                 var val = dbg.Trim();
-                if (val == "1") val = "pw:server,pw:protocol";
+                if (val == "1")
+                {
+                    val = "pw:server,pw:protocol";
+                }
+
                 // Ensure we don't clobber an existing DEBUG setting unintentionally
                 if (!psi.Environment.TryAdd("DEBUG", val))
-                    psi.Environment["DEBUG"] = string.Join(",", new[] { psi.Environment["DEBUG"], val }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                {
+                    psi.Environment["DEBUG"] = string.Join(",",
+                        new[] { psi.Environment["DEBUG"], val }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                }
             }
         }
-        catch { /* ignore env setup issues */ }
+        catch
+        {
+            /* ignore env setup issues */
+        }
 
         var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
         proc.ErrorDataReceived += (_, e) =>
         {
             if (!string.IsNullOrEmpty(e.Data))
+            {
                 Console.WriteLine($"[sidecar:{browserType}] {e.Data}");
+            }
         };
 
         if (!proc.Start())
+        {
             throw new InvalidOperationException("Failed to start Node sidecar process.");
+        }
 
         proc.BeginErrorReadLine();
 
@@ -69,7 +88,12 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
                     // Process ended or stdout closed before emitting JSON
                     throw new TimeoutException("Sidecar exited before providing wsEndpoint.");
                 }
-                if (string.IsNullOrWhiteSpace(ln)) continue;
+
+                if (string.IsNullOrWhiteSpace(ln))
+                {
+                    continue;
+                }
+
                 try
                 {
                     var probe = JsonNode.Parse(ln)?.AsObject();
@@ -109,6 +133,13 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
 
     private static void TryKill(Process proc)
     {
-        try { if (!proc.HasExited) proc.Kill(true); } catch { }
+        try
+        {
+            if (!proc.HasExited)
+            {
+                proc.Kill(true);
+            }
+        }
+        catch { }
     }
 }

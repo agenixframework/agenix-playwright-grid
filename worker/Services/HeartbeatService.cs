@@ -35,7 +35,7 @@ public sealed class HeartbeatService(WorkerOptions options, IDatabase db)
                 var key = $"node:{options.NodeId}";
                 var nowIso = DateTime.UtcNow.ToString("o");
                 await db.HashSetAsync(key, "LastSeen", nowIso);
-                var lblsJson = System.Text.Json.JsonSerializer.Serialize(options.Labels.ToDictionary(k => k.Key, v => v.Value));
+                var lblsJson = JsonSerializer.Serialize(options.Labels.ToDictionary(k => k.Key, v => v.Value));
                 await db.HashSetAsync(key, "Labels", lblsJson);
                 await db.HashSetAsync(key, "Capacity", options.PoolConfig.Values.Sum().ToString());
                 await db.SetAddAsync("nodes", options.NodeId);
@@ -46,7 +46,8 @@ public sealed class HeartbeatService(WorkerOptions options, IDatabase db)
                 Console.WriteLine($"[Heartbeat] error: {ex.Message}");
             }
 
-            try { await Task.Delay(hbInterval, ct); } catch { }
+            try { await Task.Delay(hbInterval, ct); }
+            catch { }
         }
     }
 }
