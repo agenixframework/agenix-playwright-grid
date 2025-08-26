@@ -51,7 +51,8 @@ public sealed class RunCleanupService(
             ? $"{maxDuration.TotalHours:F1}h"
             : $"{maxDuration.TotalMinutes:F0}m";
 
-        Console.WriteLine($"[Cleanup] Starting. interval={interval.TotalMinutes:F0}m inactivity>={inactivity.TotalMinutes:F0}m max={maxDisplay} batch={batchSize}");
+        Console.WriteLine(
+            $"[Cleanup] Starting. interval={interval.TotalMinutes:F0}m inactivity>={inactivity.TotalMinutes:F0}m max={maxDisplay} batch={batchSize}");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -61,8 +62,8 @@ public sealed class RunCleanupService(
             try
             {
                 // Get running and in-progress runs
-                var running = await resultsStore.GetRunsAsync(0, 1000, status: "Running");
-                var inprog = await resultsStore.GetRunsAsync(0, 1000, status: "InProgress");
+                var running = await resultsStore.GetRunsAsync(0, 1000, "Running");
+                var inprog = await resultsStore.GetRunsAsync(0, 1000, "InProgress");
                 var candidatesAll = running.Concat(inprog)
                     .OrderBy(r => r.StartedAtUtc)
                     .ToList();
@@ -71,8 +72,15 @@ public sealed class RunCleanupService(
 
                 foreach (var run in candidatesAll)
                 {
-                    if (stoppingToken.IsCancellationRequested) break;
-                    if (processed >= batchSize) break;
+                    if (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    if (processed >= batchSize)
+                    {
+                        break;
+                    }
 
                     try
                     {
@@ -83,44 +91,80 @@ public sealed class RunCleanupService(
                             : run.StartedAtUtc;
                         var now = DateTime.UtcNow;
 
-                        var inactiveLongEnough = (now - lastActivity) >= inactivity;
-                        var overMaxDuration = (now - run.StartedAtUtc) >= maxDuration;
+                        var inactiveLongEnough = now - lastActivity >= inactivity;
+                        var overMaxDuration = now - run.StartedAtUtc >= maxDuration;
                         // Change this to match the auto-stopping criteria
                         if (!(inactiveLongEnough || overMaxDuration))
                         {
-                            if (!inactiveLongEnough) skipIdle++;
-                            if (!overMaxDuration) skipDuration++;
+                            if (!inactiveLongEnough)
+                            {
+                                skipIdle++;
+                            }
+
+                            if (!overMaxDuration)
+                            {
+                                skipDuration++;
+                            }
+
                             if (debug)
                             {
                                 var reasons = new List<string>();
-                                if (!inactiveLongEnough) reasons.Add("idle<inactivity");
-                                if (!overMaxDuration) reasons.Add("duration<max");
-                                Console.WriteLine($"[Cleanup] Skip run {run.RunId} reason={string.Join(", ", reasons)} lastActivity={lastActivity:o} started={run.StartedAtUtc:o}");
+                                if (!inactiveLongEnough)
+                                {
+                                    reasons.Add("idle<inactivity");
+                                }
+
+                                if (!overMaxDuration)
+                                {
+                                    reasons.Add("duration<max");
+                                }
+
+                                Console.WriteLine(
+                                    $"[Cleanup] Skip run {run.RunId} reason={string.Join(", ", reasons)} lastActivity={lastActivity:o} started={run.StartedAtUtc:o}");
                             }
+
                             continue;
                         }
 
                         // Identify browser borrow/return evidence from command logs
-                        var borrowMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // browserId -> labelKey
+                        var borrowMap =
+                            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // browserId -> labelKey
                         var launched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         var returned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         foreach (var cmd in cmds)
                         {
-                            if (cmd.Props is null) continue;
+                            if (cmd.Props is null)
+                            {
+                                continue;
+                            }
+
                             if (string.Equals(cmd.Kind, "ServerLaunch", StringComparison.OrdinalIgnoreCase))
                             {
-                                if (!cmd.Props.TryGetValue("browserId", out var bid) || string.IsNullOrWhiteSpace(bid)) continue;
-                                var labelKey = cmd.Props.TryGetValue("matchedLabel", out var ml) && !string.IsNullOrWhiteSpace(ml)
+                                if (!cmd.Props.TryGetValue("browserId", out var bid) || string.IsNullOrWhiteSpace(bid))
+                                {
+                                    continue;
+                                }
+
+                                var labelKey = cmd.Props.TryGetValue("matchedLabel", out var ml) &&
+                                               !string.IsNullOrWhiteSpace(ml)
                                     ? ml!
-                                    : (cmd.Props.TryGetValue("labelKey", out var lk) ? (lk ?? string.Empty) : string.Empty);
-                                if (string.IsNullOrWhiteSpace(labelKey)) continue;
+                                    : cmd.Props.TryGetValue("labelKey", out var lk)
+                                        ? lk ?? string.Empty
+                                        : string.Empty;
+                                if (string.IsNullOrWhiteSpace(labelKey))
+                                {
+                                    continue;
+                                }
+
                                 launched.Add(bid);
                                 borrowMap[bid] = labelKey;
                             }
                             else if (string.Equals(cmd.Kind, "Return", StringComparison.OrdinalIgnoreCase))
                             {
                                 if (cmd.Props.TryGetValue("browserId", out var rb) && !string.IsNullOrWhiteSpace(rb))
+                                {
                                     returned.Add(rb);
+                                }
                             }
                         }
 
@@ -135,6 +179,7 @@ public sealed class RunCleanupService(
                             {
                                 Console.WriteLine($"[Cleanup] Skip run {run.RunId} reason=no-outstanding-browsers");
                             }
+
                             continue;
                         }
 
@@ -142,8 +187,12 @@ public sealed class RunCleanupService(
                         var released = 0;
                         foreach (var browserId in outstanding.Distinct())
                         {
-                            if (!borrowMap.TryGetValue(browserId, out var labelKey) || string.IsNullOrWhiteSpace(labelKey))
+                            if (!borrowMap.TryGetValue(browserId, out var labelKey) ||
+                                string.IsNullOrWhiteSpace(labelKey))
+                            {
                                 continue;
+                            }
+
                             try
                             {
                                 var inuseKey = $"inuse:{labelKey}";
@@ -162,14 +211,16 @@ for i,item in ipairs(list) do
 end
 return nil
 ";
-                                var res = await db.ScriptEvaluateAsync(luaReturn, new RedisKey[] { inuseKey, availKey }, new RedisValue[] { browserId });
+                                var res = await db.ScriptEvaluateAsync(luaReturn, new RedisKey[] { inuseKey, availKey },
+                                    new RedisValue[] { browserId });
                                 if (!res.IsNull)
                                 {
                                     released++;
                                     releasedTotal++;
 
                                     // request sidecar recycle on the worker (short TTL)
-                                    try { db.StringSet($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); } catch { }
+                                    try { db.StringSet($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
+                                    catch { }
 
                                     // record AutoReturn
                                     var evReturn = new CommandLogEventDto
@@ -188,12 +239,19 @@ return nil
                                     await resultsHub.Clients.Group($"run:{run.RunId}").CommandLogChunk([evReturn]);
 
                                     // clear mappings
-                                    try { db.KeyDelete($"browser_run:{browserId}"); } catch { }
-                                    try { db.KeyDelete($"browser_test:{browserId}"); } catch { }
+                                    try { db.KeyDelete($"browser_run:{browserId}"); }
+                                    catch { }
+
+                                    try { db.KeyDelete($"browser_test:{browserId}"); }
+                                    catch { }
                                 }
                             }
-                            catch { /* ignore per-item errors */ }
+                            catch
+                            {
+                                /* ignore per-item errors */
+                            }
                         }
+
                         // Proceed to mark auto-stopped when either condition is met and there are outstanding browsers
                         if ((inactiveLongEnough || overMaxDuration) && outstanding.Count >= 1)
                         {
@@ -215,7 +273,8 @@ return nil
                                 RunId = run.RunId,
                                 TimestampUtc = now2,
                                 Kind = "AutoStop",
-                                Message = $"Run auto-stopped due to inactivity. Outstanding={outstanding.Count} Released={released}.",
+                                Message =
+                                    $"Run auto-stopped due to inactivity. Outstanding={outstanding.Count} Released={released}.",
                                 Props = new Dictionary<string, string>()
                             };
                             await resultsStore.AppendCommandAsync(evStop);
@@ -242,14 +301,17 @@ return nil
             var tookMs = (int)(DateTime.UtcNow - tickStart).TotalMilliseconds;
             if (debug)
             {
-                Console.WriteLine($"[Cleanup] Tick: scanned={scanned} processed={processed} released={releasedTotal} errors={errors} skipIdle={skipIdle} skipDuration={skipDuration} skipNoOutstanding={skipNoOutstanding} took={tookMs}ms");
+                Console.WriteLine(
+                    $"[Cleanup] Tick: scanned={scanned} processed={processed} released={releasedTotal} errors={errors} skipIdle={skipIdle} skipDuration={skipDuration} skipNoOutstanding={skipNoOutstanding} took={tookMs}ms");
             }
             else
             {
-                Console.WriteLine($"[Cleanup] Tick: scanned={scanned} processed={processed} released={releasedTotal} errors={errors} took={tookMs}ms");
+                Console.WriteLine(
+                    $"[Cleanup] Tick: scanned={scanned} processed={processed} released={releasedTotal} errors={errors} took={tookMs}ms");
             }
 
-            try { await Task.Delay(interval, stoppingToken); } catch { break; }
+            try { await Task.Delay(interval, stoppingToken); }
+            catch { break; }
         }
     }
 }

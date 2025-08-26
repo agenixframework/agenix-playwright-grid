@@ -19,7 +19,8 @@ public class ResultsRunTests
 {
     private class NotFoundHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
             // Return 404 for any request to force the component to use simulated data
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
@@ -29,11 +30,16 @@ public class ResultsRunTests
     private sealed class FakeHttpClientFactory : IHttpClientFactory
     {
         private readonly HttpClient _client;
+
         public FakeHttpClientFactory(HttpMessageHandler handler)
         {
             _client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
         }
-        public HttpClient CreateClient(string name) => _client;
+
+        public HttpClient CreateClient(string name)
+        {
+            return _client;
+        }
     }
 
     private Bunit.TestContext _ctx;
@@ -75,7 +81,7 @@ public class ResultsRunTests
     {
         // Arrange
         var runId = "abcd1234";
-        var cut = _ctx.RenderComponent<Dashboard.Pages.ResultsRun>(ps => ps.Add(p => p.runId, runId));
+        var cut = _ctx.RenderComponent<Pages.ResultsRun>(ps => ps.Add(p => p.runId, runId));
 
         // Wait until simulated commands are rendered
         cut.WaitForAssertion(() =>
@@ -87,7 +93,8 @@ public class ResultsRunTests
         var initialCount = cut.FindAll(".list-group-item").Count;
 
         // Act: invoke OnKindInput via reflection to simulate oninput
-        var mi = typeof(Dashboard.Pages.ResultsRun).GetMethod("OnKindInput", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var mi = typeof(Pages.ResultsRun).GetMethod("OnKindInput",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.That(mi, Is.Not.Null, "OnKindInput method not found");
         cut.InvokeAsync(() => mi!.Invoke(cut.Instance, new object[] { new ChangeEventArgs { Value = "Borrow" } }));
 
@@ -112,7 +119,7 @@ public class ResultsRunTests
         var copySetup = _ctx.JSInterop.SetupVoid("copyText", args => true);
         var alertSetup = _ctx.JSInterop.SetupVoid("alert", args => true);
 
-        var cut = _ctx.RenderComponent<Dashboard.Pages.ResultsRun>(ps => ps.Add(p => p.runId, runId));
+        var cut = _ctx.RenderComponent<Pages.ResultsRun>(ps => ps.Add(p => p.runId, runId));
 
         // Narrow list to a single known item to make click deterministic
         cut.WaitForAssertion(() =>
@@ -122,7 +129,7 @@ public class ResultsRunTests
         }, TimeSpan.FromSeconds(5));
 
         // Narrow using OnKindInput (explicit method now available)
-        var mi = typeof(Dashboard.Pages.ResultsRun).GetMethod("OnKindInput",
+        var mi = typeof(Pages.ResultsRun).GetMethod("OnKindInput",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.That(mi, Is.Not.Null, "OnKindInput method not found");
         await cut.InvokeAsync(() => mi!.Invoke(cut.Instance, [new ChangeEventArgs { Value = "Borrow" }]));
@@ -135,21 +142,21 @@ public class ResultsRunTests
         }, TimeSpan.FromSeconds(5));
 
         // Get filtered commands via reflection
-        var prop = typeof(Dashboard.Pages.ResultsRun).GetProperty("FilteredCommands",
+        var prop = typeof(Pages.ResultsRun).GetProperty("FilteredCommands",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.That(prop, Is.Not.Null, "FilteredCommands property not found");
-        var list = (System.Collections.Generic.List<Dashboard.Results.CommandLogEventDto>)prop!.GetValue(cut.Instance)!;
+        var list = (System.Collections.Generic.List<Results.CommandLogEventDto>)prop!.GetValue(cut.Instance)!;
         Assert.That(list, Is.Not.Null, "FilteredCommands returned null");
         Assert.That(list.Count, Is.GreaterThan(0), "Expected at least one filtered command");
 
         // Use the first command event for copy test
         var ev = list[0];
-        var miCopy = typeof(Dashboard.Pages.ResultsRun).GetMethod("Copy",
+        var miCopy = typeof(Pages.ResultsRun).GetMethod("Copy",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.That(miCopy, Is.Not.Null, "Copy method not found");
 
         // Invoke Copy method
-        await cut.InvokeAsync(() => ((Task)miCopy!.Invoke(cut.Instance, new object[] { ev })!));
+        await cut.InvokeAsync(() => (Task)miCopy!.Invoke(cut.Instance, new object[] { ev })!);
 
         // Assert: JS was invoked for copy and alert
         cut.WaitForAssertion(() =>
@@ -172,8 +179,12 @@ public class ResultsRunTests
         {
             di = di.Parent;
         }
+
         if (di == null)
+        {
             Assert.Fail("Could not locate repository root (PlaywrightGrid.sln)");
+        }
+
         return di.FullName;
     }
 }

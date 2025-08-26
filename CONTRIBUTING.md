@@ -187,10 +187,19 @@ Our pull request workflow includes:
 
 #### **Branch Strategy**
 
-1. main: Default branch
-2. feature/...: Individual feature development
-3. bugfix/...: Bug fixes
-4. release/...: Release preparation (optional)
+1. main: Production-ready code. All code in this branch should be deployable.
+2. develop: Primary development branch. Features are integrated here.
+3. feature/...: Individual feature development
+4. bugfix/...: Bug fixes
+5. release/...: Release preparation (optional)
+
+### Workflow
+
+1. Create feature branches from `develop`
+2. Submit pull requests to merge back into `develop`
+3. When ready for release, create a release branch from `develop`
+4. After testing, merge the release branch into both `main` and `develop`
+
 
 #### **Commit Guidelines**
 

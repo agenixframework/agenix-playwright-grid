@@ -68,7 +68,8 @@ public static class HubServiceRunner
             var cfg = app.Configuration;
             var nodeTimeoutSeconds = int.TryParse(cfg["HUB_NODE_TIMEOUT"], out var t) ? t : 60;
             var dashboardUrl = cfg["DASHBOARD_URL"] ?? "http://localhost:3001";
-            var enableTrailingFallback = !bool.TryParse(cfg["HUB_BORROW_TRAILING_FALLBACK"], out var tf) || tf; // default true
+            var enableTrailingFallback =
+                !bool.TryParse(cfg["HUB_BORROW_TRAILING_FALLBACK"], out var tf) || tf; // default true
             var enablePrefixExpand = !bool.TryParse(cfg["HUB_BORROW_PREFIX_EXPAND"], out var pe) || pe; // default true
             var enableWildcards = bool.TryParse(cfg["HUB_BORROW_WILDCARDS"], out var wc) && wc; // default false
             var ver = typeof(HubServiceRunner).Assembly.GetName().Version?.ToString() ?? string.Empty;
@@ -102,5 +103,4 @@ public static class HubServiceRunner
 
         await app.RunAsync();
     }
-
 }

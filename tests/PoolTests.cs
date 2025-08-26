@@ -9,23 +9,31 @@ using System.Threading.Tasks;
 using Agenix.PlaywrightGrid.HubClient;
 using Microsoft.Playwright;
 using NUnit.Framework;
+using NUnit.Framework.Legacy;
 
 namespace GridTests;
 
 public class PoolTests
 {
-    private static string NewRunId() => $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
-    private static async Task<List<(string labelKey, string browserId, string runId)>> BorrowAllForLabelAsync(HubClient client,
+    private static string NewRunId()
+    {
+        return $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
+    }
+
+    private static async Task<List<(string labelKey, string browserId, string runId)>> BorrowAllForLabelAsync(
+        HubClient client,
         string label, int maxAttempts)
     {
         var acquired = new List<(string labelKey, string browserId, string runId)>();
         for (var i = 0; i < maxAttempts; i++)
+        {
             try
             {
                 var runId = NewRunId();
-                var (browserId, ws, labelKey, browserType) = await client.BorrowAsync(label, runId);
+                var (browserId, _, labelKey, browserType) = await client.BorrowAsync(label, runId);
                 acquired.Add((labelKey, browserId, runId));
-                TestContext.WriteLine($"[Borrowed] label={label} id={browserId} type={browserType ?? "?"} runId={runId}");
+                TestContext.WriteLine(
+                    $"[Borrowed] label={label} id={browserId} type={browserType ?? "?"} runId={runId}");
             }
             catch (HttpRequestException hre) when (hre.StatusCode == HttpStatusCode.ServiceUnavailable ||
                                                    hre.StatusCode == HttpStatusCode.TooManyRequests)
@@ -40,6 +48,7 @@ public class PoolTests
                 TestContext.WriteLine($"[BorrowStop] label={label} ex={ex.Message}. Stopping further borrows.");
                 break;
             }
+        }
 
         return acquired;
     }
@@ -51,18 +60,16 @@ public class PoolTests
         var env = Environment.GetEnvironmentVariable("LABELS");
         var raw = param ?? env;
         if (!string.IsNullOrWhiteSpace(raw))
+        {
             return raw.Split([',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim())
                 .Where(s => s.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+        }
+
         // Defaults that align with common labels used in this repo
-        return new[]
-        {
-            "AppB:Chromium:UAT",
-            "AppB:Firefox:UAT",
-            "AppB:Webkit:UAT"
-        };
+        return new[] { "AppB:Chromium:UAT", "AppB:Firefox:UAT", "AppB:Webkit:UAT" };
     }
 
     private static int GetInt(string name, int def)
@@ -71,8 +78,7 @@ public class PoolTests
         return int.TryParse(str, out var v) ? v : def;
     }
 
-    private static async Task<bool> BorrowNavigateReturnAsync(HubClient client, IPlaywright pw, string label,
-        CancellationToken ct)
+    private static async Task<bool> BorrowNavigateReturnAsync(HubClient client, IPlaywright pw, string label)
     {
         var browserId = string.Empty;
         var ws = string.Empty;
@@ -102,38 +108,41 @@ public class PoolTests
                 "webkit" => await pw.Webkit.ConnectAsync(ws, new BrowserTypeConnectOptions { Timeout = 20000 }),
                 _ => await pw.Chromium.ConnectAsync(ws, new BrowserTypeConnectOptions { Timeout = 20000 })
             };
-            var e2 = sw.Elapsed; TestContext.WriteLine($"[T] {label} connect {(e2 - last).TotalMilliseconds:0} ms"); last = e2;
+            var e2 = sw.Elapsed;
+            TestContext.WriteLine($"[T] {label} connect {(e2 - last).TotalMilliseconds:0} ms");
+            last = e2;
 
             ctx = await browser.NewContextAsync(new BrowserNewContextOptions { IgnoreHTTPSErrors = true });
-            var e3 = sw.Elapsed; TestContext.WriteLine($"[T] {label} context {(e3 - last).TotalMilliseconds:0} ms"); last = e3;
+            var e3 = sw.Elapsed;
+            TestContext.WriteLine($"[T] {label} context {(e3 - last).TotalMilliseconds:0} ms");
+            last = e3;
             ctx.SetDefaultTimeout(60000);
             ctx.SetDefaultNavigationTimeout(60000);
 
             var page = await ctx.NewPageAsync();
-            var e4 = sw.Elapsed; TestContext.WriteLine($"[T] {label} page {(e4 - last).TotalMilliseconds:0} ms"); last = e4;
+            var e4 = sw.Elapsed;
+            TestContext.WriteLine($"[T] {label} page {(e4 - last).TotalMilliseconds:0} ms");
+            last = e4;
             page.RequestFailed += (_, r) => TestContext.WriteLine($"RequestFailed: {r.Url} - {r.Failure}");
             page.Console += (_, msg) => TestContext.WriteLine($"Console[{msg.Type}] {msg.Text}");
 
-            // Announce current test to the hub so API logs are attributed under Tests tab; pass runId so hub can map browser->run if needed
-            var nunitTest = TestContext.CurrentContext.Test;
-            var testId = $"{runId}:{nunitTest.FullName}";
-
             // Forward a runner-side API log line before navigation
-            try { await client.SendApiLogAsync(browserId, "Page.Goto https://google.com", direction: "runner"); } catch { }
+            await client.SendApiLogAsync(browserId, "Page.Goto https://google.com", direction: "runner");
 
-            await page.GotoAsync("https://google.com", new PageGotoOptions
-            {
-                WaitUntil = WaitUntilState.Load,
-                Timeout = 20000
-            });
+            await page.GotoAsync("https://google.com",
+                new PageGotoOptions { WaitUntil = WaitUntilState.Load, Timeout = 20000 });
 
             // Forward a runner-side API log line after navigation
-            try { await client.SendApiLogAsync(browserId, "Page.Goto done", direction: "runner"); } catch { }
+            await client.SendApiLogAsync(browserId, "Page.Goto done", direction: "runner");
 
-            var e5 = sw.Elapsed; TestContext.WriteLine($"[T] {label} navigate {(e5 - last).TotalMilliseconds:0} ms"); last = e5;
+            var e5 = sw.Elapsed;
+            TestContext.WriteLine($"[T] {label} navigate {(e5 - last).TotalMilliseconds:0} ms");
+            last = e5;
             // Validate we reached a Google domain (covers consent.google.com, www.google.com, regional TLDs)
             var currentUrl = page.Url;
-            var e6 = sw.Elapsed; TestContext.WriteLine($"[T] {label} url {(e6 - last).TotalMilliseconds:0} ms"); last = e6;
+            var e6 = sw.Elapsed;
+            TestContext.WriteLine($"[T] {label} url {(e6 - last).TotalMilliseconds:0} ms");
+            last = e6;
             StringAssert.Contains("google", currentUrl.ToLowerInvariant());
             return true;
         }
@@ -146,7 +155,10 @@ public class PoolTests
         {
             try
             {
-                if (ctx != null) await ctx.CloseAsync();
+                if (ctx != null)
+                {
+                    await ctx.CloseAsync();
+                }
             }
             catch
             {
@@ -155,7 +167,10 @@ public class PoolTests
 
             try
             {
-                if (browser != null) await browser.CloseAsync();
+                if (browser != null)
+                {
+                    await browser.CloseAsync();
+                }
             }
             catch
             {
@@ -163,16 +178,19 @@ public class PoolTests
             }
 
             if (!string.IsNullOrEmpty(browserId))
+            {
                 try
                 {
                     await client.ReturnAsync(labelKey, browserId, runId);
-                    var er = sw.Elapsed; TestContext.WriteLine($"[T] {label} return {(er - last).TotalMilliseconds:0} ms"); last = er;
+                    var er = sw.Elapsed;
+                    TestContext.WriteLine($"[T] {label} return {(er - last).TotalMilliseconds:0} ms");
                     TestContext.WriteLine($"[Return] label={label} id={browserId}");
                 }
                 catch (Exception rex)
                 {
                     TestContext.WriteLine($"[ReturnError] label={label} id={browserId} ex={rex.Message}");
                 }
+            }
         }
     }
 
@@ -181,7 +199,9 @@ public class PoolTests
     {
         using var client = new HubClient("http://localhost:5100");
         if (!await client.HealthAsync())
+        {
             Assert.Inconclusive("Hub /health is not available. Ensure docker-compose is up and HUB_URL is correct.");
+        }
 
         var labels = GetLabels();
         var pw = await Playwright.CreateAsync();
@@ -190,12 +210,15 @@ public class PoolTests
         foreach (var label in labels)
         {
             var per = Stopwatch.StartNew();
-            var ok = await BorrowNavigateReturnAsync(client, pw, label, CancellationToken.None);
+            var ok = await BorrowNavigateReturnAsync(client, pw, label);
             TestContext.WriteLine($"[T] {label} total {per.Elapsed.TotalMilliseconds:0} ms");
             if (!ok)
+            {
                 Assert.Inconclusive(
                     $"No available browsers for label {label} or connection failed. Check workers and capacity.");
+            }
         }
+
         TestContext.WriteLine($"[T] all-labels total {total.Elapsed.TotalMilliseconds:0} ms");
     }
 
@@ -204,7 +227,9 @@ public class PoolTests
     {
         using var client = new HubClient("http://localhost:5100");
         if (!await client.HealthAsync())
+        {
             Assert.Inconclusive("Hub /health is not available. Ensure docker-compose is up and HUB_URL is correct.");
+        }
 
         var labels = GetLabels();
         var concurrency = GetInt("CONCURRENCY", 4);
@@ -214,8 +239,12 @@ public class PoolTests
         // Build a set of tasks across labels and iterations
         var allTasks = new List<Func<Task<bool>>>();
         foreach (var label in labels)
+        {
             for (var i = 0; i < iterations; i++)
-                allTasks.Add(() => BorrowNavigateReturnAsync(client, pw, label, CancellationToken.None));
+            {
+                allTasks.Add(() => BorrowNavigateReturnAsync(client, pw, label));
+            }
+        }
 
         // Throttle parallelism
         var sem = new SemaphoreSlim(concurrency);
@@ -246,7 +275,9 @@ public class PoolTests
     {
         using var client = new HubClient("http://localhost:5100");
         if (!await client.HealthAsync())
+        {
             Assert.Inconclusive("Hub /health is not available. Ensure docker-compose is up and HUB_URL is correct.");
+        }
 
         var labels = GetLabels();
         var holdSeconds = GetInt("HOLD_SECONDS", 10);
@@ -263,8 +294,10 @@ public class PoolTests
         }
 
         if (allBorrowed.Count == 0)
+        {
             Assert.Inconclusive(
                 "No browsers were borrowed. Check workers, capacity, labels, or increase MAX_ATTEMPTS_PER_LABEL.");
+        }
 
         TestContext.WriteLine(
             $"[PoolFilled] Total borrowed across labels = {allBorrowed.Count}. Holding for {holdSeconds}s so dashboard can reflect pool usage...");

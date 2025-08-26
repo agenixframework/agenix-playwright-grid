@@ -15,11 +15,17 @@ public sealed class PrometheusMetrics : IMetricsPort
         "worker_borrows_total", "Number of borrows", "node", "label");
 
     public void SetPoolCapacity(string nodeId, string labelKey, int count)
-        => PoolCapacity.WithLabels(nodeId, labelKey).Set(count);
+    {
+        PoolCapacity.WithLabels(nodeId, labelKey).Set(count);
+    }
 
     public void SetPoolAvailable(string nodeId, string labelKey, long count)
-        => PoolAvailable.WithLabels(nodeId, labelKey).Set(count);
+    {
+        PoolAvailable.WithLabels(nodeId, labelKey).Set(count);
+    }
 
     public void IncrementBorrow(string nodeId, string labelKey)
-        => BorrowCount.WithLabels(nodeId, labelKey).Inc();
+    {
+        BorrowCount.WithLabels(nodeId, labelKey).Inc();
+    }
 }

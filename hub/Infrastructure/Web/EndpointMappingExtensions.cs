@@ -31,7 +31,8 @@ public static class EndpointMappingExtensions
         var dashboardUrl = config["DASHBOARD_URL"] ?? "http://localhost:3001";
 
         // Borrow matching configuration
-        var enableTrailingFallback = !bool.TryParse(config["HUB_BORROW_TRAILING_FALLBACK"], out var tf) || tf; // default true
+        var enableTrailingFallback =
+            !bool.TryParse(config["HUB_BORROW_TRAILING_FALLBACK"], out var tf) || tf; // default true
         var enablePrefixExpand = !bool.TryParse(config["HUB_BORROW_PREFIX_EXPAND"], out var pe) || pe; // default true
         var enableWildcards = bool.TryParse(config["HUB_BORROW_WILDCARDS"], out var wc) && wc; // default false
 
@@ -110,13 +111,17 @@ return nil
 
                 var nodeIdRaw = body.GetValueOrDefault("NodeId")?.ToString();
                 if (string.IsNullOrWhiteSpace(nodeIdRaw) && body.TryGetValue("nodeId", out var nidTok))
+                {
                     nodeIdRaw = nidTok?.ToString();
+                }
+
                 var nodeId = string.IsNullOrWhiteSpace(nodeIdRaw) ? null : nodeIdRaw.Trim();
                 if (string.IsNullOrEmpty(nodeId))
                 {
                     Console.WriteLine($"[Register] 400 Missing NodeId from {remoteIp}");
                     return Results.BadRequest("missing NodeId");
                 }
+
                 var apps = Array.Empty<string>();
                 if (body.TryGetValue("Apps", out var a) || body.TryGetValue("apps", out a))
                 {
@@ -157,7 +162,9 @@ return nil
                 };
 
                 foreach (var kv in meta)
+                {
                     await db.HashSetAsync(key, kv.Key, kv.Value);
+                }
 
                 await db.SetAddAsync("nodes", nodeId);
 
@@ -185,11 +192,16 @@ return nil
         // Borrow expects { "labelKey": "App:Chromium:Staging" }
         app.MapPost("/session/borrow", async (HttpRequest req) =>
         {
-            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret)) return Results.Unauthorized();
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
 
             var body = await req.ReadFromJsonAsync<Dictionary<string, string>>() ?? new Dictionary<string, string>();
             if (!body.TryGetValue("labelKey", out var labelKey) || string.IsNullOrEmpty(labelKey))
+            {
                 return Results.BadRequest("missing labelKey");
+            }
 
             // Metrics use requested label key for request/latency tracking
             borrowRequests.WithLabels(labelKey).Inc();
@@ -222,9 +234,12 @@ return nil
                                 catch { }
                             }
                         }
+
                         // If still under maintenance, skip borrowing from this candidate
                         if (await db.KeyExistsAsync($"maintenance:{candidate}"))
+                        {
                             return null;
+                        }
                     }
                 }
                 catch { }
@@ -232,7 +247,10 @@ return nil
                 var listKey = $"available:{candidate}";
                 var inuseKey = $"inuse:{candidate}";
                 var res = await db.ScriptEvaluateAsync(luaFindPop, new RedisKey[] { listKey, inuseKey }, []);
-                if (res.IsNull) return null;
+                if (res.IsNull)
+                {
+                    return null;
+                }
 
                 // Update gauge for the actual matched label
                 var listLenght = await db.ListLengthAsync(listKey);
@@ -258,10 +276,7 @@ return nil
                         TimestampUtc = now,
                         Kind = "Borrow",
                         Message = $"Borrowed for {labelKey}",
-                        Props = new Dictionary<string, string>
-                        {
-                            ["labelKey"] = labelKey
-                        }
+                        Props = new Dictionary<string, string> { ["labelKey"] = labelKey }
                     };
 
                     await resultsStore.AppendCommandAsync(ev);
@@ -280,33 +295,65 @@ return nil
                     try
                     {
                         string? nodeId = null, browserVer = null, region = null, os = null, pwVer = null;
-                        if (item.Value.TryGetProperty("nodeId", out var nodeEl) && nodeEl.ValueKind == JsonValueKind.String)
+                        if (item.Value.TryGetProperty("nodeId", out var nodeEl) &&
+                            nodeEl.ValueKind == JsonValueKind.String)
+                        {
                             nodeId = nodeEl.GetString();
-                        if (item.Value.TryGetProperty("browserVersion", out var bvEl) && bvEl.ValueKind == JsonValueKind.String)
+                        }
+
+                        if (item.Value.TryGetProperty("browserVersion", out var bvEl) &&
+                            bvEl.ValueKind == JsonValueKind.String)
+                        {
                             browserVer = bvEl.GetString();
-                        if (item.Value.TryGetProperty("labels", out var labelsEl) && labelsEl.ValueKind == JsonValueKind.Object)
+                        }
+
+                        if (item.Value.TryGetProperty("labels", out var labelsEl) &&
+                            labelsEl.ValueKind == JsonValueKind.Object)
                         {
                             foreach (var p in labelsEl.EnumerateObject())
                             {
-                                if (string.Equals(p.Name, "region", StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String)
+                                if (string.Equals(p.Name, "region", StringComparison.OrdinalIgnoreCase) &&
+                                    p.Value.ValueKind == JsonValueKind.String)
+                                {
                                     region = p.Value.GetString();
-                                if (string.Equals(p.Name, "os", StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String)
+                                }
+
+                                if (string.Equals(p.Name, "os", StringComparison.OrdinalIgnoreCase) &&
+                                    p.Value.ValueKind == JsonValueKind.String)
+                                {
                                     os = p.Value.GetString();
+                                }
                             }
                         }
+
                         if (!string.IsNullOrWhiteSpace(nodeId))
                         {
                             var pwVal = await db.HashGetAsync($"node:{nodeId}", "PlaywrightVersion");
-                            if (!pwVal.IsNullOrEmpty) pwVer = pwVal.ToString();
+                            if (!pwVal.IsNullOrEmpty)
+                            {
+                                pwVer = pwVal.ToString();
+                            }
                         }
 
                         if (!string.IsNullOrWhiteSpace(region) || !string.IsNullOrWhiteSpace(os))
                         {
                             run = run with { Region = region ?? run.Region, OS = os ?? run.OS };
                         }
-                        if (!string.IsNullOrWhiteSpace(nodeId)) run.WorkerNodeId = nodeId;
-                        if (!string.IsNullOrWhiteSpace(pwVer)) run.PlaywrightVersion = pwVer;
-                        if (!string.IsNullOrWhiteSpace(browserVer)) run.BrowserVersion = browserVer;
+
+                        if (!string.IsNullOrWhiteSpace(nodeId))
+                        {
+                            run.WorkerNodeId = nodeId;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(pwVer))
+                        {
+                            run.PlaywrightVersion = pwVer;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(browserVer))
+                        {
+                            run.BrowserVersion = browserVer;
+                        }
                     }
                     catch { }
 
@@ -316,14 +363,35 @@ return nil
                     try
                     {
                         string? ws = null, bt = null, args = null, bid = null;
-                        if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl) && wsEl.ValueKind == JsonValueKind.String) ws = wsEl.GetString();
-                        if (item.Value.TryGetProperty("browserType", out var btEl) && btEl.ValueKind == JsonValueKind.String) bt = btEl.GetString();
-                        if (item.Value.TryGetProperty("args", out var argsEl) && argsEl.ValueKind == JsonValueKind.String) args = argsEl.GetString();
-                        if (item.Value.TryGetProperty("browserId", out var bidEl) && bidEl.ValueKind == JsonValueKind.String) bid = bidEl.GetString();
+                        if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl) &&
+                            wsEl.ValueKind == JsonValueKind.String)
+                        {
+                            ws = wsEl.GetString();
+                        }
+
+                        if (item.Value.TryGetProperty("browserType", out var btEl) &&
+                            btEl.ValueKind == JsonValueKind.String)
+                        {
+                            bt = btEl.GetString();
+                        }
+
+                        if (item.Value.TryGetProperty("args", out var argsEl) &&
+                            argsEl.ValueKind == JsonValueKind.String)
+                        {
+                            args = argsEl.GetString();
+                        }
+
+                        if (item.Value.TryGetProperty("browserId", out var bidEl) &&
+                            bidEl.ValueKind == JsonValueKind.String)
+                        {
+                            bid = bidEl.GetString();
+                        }
 
                         // Map browserId to runId so worker-sourced command logs can be attributed
                         if (!string.IsNullOrWhiteSpace(bid))
+                        {
                             await db.StringSetAsync($"browser_run:{bid}", runId, TimeSpan.FromHours(6));
+                        }
 
                         serverEv = new CommandLogEventDto
                         {
@@ -333,12 +401,36 @@ return nil
                             Message = "Playwright server started",
                             Props = new Dictionary<string, string>()
                         };
-                        if (!string.IsNullOrWhiteSpace(ws)) serverEv.Props["wsEndpoint"] = ws;
-                        if (!string.IsNullOrWhiteSpace(bt)) serverEv.Props["browserType"] = bt;
-                        if (!string.IsNullOrWhiteSpace(args)) serverEv.Props["args"] = args;
-                        if (!string.IsNullOrWhiteSpace(bid)) serverEv.Props["browserId"] = bid;
-                        if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion)) serverEv.Props["playwrightVersion"] = run.PlaywrightVersion;
-                        if (!string.IsNullOrWhiteSpace(run.BrowserVersion)) serverEv.Props["browserVersion"] = run.BrowserVersion;
+                        if (!string.IsNullOrWhiteSpace(ws))
+                        {
+                            serverEv.Props["wsEndpoint"] = ws;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(bt))
+                        {
+                            serverEv.Props["browserType"] = bt;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(args))
+                        {
+                            serverEv.Props["args"] = args;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(bid))
+                        {
+                            serverEv.Props["browserId"] = bid;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion))
+                        {
+                            serverEv.Props["playwrightVersion"] = run.PlaywrightVersion;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(run.BrowserVersion))
+                        {
+                            serverEv.Props["browserVersion"] = run.BrowserVersion;
+                        }
+
                         serverEv.Props["labelKey"] = labelKey;
                         await resultsStore.AppendCommandAsync(serverEv);
                     }
@@ -362,10 +454,16 @@ return nil
                 while (true)
                 {
                     var idx = s.LastIndexOf(':');
-                    if (idx <= 0) break;
+                    if (idx <= 0)
+                    {
+                        break;
+                    }
+
                     s = s[..idx];
                     if (!string.Equals(s, labelKey, StringComparison.OrdinalIgnoreCase))
+                    {
                         candidates.Add(s);
+                    }
                 }
             }
 
@@ -376,7 +474,11 @@ return nil
                 foreach (var ep in mux.GetEndPoints())
                 {
                     var server = mux.GetServer(ep);
-                    if (server is null || !server.IsConnected) continue;
+                    if (server is null || !server.IsConnected)
+                    {
+                        continue;
+                    }
+
                     foreach (var key in server.Keys(pattern: pattern))
                     {
                         var k = key.ToString();
@@ -384,7 +486,9 @@ return nil
                         {
                             var label = k["available:".Length..];
                             if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
+                            {
                                 candidates.Add(label);
+                            }
                         }
                     }
                 }
@@ -397,7 +501,11 @@ return nil
                 foreach (var ep in mux.GetEndPoints())
                 {
                     var server = mux.GetServer(ep);
-                    if (server is null || !server.IsConnected) continue;
+                    if (server is null || !server.IsConnected)
+                    {
+                        continue;
+                    }
+
                     foreach (var key in server.Keys(pattern: pattern))
                     {
                         var k = key.ToString();
@@ -405,7 +513,9 @@ return nil
                         {
                             var label = k["available:".Length..];
                             if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
+                            {
                                 candidates.Add(label);
+                            }
                         }
                     }
                 }
@@ -414,7 +524,11 @@ return nil
             // Sort candidates by specificity: prefer those closest to the requested key (fewest extra segments)
             candidates.Sort((a, b) =>
             {
-                int Segments(string s) => s.Split(':').Length;
+                int Segments(string s)
+                {
+                    return s.Split(':').Length;
+                }
+
                 var da = Math.Abs(Segments(a) - Segments(labelKey));
                 var dbb = Math.Abs(Segments(b) - Segments(labelKey));
                 var cmp = da.CompareTo(dbb);
@@ -436,11 +550,7 @@ return nil
                             TimestampUtc = now,
                             Kind = "Borrow",
                             Message = $"Borrowed for {labelKey} via fallback {c}",
-                            Props = new Dictionary<string, string>
-                            {
-                                ["labelKey"] = labelKey,
-                                ["matchedLabel"] = c
-                            }
+                            Props = new Dictionary<string, string> { ["labelKey"] = labelKey, ["matchedLabel"] = c }
                         };
                         await resultsStore.AppendCommandAsync(ev);
                         var run = await resultsStore.GetRunAsync(runId) ?? new ResultRunSummaryDto
@@ -456,33 +566,65 @@ return nil
                         try
                         {
                             string? nodeId = null, browserVer = null, region = null, os = null, pwVer = null;
-                            if (item.Value.TryGetProperty("nodeId", out var nodeEl) && nodeEl.ValueKind == JsonValueKind.String)
+                            if (item.Value.TryGetProperty("nodeId", out var nodeEl) &&
+                                nodeEl.ValueKind == JsonValueKind.String)
+                            {
                                 nodeId = nodeEl.GetString();
-                            if (item.Value.TryGetProperty("browserVersion", out var bvEl) && bvEl.ValueKind == JsonValueKind.String)
+                            }
+
+                            if (item.Value.TryGetProperty("browserVersion", out var bvEl) &&
+                                bvEl.ValueKind == JsonValueKind.String)
+                            {
                                 browserVer = bvEl.GetString();
-                            if (item.Value.TryGetProperty("labels", out var labelsEl) && labelsEl.ValueKind == JsonValueKind.Object)
+                            }
+
+                            if (item.Value.TryGetProperty("labels", out var labelsEl) &&
+                                labelsEl.ValueKind == JsonValueKind.Object)
                             {
                                 foreach (var p in labelsEl.EnumerateObject())
                                 {
-                                    if (string.Equals(p.Name, "region", StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String)
+                                    if (string.Equals(p.Name, "region", StringComparison.OrdinalIgnoreCase) &&
+                                        p.Value.ValueKind == JsonValueKind.String)
+                                    {
                                         region = p.Value.GetString();
-                                    if (string.Equals(p.Name, "os", StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.String)
+                                    }
+
+                                    if (string.Equals(p.Name, "os", StringComparison.OrdinalIgnoreCase) &&
+                                        p.Value.ValueKind == JsonValueKind.String)
+                                    {
                                         os = p.Value.GetString();
+                                    }
                                 }
                             }
+
                             if (!string.IsNullOrWhiteSpace(nodeId))
                             {
                                 var pwVal = await db.HashGetAsync($"node:{nodeId}", "PlaywrightVersion");
-                                if (!pwVal.IsNullOrEmpty) pwVer = pwVal.ToString();
+                                if (!pwVal.IsNullOrEmpty)
+                                {
+                                    pwVer = pwVal.ToString();
+                                }
                             }
 
                             if (!string.IsNullOrWhiteSpace(region) || !string.IsNullOrWhiteSpace(os))
                             {
                                 run = run with { Region = region ?? run.Region, OS = os ?? run.OS };
                             }
-                            if (!string.IsNullOrWhiteSpace(nodeId)) run.WorkerNodeId = nodeId;
-                            if (!string.IsNullOrWhiteSpace(pwVer)) run.PlaywrightVersion = pwVer;
-                            if (!string.IsNullOrWhiteSpace(browserVer)) run.BrowserVersion = browserVer;
+
+                            if (!string.IsNullOrWhiteSpace(nodeId))
+                            {
+                                run.WorkerNodeId = nodeId;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(pwVer))
+                            {
+                                run.PlaywrightVersion = pwVer;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(browserVer))
+                            {
+                                run.BrowserVersion = browserVer;
+                            }
                         }
                         catch { }
 
@@ -492,14 +634,35 @@ return nil
                         try
                         {
                             string? ws = null, bt = null, args = null, bid = null;
-                            if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl) && wsEl.ValueKind == JsonValueKind.String) ws = wsEl.GetString();
-                            if (item.Value.TryGetProperty("browserType", out var btEl) && btEl.ValueKind == JsonValueKind.String) bt = btEl.GetString();
-                            if (item.Value.TryGetProperty("args", out var argsEl) && argsEl.ValueKind == JsonValueKind.String) args = argsEl.GetString();
-                            if (item.Value.TryGetProperty("browserId", out var bidEl) && bidEl.ValueKind == JsonValueKind.String) bid = bidEl.GetString();
+                            if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl) &&
+                                wsEl.ValueKind == JsonValueKind.String)
+                            {
+                                ws = wsEl.GetString();
+                            }
+
+                            if (item.Value.TryGetProperty("browserType", out var btEl) &&
+                                btEl.ValueKind == JsonValueKind.String)
+                            {
+                                bt = btEl.GetString();
+                            }
+
+                            if (item.Value.TryGetProperty("args", out var argsEl) &&
+                                argsEl.ValueKind == JsonValueKind.String)
+                            {
+                                args = argsEl.GetString();
+                            }
+
+                            if (item.Value.TryGetProperty("browserId", out var bidEl) &&
+                                bidEl.ValueKind == JsonValueKind.String)
+                            {
+                                bid = bidEl.GetString();
+                            }
 
                             // Map browserId to runId so worker-sourced command logs can be attributed
                             if (!string.IsNullOrWhiteSpace(bid))
+                            {
                                 await db.StringSetAsync($"browser_run:{bid}", runId!, TimeSpan.FromHours(6));
+                            }
 
                             serverEv = new CommandLogEventDto
                             {
@@ -509,12 +672,36 @@ return nil
                                 Message = "Playwright server started",
                                 Props = new Dictionary<string, string>()
                             };
-                            if (!string.IsNullOrWhiteSpace(ws)) serverEv.Props["wsEndpoint"] = ws;
-                            if (!string.IsNullOrWhiteSpace(bt)) serverEv.Props["browserType"] = bt;
-                            if (!string.IsNullOrWhiteSpace(args)) serverEv.Props["args"] = args!;
-                            if (!string.IsNullOrWhiteSpace(bid)) serverEv.Props["browserId"] = bid!;
-                            if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion)) serverEv.Props["playwrightVersion"] = run.PlaywrightVersion!;
-                            if (!string.IsNullOrWhiteSpace(run.BrowserVersion)) serverEv.Props["browserVersion"] = run.BrowserVersion!;
+                            if (!string.IsNullOrWhiteSpace(ws))
+                            {
+                                serverEv.Props["wsEndpoint"] = ws;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(bt))
+                            {
+                                serverEv.Props["browserType"] = bt;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(args))
+                            {
+                                serverEv.Props["args"] = args!;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(bid))
+                            {
+                                serverEv.Props["browserId"] = bid!;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion))
+                            {
+                                serverEv.Props["playwrightVersion"] = run.PlaywrightVersion!;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(run.BrowserVersion))
+                            {
+                                serverEv.Props["browserVersion"] = run.BrowserVersion!;
+                            }
+
                             serverEv.Props["labelKey"] = labelKey;
                             serverEv.Props["matchedLabel"] = c;
                             await resultsStore.AppendCommandAsync(serverEv);
@@ -536,11 +723,16 @@ return nil
         // Return { "labelKey": "...", "browserId": "..." }
         app.MapPost("/session/return", async (HttpRequest req) =>
         {
-            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret)) return Results.Unauthorized();
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
 
             var body = await req.ReadFromJsonAsync<Dictionary<string, string>>() ?? new Dictionary<string, string>();
             if (!body.TryGetValue("labelKey", out var labelKey) || !body.TryGetValue("browserId", out var browserId))
+            {
                 return Results.BadRequest("missing labelKey|browserId");
+            }
 
             var inuseKey = $"inuse:{labelKey}";
             var availKey = $"available:{labelKey}";
@@ -552,7 +744,8 @@ return nil
 
             // Request sidecar recycle on the worker so the instance is torn down and replenished with a fresh one
             // This aligns with the policy of not reusing the same browser across multiple borrowers.
-            try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); } catch { }
+            try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
+            catch { }
 
             if (res.IsNull)
             {
@@ -571,11 +764,7 @@ return nil
                     TimestampUtc = now,
                     Kind = "Return",
                     Message = $"Returned browser {browserId} for {labelKey}",
-                    Props = new Dictionary<string, string>
-                    {
-                        ["labelKey"] = labelKey,
-                        ["browserId"] = browserId
-                    }
+                    Props = new Dictionary<string, string> { ["labelKey"] = labelKey, ["browserId"] = browserId }
                 };
                 await resultsStore.AppendCommandAsync(ev);
 
@@ -589,14 +778,17 @@ return nil
                 };
                 // Mark run complete on return when attributed by runId
                 run.CompletedAtUtc = now;
-                run.Status = (run.Failed > 0) ? "Failed" : "Passed";
+                run.Status = run.Failed > 0 ? "Failed" : "Passed";
                 await resultsStore.UpsertRunAsync(run);
                 await resultsHubCtx.Clients.Group($"run:{runId2}").CommandLogChunk(new[] { ev });
                 await resultsHubCtx.Clients.Group($"run:{runId2}").RunUpdate(run);
 
                 // Clear browserId->runId mapping on return
-                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); } catch { }
-                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); } catch { }
+                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); }
+                catch { }
+
+                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
+                catch { }
             }
 
             return Results.Ok(new { returned = browserId });
@@ -668,7 +860,10 @@ return nil
         // Admin: mark run stopped and attempt to release any borrowed browsers for this run
         app.MapPost("/results/{runId}/stop", async (HttpRequest req, string runId) =>
         {
-            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret)) return Results.Unauthorized();
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
 
             var now = DateTime.UtcNow;
             var released = 0;
@@ -678,14 +873,32 @@ return nil
             var candidates = new List<(string labelKey, string browserId)>();
             foreach (var cmd in commands)
             {
-                if (!string.Equals(cmd.Kind, "ServerLaunch", StringComparison.OrdinalIgnoreCase)) continue;
-                if (cmd.Props is null) continue;
-                if (!cmd.Props.TryGetValue("browserId", out var bid) || string.IsNullOrWhiteSpace(bid)) continue;
+                if (!string.Equals(cmd.Kind, "ServerLaunch", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (cmd.Props is null)
+                {
+                    continue;
+                }
+
+                if (!cmd.Props.TryGetValue("browserId", out var bid) || string.IsNullOrWhiteSpace(bid))
+                {
+                    continue;
+                }
+
                 // Prefer matchedLabel (actual) then labelKey
-                string labelKey = cmd.Props.TryGetValue("matchedLabel", out var ml) && !string.IsNullOrWhiteSpace(ml)
+                var labelKey = cmd.Props.TryGetValue("matchedLabel", out var ml) && !string.IsNullOrWhiteSpace(ml)
                     ? ml
-                    : (cmd.Props.TryGetValue("labelKey", out var lk) ? (lk ?? string.Empty) : string.Empty);
-                if (string.IsNullOrWhiteSpace(labelKey)) continue;
+                    : cmd.Props.TryGetValue("labelKey", out var lk)
+                        ? lk ?? string.Empty
+                        : string.Empty;
+                if (string.IsNullOrWhiteSpace(labelKey))
+                {
+                    continue;
+                }
+
                 candidates.Add((labelKey, bid));
             }
 
@@ -695,17 +908,22 @@ return nil
                 {
                     var inuseKey = $"inuse:{labelKey}";
                     var availKey = $"available:{labelKey}";
-                    var res = await db.ScriptEvaluateAsync(luaReturn, new RedisKey[] { inuseKey, availKey }, new RedisValue[] { browserId });
+                    var res = await db.ScriptEvaluateAsync(luaReturn, new RedisKey[] { inuseKey, availKey },
+                        new RedisValue[] { browserId });
                     if (!res.IsNull)
                     {
                         released++;
                         // clean mappings
-                        try { await db.KeyDeleteAsync($"browser_run:{browserId}"); } catch { }
-                        try { await db.KeyDeleteAsync($"browser_test:{browserId}"); } catch { }
+                        try { await db.KeyDeleteAsync($"browser_run:{browserId}"); }
+                        catch { }
+
+                        try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
+                        catch { }
                     }
 
                     // request sidecar recycle on the worker (idempotent, short TTL)
-                    try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); } catch { }
+                    try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
+                    catch { }
                 }
                 catch { }
             }
@@ -739,7 +957,10 @@ return nil
         // Admin: restart all pre-warmed browsers for a pool (available and in-use)
         app.MapPost("/admin/pools/{labelKey}/restart", async (HttpRequest req, string labelKey) =>
         {
-            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret)) return Results.Unauthorized();
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
 
             // Enter maintenance and snapshot current counts
             var availKey = $"available:{labelKey}";
@@ -751,10 +972,14 @@ return nil
             try
             {
                 await db.StringSetAsync($"maintenance:{labelKey}", "1", ttl);
-                await db.StringSetAsync($"maintenance:target:{labelKey}", target.ToString(CultureInfo.InvariantCulture), ttl);
-                await db.StringSetAsync($"maintenance:snap_avail:{labelKey}", availLen.ToString(CultureInfo.InvariantCulture), ttl);
-                await db.StringSetAsync($"maintenance:snap_inuse:{labelKey}", inuseLen.ToString(CultureInfo.InvariantCulture), ttl);
-                await db.StringSetAsync($"maintenance:since:{labelKey}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), ttl);
+                await db.StringSetAsync($"maintenance:target:{labelKey}", target.ToString(CultureInfo.InvariantCulture),
+                    ttl);
+                await db.StringSetAsync($"maintenance:snap_avail:{labelKey}",
+                    availLen.ToString(CultureInfo.InvariantCulture), ttl);
+                await db.StringSetAsync($"maintenance:snap_inuse:{labelKey}",
+                    inuseLen.ToString(CultureInfo.InvariantCulture), ttl);
+                await db.StringSetAsync($"maintenance:since:{labelKey}",
+                    DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), ttl);
             }
             catch { }
 
@@ -773,7 +998,8 @@ return nil
                             var bid = m.Groups["id"].Value;
                             if (scheduled.Add(bid))
                             {
-                                try { await db.StringSetAsync($"recycle:{bid}", "1", TimeSpan.FromMinutes(2)); } catch { }
+                                try { await db.StringSetAsync($"recycle:{bid}", "1", TimeSpan.FromMinutes(2)); }
+                                catch { }
                             }
                         }
                     }
@@ -781,22 +1007,33 @@ return nil
                 catch { }
             }
 
-            return Results.Ok(new { labelKey, scheduled = scheduled.Count, maintenance = new { active = true, target, avail = availLen, inuse = inuseLen } });
+            return Results.Ok(new
+            {
+                labelKey,
+                scheduled = scheduled.Count,
+                maintenance = new { active = true, target, avail = availLen, inuse = inuseLen }
+            });
         });
 
         // Test attribution from client: set current testId for a browserId
         app.MapPost("/results/browser/{browserId}/test", async (HttpRequest req, string browserId) =>
         {
-            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret)) return Results.Unauthorized();
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
 
             var body = await req.ReadFromJsonAsync<Dictionary<string, string?>>() ?? new Dictionary<string, string?>();
             if (!body.TryGetValue("testId", out var testId) || string.IsNullOrWhiteSpace(testId))
+            {
                 return Results.BadRequest("missing testId");
+            }
 
             // Ensure browser->run mapping if provided in body and missing in Redis
             var runMapKey = $"browser_run:{browserId}";
             var runIdVal = await db.StringGetAsync(runMapKey);
-            if (runIdVal.IsNullOrEmpty && body.TryGetValue("runId", out var providedRunId) && !string.IsNullOrWhiteSpace(providedRunId))
+            if (runIdVal.IsNullOrEmpty && body.TryGetValue("runId", out var providedRunId) &&
+                !string.IsNullOrWhiteSpace(providedRunId))
             {
                 await db.StringSetAsync(runMapKey, providedRunId!, TimeSpan.FromHours(6));
                 runIdVal = providedRunId;
@@ -834,21 +1071,30 @@ return nil
         // Worker-sourced Playwright command logs by browserId
         app.MapPost("/results/browser/{browserId}/commands", async (HttpRequest req, string browserId) =>
         {
-            if (!CheckSecret(req, "x-hub-secret", hubNodeSecret)) return Results.Unauthorized();
+            if (!CheckSecret(req, "x-hub-secret", hubNodeSecret))
+            {
+                return Results.Unauthorized();
+            }
 
             var runIdVal = await db.StringGetAsync($"browser_run:{browserId}");
-            if (runIdVal.IsNullOrEmpty) return Results.Accepted(); // No run attribution yet
+            if (runIdVal.IsNullOrEmpty)
+            {
+                return Results.Accepted(); // No run attribution yet
+            }
+
             var runId = runIdVal.ToString();
 
             // Get current test attribution (if any)
             RedisValue currentTestVal;
             try { currentTestVal = await db.StringGetAsync($"browser_test:{browserId}"); }
             catch { currentTestVal = RedisValue.Null; }
+
             var currentTestId = currentTestVal.IsNullOrEmpty ? null : currentTestVal.ToString();
 
             JsonDocument? doc = null;
             try { doc = await JsonDocument.ParseAsync(req.Body); }
             catch { return Results.BadRequest("invalid JSON"); }
+
             using var _ = doc;
 
             var list = new List<CommandLogEventDto>();
@@ -857,32 +1103,49 @@ return nil
                 foreach (var el in doc.RootElement.EnumerateArray())
                 {
                     var (text, dir, ts) = ExtractLog(el);
-                    if (string.IsNullOrWhiteSpace(text)) continue;
-                    list.Add(ToEvent(runId, browserId, currentTestId, text, dir, ts, source: "worker"));
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        continue;
+                    }
+
+                    list.Add(ToEvent(runId, browserId, currentTestId, text, dir, ts, "worker"));
                 }
             }
             else if (doc.RootElement.ValueKind == JsonValueKind.Object)
             {
-                if (doc.RootElement.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
+                if (doc.RootElement.TryGetProperty("items", out var itemsEl) &&
+                    itemsEl.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var el in itemsEl.EnumerateArray())
                     {
                         var (text, dir, ts) = ExtractLog(el);
-                        if (string.IsNullOrWhiteSpace(text)) continue;
-                        list.Add(ToEvent(runId, browserId, currentTestId, text, dir, ts, source: "worker"));
+                        if (string.IsNullOrWhiteSpace(text))
+                        {
+                            continue;
+                        }
+
+                        list.Add(ToEvent(runId, browserId, currentTestId, text, dir, ts, "worker"));
                     }
                 }
                 else
                 {
                     var (text, dir, ts) = ExtractLog(doc.RootElement);
-                    if (!string.IsNullOrWhiteSpace(text)) list.Add(ToEvent(runId, browserId, currentTestId, text, dir, ts, source: "worker"));
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        list.Add(ToEvent(runId, browserId, currentTestId, text, dir, ts, "worker"));
+                    }
                 }
             }
 
-            if (list.Count == 0) return Results.NoContent();
+            if (list.Count == 0)
+            {
+                return Results.NoContent();
+            }
 
             foreach (var ev in list)
+            {
                 await resultsStore.AppendCommandAsync(ev);
+            }
 
             await resultsHubCtx.Clients.Group($"run:{runId}").CommandLogChunk(list.ToArray());
             return Results.Ok(new { accepted = list.Count });
@@ -892,23 +1155,46 @@ return nil
                 try
                 {
                     if (el.ValueKind == JsonValueKind.String)
+                    {
                         return (el.GetString() ?? string.Empty, null, null);
+                    }
+
                     if (el.ValueKind == JsonValueKind.Object)
                     {
-                        string? text = null, dir = null; DateTime? ts = null;
-                        if (el.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String) text = t.GetString();
-                        if (el.TryGetProperty("direction", out var d) && d.ValueKind == JsonValueKind.String) dir = d.GetString();
-                        if (el.TryGetProperty("ts", out var tsEl) && tsEl.ValueKind == JsonValueKind.String && DateTime.TryParse(tsEl.GetString(), out var parsed)) ts = parsed;
+                        string? text = null, dir = null;
+                        DateTime? ts = null;
+                        if (el.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String)
+                        {
+                            text = t.GetString();
+                        }
+
+                        if (el.TryGetProperty("direction", out var d) && d.ValueKind == JsonValueKind.String)
+                        {
+                            dir = d.GetString();
+                        }
+
+                        if (el.TryGetProperty("ts", out var tsEl) && tsEl.ValueKind == JsonValueKind.String &&
+                            DateTime.TryParse(tsEl.GetString(), out var parsed))
+                        {
+                            ts = parsed;
+                        }
+
                         return (text ?? string.Empty, dir, ts);
                     }
                 }
                 catch { }
+
                 return (string.Empty, null, null);
             }
 
-            static CommandLogEventDto ToEvent(string runId, string browserId, string? testId, string text, string? dir, DateTime? ts, string source)
+            static CommandLogEventDto ToEvent(string runId, string browserId, string? testId, string text, string? dir,
+                DateTime? ts, string source)
             {
-                if (text.Length > 4000) text = text.Substring(0, 4000);
+                if (text.Length > 4000)
+                {
+                    text = text.Substring(0, 4000);
+                }
+
                 return new CommandLogEventDto
                 {
                     RunId = runId,
@@ -930,20 +1216,29 @@ return nil
         // Accepts HUB_RUNNER_SECRET so test runners can forward their client-side logs
         app.MapPost("/results/browser/{browserId}/api-logs", async (HttpRequest req, string browserId) =>
         {
-            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret)) return Results.Unauthorized();
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
 
             var runIdVal = await db.StringGetAsync($"browser_run:{browserId}");
-            if (runIdVal.IsNullOrEmpty) return Results.Accepted();
+            if (runIdVal.IsNullOrEmpty)
+            {
+                return Results.Accepted();
+            }
+
             var runId = runIdVal.ToString();
 
             RedisValue currentTestVal;
             try { currentTestVal = await db.StringGetAsync($"browser_test:{browserId}"); }
             catch { currentTestVal = RedisValue.Null; }
+
             var currentTestId = currentTestVal.IsNullOrEmpty ? null : currentTestVal.ToString();
 
             JsonDocument? doc;
             try { doc = await JsonDocument.ParseAsync(req.Body); }
             catch { return Results.BadRequest("invalid JSON"); }
+
             using var _2 = doc;
 
             var list = new List<CommandLogEventDto>();
@@ -954,18 +1249,27 @@ return nil
                         foreach (var el in doc.RootElement.EnumerateArray())
                         {
                             var (text, dir, ts) = ExtractRunnerLog(el);
-                            if (string.IsNullOrWhiteSpace(text)) continue;
+                            if (string.IsNullOrWhiteSpace(text))
+                            {
+                                continue;
+                            }
+
                             list.Add(ToRunnerEvent(runId, browserId, currentTestId, text, dir, ts));
                         }
 
                         break;
                     }
-                case JsonValueKind.Object when doc.RootElement.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array:
+                case JsonValueKind.Object when doc.RootElement.TryGetProperty("items", out var itemsEl) &&
+                                               itemsEl.ValueKind == JsonValueKind.Array:
                     {
                         foreach (var el in itemsEl.EnumerateArray())
                         {
                             var (text, dir, ts) = ExtractRunnerLog(el);
-                            if (string.IsNullOrWhiteSpace(text)) continue;
+                            if (string.IsNullOrWhiteSpace(text))
+                            {
+                                continue;
+                            }
+
                             list.Add(ToRunnerEvent(runId, browserId, currentTestId, text, dir, ts));
                         }
 
@@ -974,15 +1278,24 @@ return nil
                 case JsonValueKind.Object:
                     {
                         var (text, dir, ts) = ExtractRunnerLog(doc.RootElement);
-                        if (!string.IsNullOrWhiteSpace(text)) list.Add(ToRunnerEvent(runId, browserId, currentTestId, text, dir, ts));
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            list.Add(ToRunnerEvent(runId, browserId, currentTestId, text, dir, ts));
+                        }
+
                         break;
                     }
             }
 
-            if (list.Count == 0) return Results.NoContent();
+            if (list.Count == 0)
+            {
+                return Results.NoContent();
+            }
 
             foreach (var ev in list)
+            {
                 await resultsStore.AppendCommandAsync(ev);
+            }
 
             await resultsHubCtx.Clients.Group($"run:{runId}").CommandLogChunk(list.ToArray());
             return Results.Ok(new { accepted = list.Count });
@@ -992,23 +1305,47 @@ return nil
                 try
                 {
                     if (el.ValueKind == JsonValueKind.String)
+                    {
                         return (el.GetString() ?? string.Empty, null, null);
+                    }
+
                     if (el.ValueKind == JsonValueKind.Object)
                     {
-                        string? text = null; DateTime? ts = null; string? dir = null;
-                        if (el.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String) text = t.GetString();
-                        if (el.TryGetProperty("ts", out var tsEl) && tsEl.ValueKind == JsonValueKind.String && DateTime.TryParse(tsEl.GetString(), out var parsed)) ts = parsed;
-                        if (el.TryGetProperty("direction", out var d) && d.ValueKind == JsonValueKind.String) dir = d.GetString();
+                        string? text = null;
+                        DateTime? ts = null;
+                        string? dir = null;
+                        if (el.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String)
+                        {
+                            text = t.GetString();
+                        }
+
+                        if (el.TryGetProperty("ts", out var tsEl) && tsEl.ValueKind == JsonValueKind.String &&
+                            DateTime.TryParse(tsEl.GetString(), out var parsed))
+                        {
+                            ts = parsed;
+                        }
+
+                        if (el.TryGetProperty("direction", out var d) && d.ValueKind == JsonValueKind.String)
+                        {
+                            dir = d.GetString();
+                        }
+
                         return (text ?? string.Empty, dir, ts);
                     }
                 }
                 catch { }
+
                 return (string.Empty, null, null);
             }
 
-            static CommandLogEventDto ToRunnerEvent(string runId, string browserId, string? testId, string text, string? dir, DateTime? ts)
+            static CommandLogEventDto ToRunnerEvent(string runId, string browserId, string? testId, string text,
+                string? dir, DateTime? ts)
             {
-                if (text.Length > 4000) text = text.Substring(0, 4000);
+                if (text.Length > 4000)
+                {
+                    text = text.Substring(0, 4000);
+                }
+
                 return new CommandLogEventDto
                 {
                     RunId = runId,
@@ -1053,13 +1390,47 @@ return nil
 
             var evs = new List<CommandLogEventDto>
             {
-                new CommandLogEventDto { RunId = runId, TimestampUtc = now, Kind = "ServerLaunch", Message = "Playwright server started", Props = new Dictionary<string, string> { ["wsEndpoint"] = "ws://demo/ws", ["args"] = "--disable-gpu --no-sandbox" } },
-                new CommandLogEventDto { RunId = runId, TimestampUtc = now.AddSeconds(1), Kind = "Borrow", Message = "Borrowed Chromium endpoint", Props = new Dictionary<string, string> { ["labelKey"] = "demo:Chromium:local", ["browserId"] = "demo-browser-1" } },
-                new CommandLogEventDto { RunId = runId, TimestampUtc = now.AddSeconds(5), Kind = "Return", Message = "Returned Chromium endpoint", Props = new Dictionary<string, string> { ["labelKey"] = "demo:Chromium:local", ["browserId"] = "demo-browser-1" } }
+                new()
+                {
+                    RunId = runId,
+                    TimestampUtc = now,
+                    Kind = "ServerLaunch",
+                    Message = "Playwright server started",
+                    Props =
+                        new Dictionary<string, string>
+                        {
+                            ["wsEndpoint"] = "ws://demo/ws", ["args"] = "--disable-gpu --no-sandbox"
+                        }
+                },
+                new()
+                {
+                    RunId = runId,
+                    TimestampUtc = now.AddSeconds(1),
+                    Kind = "Borrow",
+                    Message = "Borrowed Chromium endpoint",
+                    Props =
+                        new Dictionary<string, string>
+                        {
+                            ["labelKey"] = "demo:Chromium:local", ["browserId"] = "demo-browser-1"
+                        }
+                },
+                new()
+                {
+                    RunId = runId,
+                    TimestampUtc = now.AddSeconds(5),
+                    Kind = "Return",
+                    Message = "Returned Chromium endpoint",
+                    Props = new Dictionary<string, string>
+                    {
+                        ["labelKey"] = "demo:Chromium:local", ["browserId"] = "demo-browser-1"
+                    }
+                }
             };
 
             foreach (var e in evs)
+            {
                 await resultsStore.AppendCommandAsync(e);
+            }
 
             // Broadcast to any connected dashboard clients
             await resultsHubCtx.Clients.All.RunUpdate(run);
@@ -1072,7 +1443,9 @@ return nil
         app.MapGet("/diagnostics", async (HttpRequest req) =>
         {
             if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
                 return Results.Unauthorized();
+            }
 
             var reader = services.GetRequiredService<IPoolStateReader>();
             var state = await reader.GetStateAsync();
@@ -1102,7 +1475,9 @@ return nil
         app.MapGet("/diagnostics/env", (HttpRequest req) =>
         {
             if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
                 return Results.Unauthorized();
+            }
 
             static bool IsSecret(string key)
             {
@@ -1114,7 +1489,11 @@ return nil
             foreach (System.Collections.DictionaryEntry de in Environment.GetEnvironmentVariables())
             {
                 var k = de.Key?.ToString();
-                if (string.IsNullOrWhiteSpace(k)) continue;
+                if (string.IsNullOrWhiteSpace(k))
+                {
+                    continue;
+                }
+
                 var v = de.Value?.ToString() ?? string.Empty;
                 dict[k] = IsSecret(k) && !string.IsNullOrEmpty(v) ? "***" : v;
             }
@@ -1126,17 +1505,21 @@ return nil
         app.MapGet("/diagnostics/worker-env/{nodeId}", async (HttpRequest req, string nodeId) =>
         {
             if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
                 return Results.Unauthorized();
+            }
 
             try
             {
                 var key = $"node:{nodeId}";
                 var baseUrl = (await db.HashGetAsync(key, "BaseUrl")).ToString();
                 if (string.IsNullOrWhiteSpace(baseUrl))
+                {
                     baseUrl = $"http://{nodeId}:5000";
+                }
 
-                using var handler = new System.Net.Http.HttpClientHandler { AllowAutoRedirect = false };
-                using var client = new System.Net.Http.HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
+                using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
                 client.DefaultRequestHeaders.Remove("x-hub-secret");
                 client.DefaultRequestHeaders.TryAddWithoutValidation("x-hub-secret", hubNodeSecret);
 

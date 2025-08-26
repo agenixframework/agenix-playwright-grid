@@ -21,27 +21,38 @@ public sealed class PoolManager(
     private readonly ConcurrentDictionary<string, int> _activeWs = new(StringComparer.OrdinalIgnoreCase);
 
     public void MarkConnectionStart(string browserId)
-        => _activeWs.AddOrUpdate(browserId, 1, static (_, v) => v + 1);
+    {
+        _activeWs.AddOrUpdate(browserId, 1, static (_, v) => v + 1);
+    }
 
     public void MarkConnectionEnd(string browserId)
     {
         _activeWs.AddOrUpdate(browserId, 0, static (_, v) => v > 1 ? v - 1 : 0);
         if (_activeWs.TryGetValue(browserId, out var cnt) && cnt <= 0)
+        {
             _activeWs.TryRemove(browserId, out _);
+        }
     }
 
     public bool HasActiveConnection(string browserId)
-        => _activeWs.TryGetValue(browserId, out var v) && v > 0;
+    {
+        return _activeWs.TryGetValue(browserId, out var v) && v > 0;
+    }
 
     private static string NormalizeBrowser(string s)
-        => string.IsNullOrWhiteSpace(s) ? "Chromium" : s.Trim();
+    {
+        return string.IsNullOrWhiteSpace(s) ? "Chromium" : s.Trim();
+    }
 
     private async Task<SidecarStartResult> StartPwServerAsync(string browserType)
-        => await sidecarLauncher.StartAsync(browserType);
+    {
+        return await sidecarLauncher.StartAsync(browserType);
+    }
 
     private static int SafePid(System.Diagnostics.Process proc)
     {
-        try { return proc.Id; } catch { return 0; }
+        try { return proc.Id; }
+        catch { return 0; }
     }
 
     public async Task InitializeAsync()
@@ -70,7 +81,16 @@ public sealed class PoolManager(
                 using var cts = new CancellationTokenSource(timeout);
                 await cws.ConnectAsync(new Uri(wsUrl), cts.Token);
                 var ok = cws.State == System.Net.WebSockets.WebSocketState.Open;
-                try { if (ok) await cws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "ok", CancellationToken.None); } catch { }
+                try
+                {
+                    if (ok)
+                    {
+                        await cws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "ok",
+                            CancellationToken.None);
+                    }
+                }
+                catch { }
+
                 return ok;
             }
             catch { return false; }
@@ -79,33 +99,41 @@ public sealed class PoolManager(
         // Local helper: detect container provenance (best-effort)
         static (bool isContainer, string? containerId) GetContainerInfo()
         {
-            bool isContainer = false; string? containerId = null;
+            var isContainer = false;
+            string? containerId = null;
             try
             {
-                isContainer = (System.IO.File.Exists("/.dockerenv")) ||
-                              (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true");
+                isContainer = File.Exists("/.dockerenv") ||
+                              Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
                 try
                 {
                     // Prefer hostname as container id hint
-                    if (System.IO.File.Exists("/etc/hostname"))
+                    if (File.Exists("/etc/hostname"))
                     {
-                        var h = System.IO.File.ReadAllText("/etc/hostname").Trim();
-                        if (!string.IsNullOrWhiteSpace(h)) containerId = h;
+                        var h = File.ReadAllText("/etc/hostname").Trim();
+                        if (!string.IsNullOrWhiteSpace(h))
+                        {
+                            containerId = h;
+                        }
                     }
-                    else if (System.IO.File.Exists("/proc/self/cgroup"))
+                    else if (File.Exists("/proc/self/cgroup"))
                     {
-                        var cg = System.IO.File.ReadAllText("/proc/self/cgroup");
+                        var cg = File.ReadAllText("/proc/self/cgroup");
                         var idx = cg.LastIndexOf('/', cg.Length - 1);
                         if (idx >= 0 && idx + 1 < cg.Length)
                         {
                             var tail = cg[(idx + 1)..].Trim();
-                            if (!string.IsNullOrWhiteSpace(tail)) containerId = tail;
+                            if (!string.IsNullOrWhiteSpace(tail))
+                            {
+                                containerId = tail;
+                            }
                         }
                     }
                 }
                 catch { }
             }
             catch { }
+
             return (isContainer, containerId);
         }
 
@@ -118,7 +146,8 @@ public sealed class PoolManager(
             res.proc.Exited += async (_, __) => await OnSidecarExited(labelKey, id, browserType);
 
             // Optionally validate WS reachability (bounded retries); restart sidecar once if enabled
-            var validateWarm = string.Equals(Environment.GetEnvironmentVariable("WORKER_VALIDATE_WS"), "true", StringComparison.OrdinalIgnoreCase);
+            var validateWarm = string.Equals(Environment.GetEnvironmentVariable("WORKER_VALIDATE_WS"), "true",
+                StringComparison.OrdinalIgnoreCase);
             var validated = !validateWarm;
             if (validateWarm)
             {
@@ -127,11 +156,23 @@ public sealed class PoolManager(
                     for (var attempt = 0; attempt < 10 && !validated; attempt++)
                     {
                         validated = await ValidateWsAsync(res.ws, TimeSpan.FromSeconds(3));
-                        if (!validated) await Task.Delay(TimeSpan.FromMilliseconds(200 * (attempt + 1)));
+                        if (!validated)
+                        {
+                            await Task.Delay(TimeSpan.FromMilliseconds(200 * (attempt + 1)));
+                        }
                     }
+
                     if (!validated && restart == 0)
                     {
-                        try { if (!res.proc.HasExited) res.proc.Kill(true); } catch { }
+                        try
+                        {
+                            if (!res.proc.HasExited)
+                            {
+                                res.proc.Kill(true);
+                            }
+                        }
+                        catch { }
+
                         await Task.Delay(200);
                         res = await StartPwServerAsync(browserType);
                         // keep same id and exit handler already attached for previous proc id; attach again for the new one
@@ -150,18 +191,27 @@ public sealed class PoolManager(
             // Public endpoint goes through this worker’s proxy (single stable port).
             string wsPublic;
             if (!string.IsNullOrWhiteSpace(options.PublicWsHost) && !string.IsNullOrWhiteSpace(options.PublicWsPort))
+            {
                 wsPublic = $"{options.PublicWsScheme}://{options.PublicWsHost}:{options.PublicWsPort}/ws/{id}";
+            }
             else if (!string.IsNullOrWhiteSpace(options.NodeId))
-                wsPublic = $"{options.PublicWsScheme}://{options.NodeId}:5000/ws/{id}"; // default to proxy via worker service name
+            {
+                wsPublic =
+                    $"{options.PublicWsScheme}://{options.NodeId}:5000/ws/{id}"; // default to proxy via worker service name
+            }
             else
+            {
                 wsPublic = res.ws; // last resort fallback
+            }
 
             var slot = new Slot(res.proc, browserType, res.ws, wsPublic, DateTime.UtcNow);
             map[id] = slot;
 
             // Store PlaywrightVersion on node metadata if available
             if (!string.IsNullOrWhiteSpace(res.playwrightVersion))
+            {
                 await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", res.playwrightVersion);
+            }
 
             var argsEnv = Environment.GetEnvironmentVariable("CHROMIUM_ARGS");
             var (isContainer, containerId) = GetContainerInfo();
@@ -181,7 +231,8 @@ public sealed class PoolManager(
             });
             await db.ListRightPushAsync(availableKey, item);
 
-            Console.WriteLine($"+ warm server {id} for {labelKey} (type={browserType}) ws={wsPublic} (container={isContainer} id={(containerId ?? "?")})");
+            Console.WriteLine(
+                $"+ warm server {id} for {labelKey} (type={browserType}) ws={wsPublic} (container={isContainer} id={containerId ?? "?"})");
         }
 
         metrics.SetPoolCapacity(options.NodeId, labelKey, map.Count);
@@ -195,9 +246,11 @@ public sealed class PoolManager(
             var availableKey = $"available:{labelKey}";
             var inuseKey = $"inuse:{labelKey}";
 
-            bool existedInMap = false;
+            var existedInMap = false;
             if (Pools.TryGetValue(labelKey, out var map))
+            {
                 existedInMap = map.TryRemove(browserId, out _);
+            }
 
             // Prune stale entries for the dead browserId
             static async Task PruneAsync(IDatabase db, string listKey, string browserId)
@@ -205,8 +258,12 @@ public sealed class PoolManager(
                 var entries = await db.ListRangeAsync(listKey);
                 var pattern = $"\"browserId\":\"{browserId}\"";
                 foreach (var e in entries)
+                {
                     if (e.ToString().Contains(pattern, StringComparison.Ordinal))
+                    {
                         await db.ListRemoveAsync(listKey, e, 1);
+                    }
+                }
             }
 
             await PruneAsync(db, availableKey, browserId);
@@ -236,14 +293,35 @@ public sealed class PoolManager(
                         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                         await cws.ConnectAsync(new Uri(res.ws), cts.Token);
                         validated = cws.State == System.Net.WebSockets.WebSocketState.Open;
-                        try { if (validated) await cws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "ok", CancellationToken.None); } catch { }
+                        try
+                        {
+                            if (validated)
+                            {
+                                await cws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "ok",
+                                    CancellationToken.None);
+                            }
+                        }
+                        catch { }
                     }
                     catch { }
-                    if (!validated) await Task.Delay(TimeSpan.FromMilliseconds(200 * (attempt + 1)));
+
+                    if (!validated)
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(200 * (attempt + 1)));
+                    }
                 }
+
                 if (!validated && restart == 0)
                 {
-                    try { if (!res.proc.HasExited) res.proc.Kill(true); } catch { }
+                    try
+                    {
+                        if (!res.proc.HasExited)
+                        {
+                            res.proc.Kill(true);
+                        }
+                    }
+                    catch { }
+
                     await Task.Delay(200);
                     res = await StartPwServerAsync(browserType);
                     res.proc.EnableRaisingEvents = true;
@@ -253,17 +331,24 @@ public sealed class PoolManager(
 
             if (!validated)
             {
-                Console.WriteLine($"[SidecarExit] Replacement failed WS validation for {labelKey}; capacity temporarily reduced");
+                Console.WriteLine(
+                    $"[SidecarExit] Replacement failed WS validation for {labelKey}; capacity temporarily reduced");
                 return;
             }
 
             string wsPublic;
             if (!string.IsNullOrWhiteSpace(options.PublicWsHost) && !string.IsNullOrWhiteSpace(options.PublicWsPort))
+            {
                 wsPublic = $"{options.PublicWsScheme}://{options.PublicWsHost}:{options.PublicWsPort}/ws/{newId}";
+            }
             else if (!string.IsNullOrWhiteSpace(options.NodeId))
+            {
                 wsPublic = $"{options.PublicWsScheme}://{options.NodeId}:5000/ws/{newId}";
+            }
             else
+            {
                 wsPublic = res.ws;
+            }
 
             var newSlot = new Slot(res.proc, browserType, res.ws, wsPublic, DateTime.UtcNow);
             var map2 = Pools.GetOrAdd(labelKey, _ => new ConcurrentDictionary<string, Slot>());
@@ -275,26 +360,35 @@ public sealed class PoolManager(
 
             // Update node PlaywrightVersion if available
             if (!string.IsNullOrWhiteSpace(res.playwrightVersion))
+            {
                 await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", res.playwrightVersion);
+            }
 
             // Container provenance
-            var isContainer = System.IO.File.Exists("/.dockerenv") || (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true");
+            var isContainer = File.Exists("/.dockerenv") ||
+                              Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
             string? containerId = null;
             try
             {
-                if (System.IO.File.Exists("/etc/hostname"))
+                if (File.Exists("/etc/hostname"))
                 {
-                    var h = System.IO.File.ReadAllText("/etc/hostname").Trim();
-                    if (!string.IsNullOrWhiteSpace(h)) containerId = h;
+                    var h = File.ReadAllText("/etc/hostname").Trim();
+                    if (!string.IsNullOrWhiteSpace(h))
+                    {
+                        containerId = h;
+                    }
                 }
-                else if (System.IO.File.Exists("/proc/self/cgroup"))
+                else if (File.Exists("/proc/self/cgroup"))
                 {
-                    var cg = System.IO.File.ReadAllText("/proc/self/cgroup");
+                    var cg = File.ReadAllText("/proc/self/cgroup");
                     var idx = cg.LastIndexOf('/', cg.Length - 1);
                     if (idx >= 0 && idx + 1 < cg.Length)
                     {
                         var tail = cg[(idx + 1)..].Trim();
-                        if (!string.IsNullOrWhiteSpace(tail)) containerId = tail;
+                        if (!string.IsNullOrWhiteSpace(tail))
+                        {
+                            containerId = tail;
+                        }
                     }
                 }
             }
@@ -320,7 +414,8 @@ public sealed class PoolManager(
             metrics.SetPoolCapacity(options.NodeId, labelKey, map2.Count);
             metrics.SetPoolAvailable(options.NodeId, labelKey, await db.ListLengthAsync(availableKey));
 
-            Console.WriteLine($"  {browserId} with {newId} for {labelKey} (container={isContainer} id={(containerId ?? "?")})");
+            Console.WriteLine(
+                $"  {browserId} with {newId} for {labelKey} (container={isContainer} id={containerId ?? "?"})");
         }
         catch (Exception ex)
         {
@@ -332,6 +427,7 @@ public sealed class PoolManager(
     {
         var keys = new[] { $"available:{labelKey}", $"inuse:{labelKey}" };
         foreach (var key in keys)
+        {
             try
             {
                 var items = await db.ListRangeAsync(key);
@@ -362,6 +458,7 @@ public sealed class PoolManager(
                 Console.WriteLine(
                     $"[Startup-Cleanup] node={options.NodeId} label={labelKey} error cleaning key={key}: {ex.Message}");
             }
+        }
     }
 
     public async Task ReconcileLoopAsync(CancellationToken ct)
@@ -385,32 +482,41 @@ public sealed class PoolManager(
 
                         var replaceRequested = await db.KeyExistsAsync($"recycle:{browserId}");
                         var needsReplace = slot.Proc.HasExited || replaceRequested;
-                        if (!needsReplace) continue;
+                        if (!needsReplace)
+                        {
+                            continue;
+                        }
 
                         // Defer recycling if a client is currently connected to this browserId
                         var hasActive = HasActiveConnection(browserId);
                         if (replaceRequested && hasActive)
                         {
-                            Console.WriteLine($"[Reconcile] Defer recycle for {browserId} ({labelKey}) - active WS connection");
+                            Console.WriteLine(
+                                $"[Reconcile] Defer recycle for {browserId} ({labelKey}) - active WS connection");
                             continue;
                         }
 
                         if (replaceRequested)
                         {
-                            try { await db.KeyDeleteAsync($"recycle:{browserId}"); } catch { }
+                            try { await db.KeyDeleteAsync($"recycle:{browserId}"); }
+                            catch { }
                         }
 
                         Console.WriteLine($"[Reconcile] Sidecar {browserId} for {labelKey} exited - replacing");
                         var removed = map.TryRemove(browserId, out _);
                         if (!removed)
                         {
-                            Console.WriteLine($"[Reconcile] Skip replacement for {browserId} ({labelKey}) - already handled by exit handler");
+                            Console.WriteLine(
+                                $"[Reconcile] Skip replacement for {browserId} ({labelKey}) - already handled by exit handler");
                             continue;
                         }
 
                         try
                         {
-                            if (!slot.Proc.HasExited) slot.Proc.Kill(true);
+                            if (!slot.Proc.HasExited)
+                            {
+                                slot.Proc.Kill(true);
+                            }
                         }
                         catch
                         {
@@ -423,8 +529,12 @@ public sealed class PoolManager(
                             var entries = await db.ListRangeAsync(listKey);
                             var pattern = $"\"browserId\":\"{browserId}\"";
                             foreach (var e in entries)
+                            {
                                 if (e.ToString().Contains(pattern, StringComparison.Ordinal))
+                                {
                                     await db.ListRemoveAsync(listKey, e);
+                                }
+                            }
                         }
 
                         // Launch a replacement
@@ -432,12 +542,20 @@ public sealed class PoolManager(
                         var newId = Guid.NewGuid().ToString("N");
 
                         string wsPublic;
-                        if (!string.IsNullOrWhiteSpace(options.PublicWsHost) && !string.IsNullOrWhiteSpace(options.PublicWsPort))
-                            wsPublic = $"{options.PublicWsScheme}://{options.PublicWsHost}:{options.PublicWsPort}/ws/{newId}";
+                        if (!string.IsNullOrWhiteSpace(options.PublicWsHost) &&
+                            !string.IsNullOrWhiteSpace(options.PublicWsPort))
+                        {
+                            wsPublic =
+                                $"{options.PublicWsScheme}://{options.PublicWsHost}:{options.PublicWsPort}/ws/{newId}";
+                        }
                         else if (!string.IsNullOrWhiteSpace(options.NodeId))
+                        {
                             wsPublic = $"{options.PublicWsScheme}://{options.NodeId}:5000/ws/{newId}";
+                        }
                         else
+                        {
                             wsPublic = res.ws;
+                        }
 
                         var newSlot = new Slot(res.proc, slot.BrowserType, res.ws, wsPublic, DateTime.UtcNow);
                         map[newId] = newSlot;
@@ -448,7 +566,9 @@ public sealed class PoolManager(
 
                         // Update node PlaywrightVersion if available
                         if (!string.IsNullOrWhiteSpace(res.playwrightVersion))
+                        {
                             await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", res.playwrightVersion);
+                        }
 
                         var item = JsonSerializer.Serialize(new
                         {
@@ -473,7 +593,8 @@ public sealed class PoolManager(
                 Console.WriteLine($"[Reconcile] error: {ex.Message}");
             }
 
-            try { await Task.Delay(checkInterval, ct); } catch { }
+            try { await Task.Delay(checkInterval, ct); }
+            catch { }
         }
     }
 
@@ -481,9 +602,17 @@ public sealed class PoolManager(
     {
         browserId = string.Empty;
         slot = default!;
-        if (!Pools.TryGetValue(labelKey, out var map) || map.IsEmpty) return false;
+        if (!Pools.TryGetValue(labelKey, out var map) || map.IsEmpty)
+        {
+            return false;
+        }
+
         var first = map.FirstOrDefault();
-        if (first.Equals(default(KeyValuePair<string, Slot>))) return false;
+        if (first.Equals(default(KeyValuePair<string, Slot>)))
+        {
+            return false;
+        }
+
         browserId = first.Key;
         slot = first.Value;
         return true;
@@ -492,14 +621,21 @@ public sealed class PoolManager(
     public bool TryFindSlotById(string browserId, out Slot slot)
     {
         foreach (var labelMap in Pools.Values)
+        {
             if (labelMap.TryGetValue(browserId, out slot))
+            {
                 return true;
+            }
+        }
+
         slot = default!;
         return false;
     }
 
     public Task<long> GetAvailableCountAsync(string labelKey)
-        => db.ListLengthAsync($"available:{labelKey}");
+    {
+        return db.ListLengthAsync($"available:{labelKey}");
+    }
 
     public async Task CleanupAllAsync()
     {
@@ -508,12 +644,18 @@ public sealed class PoolManager(
             // Remove this worker from Redis lists and node metadata
             foreach (var label in options.PoolConfig.Keys)
             {
-                try { await CleanupLabelListsAsync(label); } catch (Exception ex) { Console.WriteLine($"[Shutdown] error cleaning label {label}: {ex.Message}"); }
+                try { await CleanupLabelListsAsync(label); }
+                catch (Exception ex) { Console.WriteLine($"[Shutdown] error cleaning label {label}: {ex.Message}"); }
             }
 
-            try { await db.SetRemoveAsync("nodes", options.NodeId); } catch { }
-            try { await db.KeyDeleteAsync($"node:{options.NodeId}"); } catch { }
-            try { await db.KeyDeleteAsync($"node_alive:{options.NodeId}"); } catch { }
+            try { await db.SetRemoveAsync("nodes", options.NodeId); }
+            catch { }
+
+            try { await db.KeyDeleteAsync($"node:{options.NodeId}"); }
+            catch { }
+
+            try { await db.KeyDeleteAsync($"node_alive:{options.NodeId}"); }
+            catch { }
         }
         catch (Exception ex)
         {
@@ -525,9 +667,22 @@ public sealed class PoolManager(
     {
         foreach (var label in Pools.Keys)
         {
-            if (!Pools.TryGetValue(label, out var map)) continue;
+            if (!Pools.TryGetValue(label, out var map))
+            {
+                continue;
+            }
+
             foreach (var s in map.Values)
-                try { if (!s.Proc.HasExited) s.Proc.Kill(true); } catch { }
+            {
+                try
+                {
+                    if (!s.Proc.HasExited)
+                    {
+                        s.Proc.Kill(true);
+                    }
+                }
+                catch { }
+            }
         }
     }
 }

@@ -19,9 +19,14 @@ public static class HubUrlProvider
     public static string Get(IConfiguration configuration)
     {
         var fromEnv = Environment.GetEnvironmentVariable("HUB_URL");
-        if (!string.IsNullOrWhiteSpace(fromEnv)) return fromEnv;
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv;
+        }
 
         var fromConfig = configuration["Hub:Url"];
-        return !string.IsNullOrWhiteSpace(fromConfig) ? fromConfig : throw new InvalidOperationException("Hub URL is not configured. Set HUB_URL or 'Hub:Url'.");
+        return !string.IsNullOrWhiteSpace(fromConfig)
+            ? fromConfig
+            : throw new InvalidOperationException("Hub URL is not configured. Set HUB_URL or 'Hub:Url'.");
     }
 }

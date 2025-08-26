@@ -28,9 +28,11 @@ public sealed class TestEnvironment
     public async Task GlobalSetup()
     {
         var skip = Environment.GetEnvironmentVariable("GRID_TESTS_SKIP_CONTAINERS");
-        if (string.Equals(skip, "1", StringComparison.OrdinalIgnoreCase) || string.Equals(skip, "true", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(skip, "1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(skip, "true", StringComparison.OrdinalIgnoreCase))
         {
-            await TestContext.Progress.WriteLineAsync("[GridTests] Skipping Test-containers per GRID_TESTS_SKIP_CONTAINERS.");
+            await TestContext.Progress.WriteLineAsync(
+                "[GridTests] Skipping Test-containers per GRID_TESTS_SKIP_CONTAINERS.");
             return;
         }
 
@@ -40,29 +42,41 @@ public sealed class TestEnvironment
         if (useLocal)
         {
             var hubUrl = Environment.GetEnvironmentVariable("HUB_URL");
-            if (string.IsNullOrWhiteSpace(hubUrl)) hubUrl = "http://127.0.0.1:5100";
+            if (string.IsNullOrWhiteSpace(hubUrl))
+            {
+                hubUrl = "http://127.0.0.1:5100";
+            }
+
             Environment.SetEnvironmentVariable("HUB_URL", hubUrl);
 
             var runnerSecret = Environment.GetEnvironmentVariable("HUB_RUNNER_SECRET");
-            if (string.IsNullOrWhiteSpace(runnerSecret)) runnerSecret = "runner-secret";
+            if (string.IsNullOrWhiteSpace(runnerSecret))
+            {
+                runnerSecret = "runner-secret";
+            }
+
             Environment.SetEnvironmentVariable("HUB_RUNNER_SECRET", runnerSecret);
 
             var healthTimeoutSecondsStrLocal = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-            int healthTimeoutSecondsLocal = 120;
-            if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStrLocal) && int.TryParse(healthTimeoutSecondsStrLocal, out var parsedLocal) && parsedLocal > 0)
+            var healthTimeoutSecondsLocal = 120;
+            if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStrLocal) &&
+                int.TryParse(healthTimeoutSecondsStrLocal, out var parsedLocal) && parsedLocal > 0)
             {
                 healthTimeoutSecondsLocal = parsedLocal;
             }
 
-            await TestContext.Progress.WriteLineAsync($"[GridTests] Using local grid at {hubUrl} per GRID_TESTS_USE_LOCAL (env or test parameter).");
-            await WaitForHubHealth(hubUrl.TrimEnd('/') + "/health", TimeSpan.FromSeconds(healthTimeoutSecondsLocal), TestContext.Progress);
+            await TestContext.Progress.WriteLineAsync(
+                $"[GridTests] Using local grid at {hubUrl} per GRID_TESTS_USE_LOCAL (env or test parameter).");
+            await WaitForHubHealth(hubUrl.TrimEnd('/') + "/health", TimeSpan.FromSeconds(healthTimeoutSecondsLocal),
+                TestContext.Progress);
             return;
         }
 
         // Preflight: auto-skip if Docker is not available/reachable
         if (!IsDockerAvailable())
         {
-            await TestContext.Progress.WriteLineAsync("[GridTests] Docker engine not detected. Skipping containerized test setup. Set GRID_TESTS_SKIP_CONTAINERS=1 to skip explicitly.");
+            await TestContext.Progress.WriteLineAsync(
+                "[GridTests] Docker engine not detected. Skipping containerized test setup. Set GRID_TESTS_SKIP_CONTAINERS=1 to skip explicitly.");
             Assert.Inconclusive("Docker engine not available for Testcontainers.");
             return;
         }
@@ -72,7 +86,12 @@ public sealed class TestEnvironment
             // Disable Testcontainers' resource reaper (Ryuk) to avoid conflicts with orphaned/stopped reaper containers.
             // We perform explicit teardown in [OneTimeTearDown], so this is safe for CI/local runs.
             Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true");
-            try { TestcontainersSettings.ResourceReaperEnabled = false; } catch { /* fallback to env var only */ }
+            try { TestcontainersSettings.ResourceReaperEnabled = false; }
+            catch
+            {
+                /* fallback to env var only */
+            }
+
             await TestContext.Progress.WriteLineAsync("[GridTests] Disabled Testcontainers Resource Reaper (Ryuk)");
 
             // Pre-flight cleanup of orphaned containers (can be skipped via GRID_TESTS_SKIP_CLEANUP=1)
@@ -83,18 +102,24 @@ public sealed class TestEnvironment
             }
             else
             {
-                await TestContext.Progress.WriteLineAsync("[GridTests] Skipping pre-flight cleanup per GRID_TESTS_SKIP_CLEANUP.");
+                await TestContext.Progress.WriteLineAsync(
+                    "[GridTests] Skipping pre-flight cleanup per GRID_TESTS_SKIP_CLEANUP.");
             }
 
             var root = FindFileUpwards("docker-compose.yml");
             if (root is null)
+            {
                 throw new FileNotFoundException("Cannot find docker-compose.yml from test working directory.");
+            }
+
             root = Path.GetDirectoryName(root);
 
             var hubDir = Path.Combine(root ?? throw new InvalidOperationException(), "hub");
             var workerDir = Path.Combine(root, "worker");
             if (!Directory.Exists(hubDir) || !Directory.Exists(workerDir))
+            {
                 throw new DirectoryNotFoundException("Expected hub/ and worker/ directories next to compose file.");
+            }
 
             // Build or reuse images with stable tags for speed
             var hubImageName = "gridtests/hub:dev";
@@ -119,17 +144,22 @@ public sealed class TestEnvironment
 
                 if (runningRedis && runningHub && runningW1 && runningW3)
                 {
-                    await TestContext.Progress.WriteLineAsync("[GridTests] Reuse mode: Found running containers, skipping setup.");
+                    await TestContext.Progress.WriteLineAsync(
+                        "[GridTests] Reuse mode: Found running containers, skipping setup.");
                     Environment.SetEnvironmentVariable("HUB_URL", "http://127.0.0.1:5100");
                     Environment.SetEnvironmentVariable("HUB_RUNNER_SECRET", "runner-secret");
 
-                    var healthTimeoutSecondsStr2 = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-                    int healthTimeoutSeconds2 = 60;
-                    if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStr2) && int.TryParse(healthTimeoutSecondsStr2, out var parsed2) && parsed2 > 0)
+                    var healthTimeoutSecondsStr2 =
+                        Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
+                    var healthTimeoutSeconds2 = 60;
+                    if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStr2) &&
+                        int.TryParse(healthTimeoutSecondsStr2, out var parsed2) && parsed2 > 0)
                     {
                         healthTimeoutSeconds2 = parsed2;
                     }
-                    await WaitForHubHealth("http://127.0.0.1:5100/health", TimeSpan.FromSeconds(healthTimeoutSeconds2), TestContext.Progress);
+
+                    await WaitForHubHealth("http://127.0.0.1:5100/health", TimeSpan.FromSeconds(healthTimeoutSeconds2),
+                        TestContext.Progress);
                     return;
                 }
             }
@@ -138,7 +168,11 @@ public sealed class TestEnvironment
             _network = new TestcontainersNetworkBuilder()
                 .WithName($"gridtests-net{nameSuffix}")
                 .Build();
-            try { await _network.CreateAsync(); } catch { /* allow reuse if already exists */ }
+            try { await _network.CreateAsync(); }
+            catch
+            {
+                /* allow reuse if already exists */
+            }
 
             // Start Redis (internal network only)
             _redis = new TestcontainersBuilder<TestcontainersContainer>()
@@ -223,12 +257,15 @@ public sealed class TestEnvironment
 
             // Ensure hub is healthy from host (configurable timeout)
             var healthTimeoutSecondsStr = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-            int healthTimeoutSeconds = 120;
-            if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStr) && int.TryParse(healthTimeoutSecondsStr, out var parsed) && parsed > 0)
+            var healthTimeoutSeconds = 120;
+            if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStr) &&
+                int.TryParse(healthTimeoutSecondsStr, out var parsed) && parsed > 0)
             {
                 healthTimeoutSeconds = parsed;
             }
-            await WaitForHubHealth("http://127.0.0.1:5100/health", TimeSpan.FromSeconds(healthTimeoutSeconds), TestContext.Progress);
+
+            await WaitForHubHealth("http://127.0.0.1:5100/health", TimeSpan.FromSeconds(healthTimeoutSeconds),
+                TestContext.Progress);
 
             await TestContext.Progress.WriteLineAsync("[GridTests] Testcontainers environment is ready.");
         }
@@ -240,23 +277,36 @@ public sealed class TestEnvironment
             try
             {
                 var hubUrl = Environment.GetEnvironmentVariable("HUB_URL");
-                if (string.IsNullOrWhiteSpace(hubUrl)) hubUrl = "http://127.0.0.1:5100";
+                if (string.IsNullOrWhiteSpace(hubUrl))
+                {
+                    hubUrl = "http://127.0.0.1:5100";
+                }
+
                 Environment.SetEnvironmentVariable("HUB_URL", hubUrl);
 
                 var runnerSecret = Environment.GetEnvironmentVariable("HUB_RUNNER_SECRET");
-                if (string.IsNullOrWhiteSpace(runnerSecret)) runnerSecret = "runner-secret";
+                if (string.IsNullOrWhiteSpace(runnerSecret))
+                {
+                    runnerSecret = "runner-secret";
+                }
+
                 Environment.SetEnvironmentVariable("HUB_RUNNER_SECRET", runnerSecret);
 
-                var healthTimeoutSecondsStrLocal = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-                int healthTimeoutSecondsLocal = 60;
-                if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStrLocal) && int.TryParse(healthTimeoutSecondsStrLocal, out var parsedLocal) && parsedLocal > 0)
+                var healthTimeoutSecondsStrLocal =
+                    Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
+                var healthTimeoutSecondsLocal = 60;
+                if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStrLocal) &&
+                    int.TryParse(healthTimeoutSecondsStrLocal, out var parsedLocal) && parsedLocal > 0)
                 {
                     healthTimeoutSecondsLocal = parsedLocal;
                 }
 
-                await TestContext.Progress.WriteLineAsync($"[GridTests] Falling back to local hub at {hubUrl} after container setup failure...");
-                await WaitForHubHealth(hubUrl.TrimEnd('/') + "/health", TimeSpan.FromSeconds(healthTimeoutSecondsLocal), TestContext.Progress);
-                await TestContext.Progress.WriteLineAsync("[GridTests] Local hub is healthy. Proceeding with tests in local mode.");
+                await TestContext.Progress.WriteLineAsync(
+                    $"[GridTests] Falling back to local hub at {hubUrl} after container setup failure...");
+                await WaitForHubHealth(hubUrl.TrimEnd('/') + "/health", TimeSpan.FromSeconds(healthTimeoutSecondsLocal),
+                    TestContext.Progress);
+                await TestContext.Progress.WriteLineAsync(
+                    "[GridTests] Local hub is healthy. Proceeding with tests in local mode.");
                 return;
             }
             catch (Exception ex2)
@@ -264,7 +314,8 @@ public sealed class TestEnvironment
                 await TestContext.Progress.WriteLineAsync($"[GridTests] Local fallback not available: {ex2.Message}");
             }
 
-            Assert.Inconclusive($"Testcontainers environment not available: {ex.Message}. Set GRID_TESTS_SKIP_CONTAINERS=1 or run docker-compose and set GRID_TESTS_USE_LOCAL=1.");
+            Assert.Inconclusive(
+                $"Testcontainers environment not available: {ex.Message}. Set GRID_TESTS_SKIP_CONTAINERS=1 or run docker-compose and set GRID_TESTS_USE_LOCAL=1.");
         }
     }
 
@@ -274,7 +325,8 @@ public sealed class TestEnvironment
         var reuse = IsTruthy(Environment.GetEnvironmentVariable("GRID_TESTS_REUSE"));
         if (reuse)
         {
-            await TestContext.Progress.WriteLineAsync("[GridTests] Reuse mode enabled: skipping teardown to speed subsequent runs.");
+            await TestContext.Progress.WriteLineAsync(
+                "[GridTests] Reuse mode enabled: skipping teardown to speed subsequent runs.");
             return;
         }
 
@@ -286,16 +338,32 @@ public sealed class TestEnvironment
         // Delete network after containers are stopped
         if (_network != null)
         {
-            try { await _network.DeleteAsync(); } catch { /* ignore */ }
+            try { await _network.DeleteAsync(); }
+            catch
+            {
+                /* ignore */
+            }
+
             _network = null;
         }
 
         async Task StopAsync(TestcontainersContainer c)
         {
-            if (c == null) return;
-            try { await c.StopAsync(); await c.DisposeAsync(); } catch { /* ignore */ }
-        }
+            if (c == null)
+            {
+                return;
+            }
 
+            try
+            {
+                await c.StopAsync();
+                await c.DisposeAsync();
+            }
+            catch
+            {
+                /* ignore */
+            }
+        }
     }
 
     private static async Task CleanupGridtestsContainersAsync(TextWriter log)
@@ -305,11 +373,13 @@ public sealed class TestEnvironment
             await log.WriteLineAsync("[GridTests] Pre-flight: cleaning up orphaned 'gridtests' containers...");
 
             var docker = OperatingSystem.IsWindows() ? "docker.exe" : "docker";
-            var listArgs = "ps -a --filter name=^/gridtests --filter status=exited --filter status=dead --filter status=created -q";
+            var listArgs =
+                "ps -a --filter name=^/gridtests --filter status=exited --filter status=dead --filter status=created -q";
             var (code, outText, errText) = await RunCommandAsync(docker, listArgs, 20000);
             if (code != 0)
             {
-                await log.WriteLineAsync($"[GridTests] 'docker ps' failed (ignored): exit={code} err={errText?.Trim()}");
+                await log.WriteLineAsync(
+                    $"[GridTests] 'docker ps' failed (ignored): exit={code} err={errText?.Trim()}");
                 return;
             }
 
@@ -327,18 +397,20 @@ public sealed class TestEnvironment
             }
 
             const int batchSize = 50;
-            for (int i = 0; i < ids.Count; i += batchSize)
+            for (var i = 0; i < ids.Count; i += batchSize)
             {
                 var batch = ids.Skip(i).Take(batchSize).ToList();
                 var rmArgs = "rm -f " + string.Join(" ", batch);
                 var (rmCode, rmOut, rmErr) = await RunCommandAsync(docker, rmArgs, 60000);
                 if (rmCode == 0)
                 {
-                    await log.WriteLineAsync($"[GridTests] Removed {batch.Count} container(s): {string.Join(",", batch.Select(x => x[..Math.Min(12, x.Length)]))}");
+                    await log.WriteLineAsync(
+                        $"[GridTests] Removed {batch.Count} container(s): {string.Join(",", batch.Select(x => x[..Math.Min(12, x.Length)]))}");
                 }
                 else
                 {
-                    await log.WriteLineAsync($"[GridTests] 'docker rm' failed for batch (ignored): exit={rmCode} err={rmErr?.Trim()}");
+                    await log.WriteLineAsync(
+                        $"[GridTests] 'docker rm' failed for batch (ignored): exit={rmCode} err={rmErr?.Trim()}");
                 }
             }
 
@@ -350,7 +422,8 @@ public sealed class TestEnvironment
         }
     }
 
-    private static async Task<(int ExitCode, string StdOut, string StdErr)> RunCommandAsync(string fileName, string arguments, int timeoutMs)
+    private static async Task<(int ExitCode, string StdOut, string StdErr)> RunCommandAsync(string fileName,
+        string arguments, int timeoutMs)
     {
         try
         {
@@ -373,13 +446,25 @@ public sealed class TestEnvironment
 
             proc.OutputDataReceived += (s, e) =>
             {
-                if (e.Data == null) outTcs.TrySetResult(true);
-                else stdout.AppendLine(e.Data);
+                if (e.Data == null)
+                {
+                    outTcs.TrySetResult(true);
+                }
+                else
+                {
+                    stdout.AppendLine(e.Data);
+                }
             };
             proc.ErrorDataReceived += (s, e) =>
             {
-                if (e.Data == null) errTcs.TrySetResult(true);
-                else stderr.AppendLine(e.Data);
+                if (e.Data == null)
+                {
+                    errTcs.TrySetResult(true);
+                }
+                else
+                {
+                    stderr.AppendLine(e.Data);
+                }
             };
 
             if (!proc.Start())
@@ -395,12 +480,31 @@ public sealed class TestEnvironment
             var completed = await Task.WhenAny(waitTask, timeoutTask);
             if (completed == timeoutTask)
             {
-                try { if (!proc.HasExited) proc.Kill(true); } catch { /* ignore */ }
+                try
+                {
+                    if (!proc.HasExited)
+                    {
+                        proc.Kill(true);
+                    }
+                }
+                catch
+                {
+                    /* ignore */
+                }
+
                 return (-1, stdout.ToString(), "Timeout");
             }
 
             // Ensure streams are consumed
-            try { await Task.WhenAll(outTcs.Task, errTcs.Task).WaitAsync(TimeSpan.FromMilliseconds(Math.Max(1000, timeoutMs / 10))); } catch { /* ignore */ }
+            try
+            {
+                await Task.WhenAll(outTcs.Task, errTcs.Task)
+                    .WaitAsync(TimeSpan.FromMilliseconds(Math.Max(1000, timeoutMs / 10)));
+            }
+            catch
+            {
+                /* ignore */
+            }
 
             return (proc.ExitCode, stdout.ToString(), stderr.ToString());
         }
@@ -426,6 +530,7 @@ public sealed class TestEnvironment
                 {
                     return;
                 }
+
                 last = new Exception($"Status {(int)resp.StatusCode}");
             }
             catch (Exception ex)
@@ -437,7 +542,8 @@ public sealed class TestEnvironment
             await log.WriteLineAsync("[GridTests] Waiting for hub /health...");
         }
 
-        throw new TimeoutException($"Hub health endpoint did not become ready in {timeout}. Last error: {last?.Message}");
+        throw new TimeoutException(
+            $"Hub health endpoint did not become ready in {timeout}. Last error: {last?.Message}");
     }
 
     private static string FindFileUpwards(string fileName)
@@ -450,8 +556,10 @@ public sealed class TestEnvironment
             {
                 return candidate;
             }
+
             dir = dir.Parent;
         }
+
         return null;
     }
 
@@ -467,11 +575,15 @@ public sealed class TestEnvironment
                     var path = dockerHost["unix://".Length..];
                     return File.Exists(path);
                 }
+
                 if (dockerHost.StartsWith("npipe://", StringComparison.OrdinalIgnoreCase))
                 {
                     return CanConnectNamedPipe("docker_engine", TimeSpan.FromMilliseconds(250));
                 }
-                if (dockerHost.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase) || dockerHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || dockerHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+
+                if (dockerHost.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase) ||
+                    dockerHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    dockerHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
                     var normalized = dockerHost.Replace("tcp://", "http://", StringComparison.OrdinalIgnoreCase);
                     var uri = new Uri(normalized);
@@ -482,16 +594,36 @@ public sealed class TestEnvironment
             // No DOCKER_HOST provided: use platform defaults
             if (OperatingSystem.IsWindows())
             {
-                if (CanConnectNamedPipe("docker_engine", TimeSpan.FromMilliseconds(250))) return true;
-                if (CanConnectTcp("127.0.0.1", 2375, TimeSpan.FromMilliseconds(150))) return true;
+                if (CanConnectNamedPipe("docker_engine", TimeSpan.FromMilliseconds(250)))
+                {
+                    return true;
+                }
+
+                if (CanConnectTcp("127.0.0.1", 2375, TimeSpan.FromMilliseconds(150)))
+                {
+                    return true;
+                }
+
                 return false;
             }
             else
             {
                 const string defaultSock = "/var/run/docker.sock";
-                if (File.Exists(defaultSock)) return true;
-                if (CanConnectTcp("127.0.0.1", 2375, TimeSpan.FromMilliseconds(150))) return true;
-                if (CanConnectTcp("127.0.0.1", 2376, TimeSpan.FromMilliseconds(150))) return true;
+                if (File.Exists(defaultSock))
+                {
+                    return true;
+                }
+
+                if (CanConnectTcp("127.0.0.1", 2375, TimeSpan.FromMilliseconds(150)))
+                {
+                    return true;
+                }
+
+                if (CanConnectTcp("127.0.0.1", 2376, TimeSpan.FromMilliseconds(150)))
+                {
+                    return true;
+                }
+
                 return false;
             }
         }
@@ -512,6 +644,7 @@ public sealed class TestEnvironment
             {
                 return false;
             }
+
             client.EndConnect(ar);
             return true;
         }
@@ -538,13 +671,17 @@ public sealed class TestEnvironment
     // Helpers
     private static bool IsTruthy(string value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
         var v = value.Trim();
         return v.Equals("1", StringComparison.OrdinalIgnoreCase)
-            || v.Equals("true", StringComparison.OrdinalIgnoreCase)
-            || v.Equals("yes", StringComparison.OrdinalIgnoreCase)
-            || v.Equals("y", StringComparison.OrdinalIgnoreCase)
-            || v.Equals("on", StringComparison.OrdinalIgnoreCase);
+               || v.Equals("true", StringComparison.OrdinalIgnoreCase)
+               || v.Equals("yes", StringComparison.OrdinalIgnoreCase)
+               || v.Equals("y", StringComparison.OrdinalIgnoreCase)
+               || v.Equals("on", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task EnsureImageAsync(string imageName, string dockerfileDir, TextWriter log, bool forceBuild)
@@ -569,22 +706,26 @@ public sealed class TestEnvironment
 
             await log.WriteLineAsync($"[GridTests] Building image {imageName} from {dockerfileDir} (docker build)...");
             var quotedDir = dockerfileDir.Contains(' ') ? $"\"{dockerfileDir}\"" : dockerfileDir;
-            var (buildCode, buildOut, buildErr) = await RunCommandAsync(docker, $"build -t {imageName} {quotedDir}", 60 * 60 * 1000);
+            var (buildCode, buildOut, buildErr) =
+                await RunCommandAsync(docker, $"build -t {imageName} {quotedDir}", 60 * 60 * 1000);
             if (buildCode != 0)
             {
-                await log.WriteLineAsync($"[GridTests] 'docker build' failed: exit={buildCode} err={(buildErr ?? string.Empty).Trim()}");
+                await log.WriteLineAsync(
+                    $"[GridTests] 'docker build' failed: exit={buildCode} err={(buildErr ?? string.Empty).Trim()}");
                 throw new InvalidOperationException($"docker build failed for {imageName} (exit {buildCode})");
             }
 
             // Verify the image exists and is tagged
-            var (inspectCode, inspectOut, _) = await RunCommandAsync(docker, $"image inspect {imageName} -f {{.Id}}", 20000);
+            var (inspectCode, inspectOut, _) =
+                await RunCommandAsync(docker, $"image inspect {imageName} -f {{.Id}}", 20000);
             if (inspectCode == 0 && !string.IsNullOrWhiteSpace(inspectOut))
             {
                 await log.WriteLineAsync($"[GridTests] Built image {imageName} ({inspectOut.Trim()})");
             }
             else
             {
-                await log.WriteLineAsync($"[GridTests] Warning: built image {imageName} but could not verify with 'docker image inspect'.");
+                await log.WriteLineAsync(
+                    $"[GridTests] Warning: built image {imageName} but could not verify with 'docker image inspect'.");
             }
         }
         catch (Exception ex)
@@ -599,8 +740,13 @@ public sealed class TestEnvironment
         try
         {
             var docker = OperatingSystem.IsWindows() ? "docker.exe" : "docker";
-            var (code, outText, _) = await RunCommandAsync(docker, $"ps --filter name=^/{containerName}$ --filter status=running -q", 15000);
-            if (code != 0) return false;
+            var (code, outText, _) = await RunCommandAsync(docker,
+                $"ps --filter name=^/{containerName}$ --filter status=running -q", 15000);
+            if (code != 0)
+            {
+                return false;
+            }
+
             return (outText ?? string.Empty)
                 .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Any();
@@ -626,19 +772,36 @@ public sealed class TestEnvironment
         public override long Position { get => 0; set { } }
         public override void Flush() { }
 
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            if (buffer is null || count <= 0) return;
+            if (buffer is null || count <= 0)
+            {
+                return;
+            }
 
-            var charCount = _decoder.GetCharCount(buffer, offset, count, flush: false);
-            if (charCount == 0) return;
+            var charCount = _decoder.GetCharCount(buffer, offset, count, false);
+            if (charCount == 0)
+            {
+                return;
+            }
 
             var chars = new char[charCount];
-            _decoder.GetChars(buffer, offset, count, chars, 0, flush: false);
+            _decoder.GetChars(buffer, offset, count, chars, 0, false);
 
             lock (_gate)
             {
@@ -646,5 +809,4 @@ public sealed class TestEnvironment
             }
         }
     }
-
 }

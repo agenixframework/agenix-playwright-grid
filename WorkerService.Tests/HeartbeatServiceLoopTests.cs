@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
@@ -16,8 +17,13 @@ public class HeartbeatServiceLoopTests
         return new WorkerOptions
         {
             NodeId = "node-loop",
-            Labels = new(StringComparer.OrdinalIgnoreCase) { ["region"] = "eu" },
-            PoolConfig = new(StringComparer.OrdinalIgnoreCase) { ["AppA:Chromium:Staging"] = 1 }
+            Labels =
+                new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["region"] = "eu" },
+            PoolConfig =
+                new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["AppA:Chromium:Staging"] = 1
+                }
         };
     }
 
@@ -28,11 +34,13 @@ public class HeartbeatServiceLoopTests
         var db = new Mock<IDatabase>(MockBehavior.Strict);
 
         // Setup all called operations to succeed
-        db.Setup(d => d.HashSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.HashSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(),
+                It.IsAny<When>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
         db.Setup(d => d.SetAddAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
-        db.Setup(d => d.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(), It.IsAny<bool>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+        db.Setup(d => d.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(),
+                It.IsAny<bool>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
 
         var svc = new HeartbeatService(options, db.Object);

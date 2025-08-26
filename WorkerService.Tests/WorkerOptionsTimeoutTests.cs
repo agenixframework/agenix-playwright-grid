@@ -45,11 +45,13 @@ public class WorkerOptionsTimeoutTests
             var opts1 = WorkerOptions.FromEnvironment();
             Assert.That(opts1.SidecarReadyTimeoutSeconds, Is.EqualTo(45));
 
-            Environment.SetEnvironmentVariable("PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS", "3"); // below min -> clamp to 5
+            Environment.SetEnvironmentVariable("PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS",
+                "3"); // below min -> clamp to 5
             var opts2 = WorkerOptions.FromEnvironment();
             Assert.That(opts2.SidecarReadyTimeoutSeconds, Is.EqualTo(5));
 
-            Environment.SetEnvironmentVariable("PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS", "9999"); // above max -> clamp to 600
+            Environment.SetEnvironmentVariable("PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS",
+                "9999"); // above max -> clamp to 600
             var opts3 = WorkerOptions.FromEnvironment();
             Assert.That(opts3.SidecarReadyTimeoutSeconds, Is.EqualTo(600));
         }

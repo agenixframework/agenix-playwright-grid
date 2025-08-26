@@ -1,4 +1,3 @@
-
 using System.Collections.Concurrent;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
@@ -15,8 +14,12 @@ namespace PlaywrightHub.Infrastructure.Adapters.Results;
 public sealed class InMemoryResultsStore : IResultsStore
 {
     private readonly ConcurrentDictionary<string, ResultRunSummaryDto> _runs = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, ConcurrentQueue<CommandLogEventDto>> _cmd = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ResultTestCaseDto>> _tests = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<CommandLogEventDto>> _cmd =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ResultTestCaseDto>> _tests =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public Task UpsertRunAsync(ResultRunSummaryDto run)
     {
@@ -30,24 +33,59 @@ public sealed class InMemoryResultsStore : IResultsStore
         return Task.FromResult(run);
     }
 
-    public Task<IReadOnlyList<ResultRunSummaryDto>> GetRunsAsync(int skip = 0, int take = 100, string? status = null, string? app = null, string? browser = null, string? env = null)
+    public Task<IReadOnlyList<ResultRunSummaryDto>> GetRunsAsync(int skip = 0, int take = 100, string? status = null,
+        string? app = null, string? browser = null, string? env = null)
     {
         IEnumerable<ResultRunSummaryDto> q = _runs.Values;
-        if (!string.IsNullOrWhiteSpace(status)) q = q.Where(r => string.Equals(r.Status, status, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(app)) q = q.Where(r => string.Equals(r.App, app, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(browser)) q = q.Where(r => string.Equals(r.Browser, browser, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(env)) q = q.Where(r => string.Equals(r.Env, env, StringComparison.OrdinalIgnoreCase));
-        var list = q.OrderByDescending(r => r.StartedAtUtc).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 500)).ToList();
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            q = q.Where(r => string.Equals(r.Status, status, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(app))
+        {
+            q = q.Where(r => string.Equals(r.App, app, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(browser))
+        {
+            q = q.Where(r => string.Equals(r.Browser, browser, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(env))
+        {
+            q = q.Where(r => string.Equals(r.Env, env, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var list = q.OrderByDescending(r => r.StartedAtUtc).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 500))
+            .ToList();
         return Task.FromResult((IReadOnlyList<ResultRunSummaryDto>)list);
     }
 
-    public Task<int> GetRunsCountAsync(string? status = null, string? app = null, string? browser = null, string? env = null)
+    public Task<int> GetRunsCountAsync(string? status = null, string? app = null, string? browser = null,
+        string? env = null)
     {
         IEnumerable<ResultRunSummaryDto> q = _runs.Values;
-        if (!string.IsNullOrWhiteSpace(status)) q = q.Where(r => string.Equals(r.Status, status, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(app)) q = q.Where(r => string.Equals(r.App, app, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(browser)) q = q.Where(r => string.Equals(r.Browser, browser, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(env)) q = q.Where(r => string.Equals(r.Env, env, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            q = q.Where(r => string.Equals(r.Status, status, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(app))
+        {
+            q = q.Where(r => string.Equals(r.App, app, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(browser))
+        {
+            q = q.Where(r => string.Equals(r.Browser, browser, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(env))
+        {
+            q = q.Where(r => string.Equals(r.Env, env, StringComparison.OrdinalIgnoreCase));
+        }
+
         return Task.FromResult(q.Count());
     }
 
@@ -65,7 +103,9 @@ public sealed class InMemoryResultsStore : IResultsStore
     public Task<IReadOnlyList<CommandLogEventDto>> GetCommandsAsync(string runId, int skip = 0, int take = 200)
     {
         if (!_cmd.TryGetValue(runId, out var queue))
+        {
             return Task.FromResult((IReadOnlyList<CommandLogEventDto>)Array.Empty<CommandLogEventDto>());
+        }
 
         var arr = queue.ToArray();
         var page = arr.OrderBy(c => c.TimestampUtc).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 1000)).ToList();
@@ -75,23 +115,35 @@ public sealed class InMemoryResultsStore : IResultsStore
     public Task<int> GetCommandCountAsync(string runId)
     {
         if (!_cmd.TryGetValue(runId, out var queue))
+        {
             return Task.FromResult(0);
+        }
+
         return Task.FromResult(queue.Count);
     }
 
     public Task UpsertTestAsync(ResultTestCaseDto test)
     {
-        var dict = _tests.GetOrAdd(test.RunId, _ => new ConcurrentDictionary<string, ResultTestCaseDto>(StringComparer.OrdinalIgnoreCase));
+        var dict = _tests.GetOrAdd(test.RunId,
+            _ => new ConcurrentDictionary<string, ResultTestCaseDto>(StringComparer.OrdinalIgnoreCase));
         dict.AddOrUpdate(test.TestId, test, (_, __) => test);
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<ResultTestCaseDto>> GetTestsAsync(string runId, int skip = 0, int take = 200, string? status = null)
+    public Task<IReadOnlyList<ResultTestCaseDto>> GetTestsAsync(string runId, int skip = 0, int take = 200,
+        string? status = null)
     {
         if (!_tests.TryGetValue(runId, out var dict))
+        {
             return Task.FromResult((IReadOnlyList<ResultTestCaseDto>)Array.Empty<ResultTestCaseDto>());
+        }
+
         IEnumerable<ResultTestCaseDto> q = dict.Values;
-        if (!string.IsNullOrWhiteSpace(status)) q = q.Where(t => string.Equals(t.Status, status, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            q = q.Where(t => string.Equals(t.Status, status, StringComparison.OrdinalIgnoreCase));
+        }
+
         var list = q.OrderBy(t => t.Title).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 1000)).ToList();
         return Task.FromResult((IReadOnlyList<ResultTestCaseDto>)list);
     }

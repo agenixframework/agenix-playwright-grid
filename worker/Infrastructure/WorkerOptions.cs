@@ -39,17 +39,24 @@ public sealed class WorkerOptions
 
         // Pools
         var pools = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var part in poolConfigEnv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in poolConfigEnv.Split(',',
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var kv = part.Split('=', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (kv.Length == 2 && int.TryParse(kv[1], out var v))
+            {
                 pools[kv[0]] = v;
+            }
         }
-        if (pools.Count == 0) pools["AppA:Chromium:Staging"] = 3;
+
+        if (pools.Count == 0)
+        {
+            pools["AppA:Chromium:Staging"] = 3;
+        }
 
         // Parse optional sidecar ready timeout (seconds)
         var timeoutEnv = Environment.GetEnvironmentVariable("PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS");
-        int timeoutSeconds = 60;
+        var timeoutSeconds = 60;
         if (!string.IsNullOrWhiteSpace(timeoutEnv) && int.TryParse(timeoutEnv.Trim(), out var parsed))
         {
             // Clamp to sane range 5..600
@@ -65,13 +72,14 @@ public sealed class WorkerOptions
             NodeNodeSecret = Environment.GetEnvironmentVariable("NODE_NODE_SECRET") ?? "node-node-secret",
             PoolConfigEnv = poolConfigEnv,
             NodeExe = Environment.GetEnvironmentVariable("NODE_EXE") ?? "node",
-            SidecarScript = Environment.GetEnvironmentVariable("PLAYWRIGHT_SIDECAR") ?? "launch_playwright_server.js",
+            SidecarScript =
+                Environment.GetEnvironmentVariable("PLAYWRIGHT_SIDECAR") ?? "launch_playwright_server.js",
             SidecarReadyTimeoutSeconds = timeoutSeconds,
             PublicWsHost = Environment.GetEnvironmentVariable("PUBLIC_WS_HOST"),
             PublicWsPort = Environment.GetEnvironmentVariable("PUBLIC_WS_PORT"),
             PublicWsScheme = Environment.GetEnvironmentVariable("PUBLIC_WS_SCHEME") ?? "ws",
             Labels = labels,
-            PoolConfig = pools,
+            PoolConfig = pools
         };
     }
 
@@ -83,22 +91,36 @@ public sealed class WorkerOptions
             if (OperatingSystem.IsLinux())
             {
                 const string path = "/etc/os-release";
-                if (System.IO.File.Exists(path))
+                if (File.Exists(path))
                 {
-                    var lines = System.IO.File.ReadAllLines(path);
+                    var lines = File.ReadAllLines(path);
                     var pretty = lines.Select(l => l.Trim())
                         .FirstOrDefault(l => l.StartsWith("PRETTY_NAME=", StringComparison.OrdinalIgnoreCase));
                     if (!string.IsNullOrWhiteSpace(pretty))
                     {
                         var val = pretty.Split('=', 2)[1].Trim().Trim('"');
-                        if (!string.IsNullOrWhiteSpace(val)) return val;
+                        if (!string.IsNullOrWhiteSpace(val))
+                        {
+                            return val;
+                        }
                     }
-                    var id = lines.FirstOrDefault(l => l.StartsWith("ID=", StringComparison.OrdinalIgnoreCase))?.Split('=', 2)[1]?.Trim().Trim('"');
-                    var ver = lines.FirstOrDefault(l => l.StartsWith("VERSION_ID=", StringComparison.OrdinalIgnoreCase))?.Split('=', 2)[1]?.Trim().Trim('"');
-                    if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(ver)) return $"{id} {ver}";
-                    if (!string.IsNullOrWhiteSpace(id)) return id!;
+
+                    var id = lines.FirstOrDefault(l => l.StartsWith("ID=", StringComparison.OrdinalIgnoreCase))
+                        ?.Split('=', 2)[1]?.Trim().Trim('"');
+                    var ver = lines.FirstOrDefault(l => l.StartsWith("VERSION_ID=", StringComparison.OrdinalIgnoreCase))
+                        ?.Split('=', 2)[1]?.Trim().Trim('"');
+                    if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(ver))
+                    {
+                        return $"{id} {ver}";
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(id))
+                    {
+                        return id!;
+                    }
                 }
             }
+
             // Fallback to runtime-provided description (works across OSes and inside containers)
             return RuntimeInformation.OSDescription;
         }

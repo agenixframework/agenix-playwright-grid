@@ -6,11 +6,30 @@
 @inject IConfiguration Config
 
 <style>
-    .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
-    .status-online { background-color:#198754; }
-    .status-stale { background-color:#ffc107; }
-    .status-offline { background-color:#dc3545; }
-    .kv-list div { padding:2px 0; border-bottom:1px dashed rgba(0,0,0,.05); }
+    .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+
+    .status-online {
+        background-color: #198754;
+    }
+
+    .status-stale {
+        background-color: #ffc107;
+    }
+
+    .status-offline {
+        background-color: #dc3545;
+    }
+
+    .kv-list div {
+        padding: 2px 0;
+        border-bottom: 1px dashed rgba(0, 0, 0, .05);
+    }
 </style>
 
 <div class="d-flex align-items-center my-3">
@@ -41,9 +60,12 @@ else
                             <div class="fs-4 fw-semibold">@(_data.Workers?.Count ?? 0)</div>
                             <div class="text-muted small">Total</div>
                         </div>
-                        <div class="small"><span class="status-dot status-online"></span><span class="text-muted">Online</span> <span class="fw-semibold">@counts.online</span></div>
-                        <div class="small"><span class="status-dot status-stale"></span><span class="text-muted">Stale</span> <span class="fw-semibold">@counts.stale</span></div>
-                        <div class="small"><span class="status-dot status-offline"></span><span class="text-muted">Offline</span> <span class="fw-semibold">@counts.offline</span></div>
+                        <div class="small"><span class="status-dot status-online"></span><span
+                                class="text-muted">Online</span> <span class="fw-semibold">@counts.online</span></div>
+                        <div class="small"><span class="status-dot status-stale"></span><span
+                                class="text-muted">Stale</span> <span class="fw-semibold">@counts.stale</span></div>
+                        <div class="small"><span class="status-dot status-offline"></span><span class="text-muted">Offline</span>
+                            <span class="fw-semibold">@counts.offline</span></div>
                     </div>
                 </div>
             </div>
@@ -78,9 +100,10 @@ else
                         <h6 class="mb-0 text-muted">Borrowing</h6>
                     </div>
                     <div class="d-flex flex-wrap gap-1">
-                        <span class="badge @( _data.HubConfig.BorrowTrailingFallback ? "bg-success" : "bg-light text-dark" )">Trailing Fallback</span>
-                        <span class="badge @( _data.HubConfig.BorrowPrefixExpand ? "bg-success" : "bg-light text-dark" )">Prefix Expand</span>
-                        <span class="badge @( _data.HubConfig.BorrowWildcards ? "bg-info" : "bg-light text-dark" )">Wildcards</span>
+                        <span
+                            class="badge @(_data.HubConfig.BorrowTrailingFallback ? "bg-success" : "bg-light text-dark")">Trailing Fallback</span>
+                        <span class="badge @(_data.HubConfig.BorrowPrefixExpand ? "bg-success" : "bg-light text-dark")">Prefix Expand</span>
+                        <span class="badge @(_data.HubConfig.BorrowWildcards ? "bg-info" : "bg-light text-dark")">Wildcards</span>
                     </div>
                 </div>
             </div>
@@ -97,11 +120,19 @@ else
                     </div>
                     <div class="row g-2 small">
                         <div class="col-6"><span class="text-muted">Redis:</span> @_data.HubConfig.RedisUrl</div>
-                        <div class="col-6"><span class="text-muted">Dashboard URL:</span> @_data.HubConfig.DashboardUrl</div>
-                        <div class="col-4"><span class="text-muted">Trailing Fallback:</span> @(_data.HubConfig.BorrowTrailingFallback ? "on" : "off")</div>
-                        <div class="col-4"><span class="text-muted">Prefix Expand:</span> @(_data.HubConfig.BorrowPrefixExpand ? "on" : "off")</div>
-                        <div class="col-4"><span class="text-muted">Wildcards:</span> @(_data.HubConfig.BorrowWildcards ? "on" : "off")</div>
-                        <div class="col-6"><span class="text-muted">Node Timeout (s):</span> @_data.HubConfig.NodeTimeoutSeconds</div>
+                        <div class="col-6"><span class="text-muted">Dashboard URL:</span> @_data.HubConfig.DashboardUrl
+                        </div>
+                        <div class="col-4"><span
+                                class="text-muted">Trailing Fallback:</span> @(_data.HubConfig.BorrowTrailingFallback ? "on" : "off")
+                        </div>
+                        <div class="col-4"><span
+                                class="text-muted">Prefix Expand:</span> @(_data.HubConfig.BorrowPrefixExpand ? "on" : "off")
+                        </div>
+                        <div class="col-4"><span
+                                class="text-muted">Wildcards:</span> @(_data.HubConfig.BorrowWildcards ? "on" : "off")
+                        </div>
+                        <div class="col-6"><span
+                                class="text-muted">Node Timeout (s):</span> @_data.HubConfig.NodeTimeoutSeconds</div>
                         <div class="col-6"><span class="text-muted">Now (UTC):</span> @_data.Now.ToString("u")</div>
                     </div>
                 </div>
@@ -123,14 +154,14 @@ else
                         <div class="table-responsive">
                             <table class="table table-sm align-middle">
                                 <thead>
-                                    <tr>
-                                        <th>Node</th>
-                                        <th>Status</th>
-                                        <th>Last Seen</th>
-                                        <th>Total</th>
-                                        <th>PW</th>
-                                        <th>Labels</th>
-                                    </tr>
+                                <tr>
+                                    <th>Node</th>
+                                    <th>Status</th>
+                                    <th>Last Seen</th>
+                                    <th>Total</th>
+                                    <th>PW</th>
+                                    <th>Labels</th>
+                                </tr>
                                 </thead>
                                 <tbody>
                                 @foreach (var w in _data.Workers.OrderByDescending(x => x.LastSeen))
@@ -150,7 +181,8 @@ else
                                         <td>
                                             @if (w.Labels is { Count: > 0 })
                                             {
-                                                <span class="badge bg-light text-dark me-1" style="border:1px solid #ddd" title="@string.Join(',', w.Labels)">
+                                                <span class="badge bg-light text-dark me-1"
+                                                      style="border:1px solid #ddd" title="@string.Join(',', w.Labels)">
                                                     @string.Join(" · ", w.Labels)
                                                 </span>
                                             }
@@ -192,7 +224,8 @@ else
                 <div class="card-body">
                     <div class="d-flex align-items-center mb-2">
                         <h5 class="card-title mb-0">Environment Variables (Hub)</h5>
-                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="LoadHubEnv" disabled="@_hubEnvLoading">@(_hubEnvLoading ? "Loading..." : "Refresh")</button>
+                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="LoadHubEnv"
+                                disabled="@_hubEnvLoading">@(_hubEnvLoading ? "Loading..." : "Refresh")</button>
                     </div>
                     @if (!string.IsNullOrEmpty(_hubEnvError))
                     {
@@ -219,7 +252,8 @@ else
                 <div class="card-body">
                     <div class="d-flex align-items-center mb-2">
                         <h5 class="card-title mb-0">Per-Worker Environment</h5>
-                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="LoadAllWorkersEnv" disabled="@_loadingAllWorkers">@(_loadingAllWorkers ? "Loading..." : "Load all")</button>
+                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="LoadAllWorkersEnv"
+                                disabled="@_loadingAllWorkers">@(_loadingAllWorkers ? "Loading..." : "Load all")</button>
                     </div>
                     @if (_data?.Workers is null || _data.Workers.Count == 0)
                     {
@@ -233,14 +267,18 @@ else
                                 var collapseId = $"collapse_{w.Id}";
                                 <div class="accordion-item">
                                     <h2 class="accordion-header" id="heading_@w.Id">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                                        <button class="accordion-button collapsed" type="button"
+                                                data-bs-toggle="collapse" data-bs-target="#@collapseId">
                                             <code>@w.Id</code>
                                         </button>
                                     </h2>
-                                    <div id="@collapseId" class="accordion-collapse collapse" data-bs-parent="#workerEnvAccordion">
+                                    <div id="@collapseId" class="accordion-collapse collapse"
+                                         data-bs-parent="#workerEnvAccordion">
                                         <div class="accordion-body">
                                             <div class="d-flex align-items-center mb-2">
-                                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => LoadWorkerEnv(w.Id)" disabled="@_loadingWorkerEnv.Contains(w.Id)">
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => LoadWorkerEnv(w.Id)"
+                                                        disabled="@_loadingWorkerEnv.Contains(w.Id)">
                                                     @(_loadingWorkerEnv.Contains(w.Id) ? "Loading..." : "Load Env")
                                                 </button>
                                                 @if (_workerEnvErrors.TryGetValue(w.Id, out var err) && !string.IsNullOrEmpty(err))
@@ -250,7 +288,8 @@ else
                                             </div>
                                             @if (_workerEnv.TryGetValue(w.Id, out var env) && env is not null)
                                             {
-                                                <div class="border rounded p-2 small" style="max-height: 250px; overflow:auto;">
+                                                <div class="border rounded p-2 small"
+                                                     style="max-height: 250px; overflow:auto;">
                                                     @foreach (var kv in env.OrderBy(k => k.Key))
                                                     {
                                                         <div><span class="text-muted">@kv.Key:</span> @kv.Value</div>
@@ -394,6 +433,7 @@ else
                 var example = string.IsNullOrEmpty(sample) ? string.Empty : $" • example: {MaskIfSecret(key, sample)}";
                 return $"{have}/{loaded} workers{example}";
             }
+
             return "unknown (load worker env)";
         }
 
@@ -439,7 +479,12 @@ else
         }
     }
 
-    private enum NodeStatus { Online, Stale, Offline }
+    private enum NodeStatus
+    {
+        Online,
+        Stale,
+        Offline
+    }
 
     private NodeStatus GetWorkerStatus(WorkerStatusDto w)
     {
@@ -452,19 +497,25 @@ else
         return NodeStatus.Offline;
     }
 
-    private string GetStatusCss(NodeStatus st) => st switch
+    private string GetStatusCss(NodeStatus st)
     {
-        NodeStatus.Online => "status-online",
-        NodeStatus.Stale => "status-stale",
-        _ => "status-offline"
-    };
+        return st switch
+        {
+            NodeStatus.Online => "status-online",
+            NodeStatus.Stale => "status-stale",
+            _ => "status-offline"
+        };
+    }
 
-    private string GetStatusText(NodeStatus st) => st switch
+    private string GetStatusText(NodeStatus st)
     {
-        NodeStatus.Online => "Online",
-        NodeStatus.Stale => "Stale",
-        _ => "Offline"
-    };
+        return st switch
+        {
+            NodeStatus.Online => "Online",
+            NodeStatus.Stale => "Stale",
+            _ => "Offline"
+        };
+    }
 
     private (int online, int stale, int offline) GetWorkerStatusCounts()
     {
@@ -481,6 +532,7 @@ else
                 }
             }
         }
+
         return (online, stale, offline);
     }
 
@@ -525,6 +577,7 @@ else
             _error = ex.Message;
             _data = null;
         }
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -563,6 +616,7 @@ else
         {
             _hubEnvLoading = false;
         }
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -594,6 +648,7 @@ else
         {
             _loadingWorkerEnv.Remove(nodeId);
         }
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -603,17 +658,34 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
-    private enum ConfigState { Set, Partial, Missing, Unknown }
+    private enum ConfigState
+    {
+        Set,
+        Partial,
+        Missing,
+        Unknown
+    }
 
-    private bool IsHubKey(string key) => _knownHubKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
-    private bool IsWorkerKey(string key) => _knownWorkerKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
-    private bool IsDashboardKey(string key) => _knownDashboardKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+    private bool IsHubKey(string key)
+    {
+        return _knownHubKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool IsWorkerKey(string key)
+    {
+        return _knownWorkerKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool IsDashboardKey(string key)
+    {
+        return _knownDashboardKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+    }
 
     private (int have, int loaded, int total) GetWorkerKeyCoverage(string key)
     {
-        int total = _data?.Workers?.Count ?? 0;
-        int loaded = 0;
-        int have = 0;
+        var total = _data?.Workers?.Count ?? 0;
+        var loaded = 0;
+        var have = 0;
         if (_data?.Workers is { Count: > 0 })
         {
             foreach (var w in _data.Workers)
@@ -628,6 +700,7 @@ else
                 }
             }
         }
+
         return (have, loaded, total);
     }
 
@@ -644,6 +717,7 @@ else
                 }
             }
         }
+
         return null;
     }
 
@@ -674,21 +748,27 @@ else
         return !string.IsNullOrEmpty(GetEnv(key)) ? ConfigState.Set : ConfigState.Unknown;
     }
 
-    private string GetBadgeClass(ConfigState st) => st switch
+    private string GetBadgeClass(ConfigState st)
     {
-        ConfigState.Set => "bg-success",
-        ConfigState.Partial => "bg-warning text-dark",
-        ConfigState.Missing => "bg-danger",
-        _ => "bg-secondary"
-    };
+        return st switch
+        {
+            ConfigState.Set => "bg-success",
+            ConfigState.Partial => "bg-warning text-dark",
+            ConfigState.Missing => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
 
-    private string GetBadgeText(ConfigState st) => st switch
+    private string GetBadgeText(ConfigState st)
     {
-        ConfigState.Set => "Set",
-        ConfigState.Partial => "Partial",
-        ConfigState.Missing => "Missing",
-        _ => "Unknown"
-    };
+        return st switch
+        {
+            ConfigState.Set => "Set",
+            ConfigState.Partial => "Partial",
+            ConfigState.Missing => "Missing",
+            _ => "Unknown"
+        };
+    }
 
     private async Task LoadAllWorkersEnv()
     {
@@ -700,6 +780,7 @@ else
         {
             tasks.Add(LoadWorkerEnv(w.Id));
         }
+
         try
         {
             await Task.WhenAll(tasks);

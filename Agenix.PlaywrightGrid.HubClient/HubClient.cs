@@ -1,4 +1,3 @@
-
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -42,7 +41,8 @@ public sealed class HubClient : IDisposable
     /// <param name="handler">Optional custom message handler.</param>
     /// <param name="timeout">Optional request timeout (defaults to 15s).</param>
     /// <exception cref="ArgumentNullException"></exception>
-    public HubClient(string? hubUrl = null, string? runnerSecret = null, HttpMessageHandler? handler = null, TimeSpan? timeout = null)
+    public HubClient(string? hubUrl = null, string? runnerSecret = null, HttpMessageHandler? handler = null,
+        TimeSpan? timeout = null)
     {
         var rawUrl = hubUrl ?? throw new ArgumentNullException(nameof(hubUrl));
 
@@ -68,7 +68,8 @@ public sealed class HubClient : IDisposable
             throw new ArgumentException("Invalid hub URL", nameof(hubUrl));
         }
 
-        var secret = (runnerSecret ?? Environment.GetEnvironmentVariable("HUB_RUNNER_SECRET") ?? "runner-secret").Trim();
+        var secret = (runnerSecret ?? Environment.GetEnvironmentVariable("HUB_RUNNER_SECRET") ?? "runner-secret")
+            .Trim();
 
         var httpHandler = handler ?? new HttpClientHandler
         {
@@ -96,7 +97,8 @@ public sealed class HubClient : IDisposable
     /// Create a HubClient using IConfiguration via HubUrlProvider (env HUB_URL has precedence over config Hub:Url).
     /// Throws if neither is configured.
     /// </summary>
-    public HubClient(IConfiguration configuration, string? runnerSecret = null, HttpMessageHandler? handler = null, TimeSpan? timeout = null)
+    public HubClient(IConfiguration configuration, string? runnerSecret = null, HttpMessageHandler? handler = null,
+        TimeSpan? timeout = null)
         : this(HubUrlProvider.Get(configuration), runnerSecret, handler, timeout)
     {
     }
@@ -134,17 +136,30 @@ public sealed class HubClient : IDisposable
     /// Requires HUB_RUNNER_SECRET and that the browserId is already attributed to a run (BorrowAsync with runId).
     /// Use the convenience overloads to omit the direction; they default to "runner".
     /// </summary>
-    public async Task SendApiLogAsync(string browserId, string text, DateTime? timestampUtc = null, string? direction = null)
+    public async Task SendApiLogAsync(string browserId, string text, DateTime? timestampUtc = null,
+        string? direction = null)
     {
-        if (string.IsNullOrWhiteSpace(browserId)) throw new ArgumentNullException(nameof(browserId));
-        if (string.IsNullOrWhiteSpace(text)) return;
+        if (string.IsNullOrWhiteSpace(browserId))
+        {
+            throw new ArgumentNullException(nameof(browserId));
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
         var url = $"/results/browser/{WebUtility.UrlEncode(browserId)}/api-logs";
         var body = new Dictionary<string, object?>
         {
             ["text"] = text,
             ["ts"] = (timestampUtc ?? DateTime.UtcNow).ToString("O")
         };
-        if (!string.IsNullOrWhiteSpace(direction)) body["direction"] = direction;
+        if (!string.IsNullOrWhiteSpace(direction))
+        {
+            body["direction"] = direction;
+        }
+
         var resp = await _retry.ExecuteAsync(() => _http.PostAsJsonAsync(url, body));
         resp.EnsureSuccessStatusCode();
     }
@@ -153,13 +168,17 @@ public sealed class HubClient : IDisposable
     /// Convenience overload: defaults direction to "runner".
     /// </summary>
     public Task SendApiLogAsync(string browserId, string text)
-        => SendApiLogAsync(browserId, text, null, "runner");
+    {
+        return SendApiLogAsync(browserId, text, null, "runner");
+    }
 
     /// <summary>
     /// Convenience overload: defaults direction to "runner".
     /// </summary>
     public Task SendApiLogAsync(string browserId, string text, DateTime? timestampUtc)
-        => SendApiLogAsync(browserId, text, timestampUtc, "runner");
+    {
+        return SendApiLogAsync(browserId, text, timestampUtc, "runner");
+    }
 
     /// <summary>
     /// Sends multiple Playwright API/protocol logs from the test runner in one batch.
@@ -167,12 +186,24 @@ public sealed class HubClient : IDisposable
     /// </summary>
     public async Task SendApiLogsAsync(string browserId, IEnumerable<string> texts)
     {
-        if (string.IsNullOrWhiteSpace(browserId)) throw new ArgumentNullException(nameof(browserId));
-        if (texts is null) return;
+        if (string.IsNullOrWhiteSpace(browserId))
+        {
+            throw new ArgumentNullException(nameof(browserId));
+        }
+
+        if (texts is null)
+        {
+            return;
+        }
+
         var items = texts.Where(s => !string.IsNullOrWhiteSpace(s))
-                         .Select(s => new Dictionary<string, object?> { ["text"] = s, ["direction"] = "runner" })
-                         .ToArray();
-        if (items.Length == 0) return;
+            .Select(s => new Dictionary<string, object?> { ["text"] = s, ["direction"] = "runner" })
+            .ToArray();
+        if (items.Length == 0)
+        {
+            return;
+        }
+
         var url = $"/results/browser/{WebUtility.UrlEncode(browserId)}/api-logs";
         var resp = await _retry.ExecuteAsync(() => _http.PostAsJsonAsync(url, items));
         resp.EnsureSuccessStatusCode();
@@ -184,10 +215,13 @@ public sealed class HubClient : IDisposable
     /// </summary>
     /// <param name="runId">Optional run identifier to be attributed by the hub (sent as query runId).</param>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public async Task<(string browserId, string wsEndpoint, string labelKey, string? browserType)> BorrowAsync(string labelKey, string? runId = null)
+    public async Task<(string browserId, string wsEndpoint, string labelKey, string? browserType)> BorrowAsync(
+        string labelKey, string? runId = null)
     {
         var body = new Dictionary<string, string> { ["labelKey"] = labelKey };
-        var url = string.IsNullOrWhiteSpace(runId) ? "/session/borrow" : $"/session/borrow?runId={WebUtility.UrlEncode(runId)}";
+        var url = string.IsNullOrWhiteSpace(runId)
+            ? "/session/borrow"
+            : $"/session/borrow?runId={WebUtility.UrlEncode(runId)}";
         var resp = await _retry.ExecuteAsync(() => _http.PostAsJsonAsync(url, body));
 
         switch (resp.StatusCode)
@@ -205,13 +239,16 @@ public sealed class HubClient : IDisposable
         var root = doc.RootElement;
 
         var browserId = GetStr(root, "browserId") ?? throw new InvalidOperationException("Missing browserId");
-        var ws = GetStr(root, "webSocketEndpoint") ?? GetStr(root, "wsEndpoint") ?? throw new InvalidOperationException("Missing ws endpoint");
+        var ws = GetStr(root, "webSocketEndpoint") ??
+                 GetStr(root, "wsEndpoint") ?? throw new InvalidOperationException("Missing ws endpoint");
         var browserType = GetStr(root, "browserType");
 
         return (browserId, ws, labelKey, browserType);
 
         static string? GetStr(JsonElement root, string name)
-            => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        {
+            return root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        }
     }
 
     /// <summary>
@@ -223,15 +260,12 @@ public sealed class HubClient : IDisposable
     /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task ReturnAsync(string labelKey, string browserId, string? runId = null)
     {
-        var body = new Dictionary<string, string>
-        {
-            ["labelKey"] = labelKey,
-            ["browserId"] = browserId
-        };
+        var body = new Dictionary<string, string> { ["labelKey"] = labelKey, ["browserId"] = browserId };
 
-        var url = string.IsNullOrWhiteSpace(runId) ? "/session/return" : $"/session/return?runId={WebUtility.UrlEncode(runId)}";
+        var url = string.IsNullOrWhiteSpace(runId)
+            ? "/session/return"
+            : $"/session/return?runId={WebUtility.UrlEncode(runId)}";
         var resp = await _retry.ExecuteAsync(() => _http.PostAsJsonAsync(url, body));
         resp.EnsureSuccessStatusCode();
     }
-
 }

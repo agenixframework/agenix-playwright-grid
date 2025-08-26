@@ -40,25 +40,34 @@ public sealed class WebServerHost
             }
             catch { }
 
-            try { _pool.CleanupAllAsync().GetAwaiter().GetResult(); } catch { }
-            try { _pool.KillAll(); } catch { }
+            try { _pool.CleanupAllAsync().GetAwaiter().GetResult(); }
+            catch { }
+
+            try { _pool.KillAll(); }
+            catch { }
         });
 
         app.MapPost("/borrow/{labelKey}", async (string labelKey, HttpRequest req) =>
         {
             if (!req.Headers.TryGetValue("x-node-secret", out var s) || s.FirstOrDefault() != _options.NodeNodeSecret)
+            {
                 return Results.Unauthorized();
+            }
 
             // Respect maintenance mode: deny borrow while maintenance is active for this label
             try
             {
                 if (_db.KeyExists($"maintenance:{labelKey}"))
+                {
                     return Results.StatusCode(503);
+                }
             }
             catch { }
 
             if (!_pool.TryGetFirstSlot(labelKey, out var browserId, out var slot))
+            {
                 return Results.StatusCode(503);
+            }
 
             _metrics.IncrementBorrow(_options.NodeId, labelKey);
             var availableKey = $"available:{labelKey}";
@@ -78,31 +87,36 @@ public sealed class WebServerHost
         app.MapPost("/return/{labelKey}", async (string labelKey, HttpRequest req) =>
         {
             if (!req.Headers.TryGetValue("x-node-secret", out var s) || s.FirstOrDefault() != _options.NodeNodeSecret)
+            {
                 return Results.Unauthorized();
+            }
 
-            var body = await req.ReadFromJsonAsync<System.Collections.Concurrent.ConcurrentDictionary<string, string>>() ??
-                       new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
-            if (!body.TryGetValue("browserId", out var _))
+            var body =
+                await req.ReadFromJsonAsync<System.Collections.Concurrent.ConcurrentDictionary<string, string>>() ??
+                new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+            if (!body.TryGetValue("browserId", out _))
+            {
                 return Results.BadRequest();
+            }
 
             var availableKey = $"available:{labelKey}";
             _metrics.SetPoolAvailable(_options.NodeId, labelKey, await _db.ListLengthAsync(availableKey));
             return Results.Ok(new { ok = true });
         });
 
-        app.MapGet("/health", () => Results.Ok(new
-        {
-            node = _options.NodeId,
-            pools = _pool.Pools.Keys.ToArray()
-        }));
+        app.MapGet("/health", () => Results.Ok(new { node = _options.NodeId, pools = _pool.Pools.Keys.ToArray() }));
 
         // Diagnostics: expose filtered environment variables for this worker
         app.MapGet("/diagnostics/env", (HttpRequest req) =>
         {
             // Allow access with either hub secret (from hub) or node-node secret
             var ok = (req.Headers.TryGetValue("x-hub-secret", out var hs) && hs.FirstOrDefault() == _options.NodeSecret)
-                     || (req.Headers.TryGetValue("x-node-secret", out var ns) && ns.FirstOrDefault() == _options.NodeNodeSecret);
-            if (!ok) return Results.Unauthorized();
+                     || (req.Headers.TryGetValue("x-node-secret", out var ns) &&
+                         ns.FirstOrDefault() == _options.NodeNodeSecret);
+            if (!ok)
+            {
+                return Results.Unauthorized();
+            }
 
             static bool IsSecret(string key)
             {
@@ -114,17 +128,16 @@ public sealed class WebServerHost
             foreach (System.Collections.DictionaryEntry de in Environment.GetEnvironmentVariables())
             {
                 var k = de.Key?.ToString();
-                if (string.IsNullOrWhiteSpace(k)) continue;
+                if (string.IsNullOrWhiteSpace(k))
+                {
+                    continue;
+                }
+
                 var v = de.Value?.ToString() ?? string.Empty;
                 dict[k] = IsSecret(k) && !string.IsNullOrEmpty(v) ? "***" : v;
             }
 
-            var payload = new
-            {
-                nodeId = _options.NodeId,
-                env = dict,
-                now = DateTime.UtcNow
-            };
+            var payload = new { nodeId = _options.NodeId, env = dict, now = DateTime.UtcNow };
             return Results.Ok(payload);
         });
 
@@ -180,16 +193,21 @@ public sealed class WebServerHost
                     try
                     {
                         var hubUrl = _options.HubUrl?.TrimEnd('/') ?? "";
-                        if (string.IsNullOrEmpty(hubUrl)) return;
+                        if (string.IsNullOrEmpty(hubUrl))
+                        {
+                            return;
+                        }
+
                         var url = $"{hubUrl}/results/browser/{browserId}/commands";
                         _ = Task.Run(async () =>
                         {
                             try
                             {
-                                using var handler = new System.Net.Http.HttpClientHandler { AllowAutoRedirect = false };
-                                using var client = new System.Net.Http.HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
+                                using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+                                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
                                 client.DefaultRequestHeaders.Remove("x-hub-secret");
-                                client.DefaultRequestHeaders.TryAddWithoutValidation("x-hub-secret", _options.NodeSecret);
+                                client.DefaultRequestHeaders.TryAddWithoutValidation("x-hub-secret",
+                                    _options.NodeSecret);
                                 var payload = new
                                 {
                                     text = message,
@@ -197,7 +215,8 @@ public sealed class WebServerHost
                                     ts = DateTime.UtcNow.ToString("O")
                                 };
                                 var json = System.Text.Json.JsonSerializer.Serialize(payload);
-                                using var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                                using var content =
+                                    new StringContent(json, System.Text.Encoding.UTF8, "application/json");
                                 await client.PostAsync(url, content, ctx.RequestAborted);
                             }
                             catch { }
@@ -212,9 +231,12 @@ public sealed class WebServerHost
             }
             finally
             {
-                try { await cts.CancelAsync(); } catch { }
+                try { await cts.CancelAsync(); }
+                catch { }
+
                 _pool.MarkConnectionEnd(browserId);
             }
+
             return;
 
             static async Task Pump(WebSocket src, WebSocket dst, CancellationToken ct, Action<string>? onTextMessage)
@@ -232,6 +254,7 @@ public sealed class WebServerHost
                                 src.CloseStatusDescription, ct);
                         }
                         catch { }
+
                         break;
                     }
 
@@ -252,11 +275,15 @@ public sealed class WebServerHost
                                 sb.Clear();
                                 if (!string.IsNullOrWhiteSpace(full))
                                 {
-                                    try { onTextMessage?.Invoke(full); } catch { }
+                                    try { onTextMessage?.Invoke(full); }
+                                    catch { }
                                 }
                             }
                         }
-                        catch { /* ignore capture errors */ }
+                        catch
+                        {
+                            /* ignore capture errors */
+                        }
                     }
                 }
             }

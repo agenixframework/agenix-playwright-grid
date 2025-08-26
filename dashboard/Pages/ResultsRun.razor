@@ -29,7 +29,8 @@ else
         <div class="card-body">
             <div class="d-flex justify-content-between">
                 <div>
-                    <div><span class="text-muted">Status:</span> <span class="badge @StatusBadgeClass(_run.Status)">@_run.Status</span></div>
+                    <div><span class="text-muted">Status:</span> <span
+                            class="badge @StatusBadgeClass(_run.Status)">@_run.Status</span></div>
                     <div class="small text-muted">App: @_run.App · Browser: @_run.Browser · Env: @_run.Env</div>
                     <div class="small text-muted">Region/OS: @(_run.Region ?? "-") / @GetDisplayOS()</div>
                 </div>
@@ -40,7 +41,8 @@ else
                         <div>Completed: @_run.CompletedAtUtc.Value.ToLocalTime().ToString("g")</div>
                     }
                     <div>Node: @(_run.WorkerNodeId ?? "-")</div>
-                    <div>PW/Browsers: @(string.Join(" / ", new[]{_run.PlaywrightVersion, _run.BrowserVersion}.Where(x=>!string.IsNullOrWhiteSpace(x))))</div>
+                    <div>
+                        PW/Browsers: @(string.Join(" / ", new[] { _run.PlaywrightVersion, _run.BrowserVersion }.Where(x => !string.IsNullOrWhiteSpace(x))))</div>
                 </div>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
@@ -51,10 +53,13 @@ else
                 }
                 <span class="badge bg-light text-dark">Commands: @CommandCount</span>
                 <span class="badge bg-light text-dark">Kinds: @KindCounts.Count</span>
-                <button class="btn btn-sm btn-outline-secondary" title="Copy RunId" @onclick="CopyRunId">Copy RunId</button>
+                <button class="btn btn-sm btn-outline-secondary" title="Copy RunId" @onclick="CopyRunId">Copy RunId
+                </button>
                 @if (!string.IsNullOrWhiteSpace(_run.ExternalId))
                 {
-                    <button class="btn btn-sm btn-outline-secondary" title="Copy ExternalId" @onclick="CopyExternalId">Copy ExternalId</button>
+                    <button class="btn btn-sm btn-outline-secondary" title="Copy ExternalId" @onclick="CopyExternalId">
+                        Copy ExternalId
+                    </button>
                 }
                 @if (IsRunningStatus(_run.Status))
                 {
@@ -70,14 +75,14 @@ else
         <h5 class="mb-2">Commands</h5>
         <div class="row g-2 mb-2">
             <div class="col-sm-3">
-                <input class="form-control form-control-sm" placeholder="Kind (e.g. Borrow)" 
-                       value="@cmdKindFilter" 
-                       @oninput="OnKindInput" />
+                <input class="form-control form-control-sm" placeholder="Kind (e.g. Borrow)"
+                       value="@cmdKindFilter"
+                       @oninput="OnKindInput"/>
             </div>
             <div class="col-sm-3">
-                <input class="form-control form-control-sm" placeholder="Direction (c2s/s2c/runner)" 
-                       value="@cmdDirectionFilter" 
-                       @oninput="OnDirectionInput" />
+                <input class="form-control form-control-sm" placeholder="Direction (c2s/s2c/runner)"
+                       value="@cmdDirectionFilter"
+                       @oninput="OnDirectionInput"/>
             </div>
         </div>
         @if (KindCounts.Count > 0)
@@ -86,7 +91,9 @@ else
                 <span class="small text-muted me-2">Quick filters:</span>
                 @foreach (var kv in KindCounts.OrderBy(kv => kv.Key))
                 {
-                    <button class="btn btn-sm @(string.Equals(cmdKindFilter, kv.Key, StringComparison.OrdinalIgnoreCase) ? "btn-primary" : "btn-outline-primary") me-1 mb-1" @onclick="(() => SetKindFilter(kv.Key))">
+                    <button
+                        class="btn btn-sm @(string.Equals(cmdKindFilter, kv.Key, StringComparison.OrdinalIgnoreCase) ? "btn-primary" : "btn-outline-primary") me-1 mb-1"
+                        @onclick="() => SetKindFilter(kv.Key)">
                         @kv.Key <span class="badge bg-light text-dark ms-1">@kv.Value</span>
                     </button>
                 }
@@ -109,9 +116,12 @@ else
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <div class="small text-muted">Showing @PageStart-@PageEnd of @CmdTotal</div>
                 <div class="btn-group btn-group-sm" role="group" aria-label="Commands pagination">
-                    <button class="btn btn-outline-secondary" disabled="@(CmdPage <= 1)" @onclick="PrevCmdPage">Prev</button>
+                    <button class="btn btn-outline-secondary" disabled="@(CmdPage <= 1)" @onclick="PrevCmdPage">Prev
+                    </button>
                     <span class="btn btn-light disabled">Page @CmdPage / @CmdTotalPages</span>
-                    <button class="btn btn-outline-secondary" disabled="@(CmdPage >= CmdTotalPages)" @onclick="NextCmdPage">Next</button>
+                    <button class="btn btn-outline-secondary" disabled="@(CmdPage >= CmdTotalPages)"
+                            @onclick="NextCmdPage">Next
+                    </button>
                 </div>
             </div>
             <div class="list-group small">
@@ -138,7 +148,9 @@ else
                             </div>
                             <div class="text-end">
                                 <div class="text-muted">@ev.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</div>
-                                <button class="btn btn-sm btn-outline-secondary mt-1" @onclick="async () => await Copy(ev)">Copy</button>
+                                <button class="btn btn-sm btn-outline-secondary mt-1"
+                                        @onclick="async () => await Copy(ev)">Copy
+                                </button>
                             </div>
                         </div>
 
@@ -155,9 +167,13 @@ else
             {
                 <div class="d-flex justify-content-end align-items-center mt-2">
                     <div class="btn-group btn-group-sm" role="group" aria-label="Commands pagination bottom">
-                        <button class="btn btn-outline-secondary" disabled="@(CmdPage <= 1)" @onclick="PrevCmdPage">Prev</button>
+                        <button class="btn btn-outline-secondary" disabled="@(CmdPage <= 1)" @onclick="PrevCmdPage">
+                            Prev
+                        </button>
                         <span class="btn btn-light disabled">Page @CmdPage / @CmdTotalPages</span>
-                        <button class="btn btn-outline-secondary" disabled="@(CmdPage >= CmdTotalPages)" @onclick="NextCmdPage">Next</button>
+                        <button class="btn btn-outline-secondary" disabled="@(CmdPage >= CmdTotalPages)"
+                                @onclick="NextCmdPage">Next
+                        </button>
                     </div>
                 </div>
             }
@@ -171,17 +187,21 @@ else
     private ResultRunSummaryDto _run;
     private bool runNotFound = false;
     private List<CommandLogEventDto> _commands;
-    private Microsoft.AspNetCore.SignalR.Client.HubConnection _conn;
+    private HubConnection _conn;
     private bool _disposed = false;
 
     // Client-side detected OS for display when server OS is missing
     private string? _displayOs;
 
     private bool NeedsOsDetect()
-        => string.IsNullOrWhiteSpace(_run?.OS) || _run!.OS == "-";
+    {
+        return string.IsNullOrWhiteSpace(_run?.OS) || _run!.OS == "-";
+    }
 
     private string GetDisplayOS()
-        => NeedsOsDetect() ? (_displayOs ?? "-") : (_run!.OS ?? "-");
+    {
+        return NeedsOsDetect() ? (_displayOs ?? "-") : (_run!.OS ?? "-");
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -200,6 +220,7 @@ else
             {
                 _displayOs = "-"; // keep safe fallback for tests/non-browser renderers
             }
+
             StateHasChanged();
         }
     }
@@ -221,7 +242,7 @@ else
 
     private int CmdTotal => _useServerPaging ? _serverCmdCount : FilteredCommands.Count;
     private int CmdTotalPages => Math.Max(1, (int)Math.Ceiling(CmdTotal / (double)CmdPageSize));
-    private int PageStart => CmdTotal == 0 ? 0 : ((CmdPage - 1) * CmdPageSize) + 1;
+    private int PageStart => CmdTotal == 0 ? 0 : (CmdPage - 1) * CmdPageSize + 1;
     private int PageEnd => Math.Min(CmdPage * CmdPageSize, CmdTotal);
 
     private List<CommandLogEventDto> PagedCommands
@@ -232,11 +253,11 @@ else
             {
                 // Apply client-side filters over server-provided page
                 return _pageBuffer
-                    .Where(c => string.IsNullOrWhiteSpace(cmdKindFilter) || (c.Kind?.Contains(cmdKindFilter, StringComparison.OrdinalIgnoreCase) == true))
+                    .Where(c => string.IsNullOrWhiteSpace(cmdKindFilter) || c.Kind?.Contains(cmdKindFilter, StringComparison.OrdinalIgnoreCase) == true)
                     .Where(c =>
                     {
                         if (string.IsNullOrWhiteSpace(cmdDirectionFilter)) return true;
-                        string dir = string.Empty;
+                        var dir = string.Empty;
                         if (c.Props != null && c.Props.TryGetValue("direction", out var d) && d != null)
                             dir = d;
                         return dir.Contains(cmdDirectionFilter, StringComparison.OrdinalIgnoreCase);
@@ -244,6 +265,7 @@ else
                     .OrderBy(c => c.TimestampUtc)
                     .ToList();
             }
+
             var list = FilteredCommands;
             var skip = Math.Max(0, (CmdPage - 1) * CmdPageSize);
             return list.Skip(skip).Take(CmdPageSize).ToList();
@@ -290,13 +312,17 @@ else
         get
         {
             List<CommandLogEventDto> snap;
-            lock (_gate) { snap = (_commands ?? new List<CommandLogEventDto>()).ToList(); }
+            lock (_gate)
+            {
+                snap = (_commands ?? new List<CommandLogEventDto>()).ToList();
+            }
+
             return snap
-                .Where(c => string.IsNullOrWhiteSpace(cmdKindFilter) || (c.Kind?.Contains(cmdKindFilter, StringComparison.OrdinalIgnoreCase) == true))
+                .Where(c => string.IsNullOrWhiteSpace(cmdKindFilter) || c.Kind?.Contains(cmdKindFilter, StringComparison.OrdinalIgnoreCase) == true)
                 .Where(c =>
                 {
                     if (string.IsNullOrWhiteSpace(cmdDirectionFilter)) return true;
-                    string dir = string.Empty;
+                    var dir = string.Empty;
                     if (c.Props != null && c.Props.TryGetValue("direction", out var d) && d != null)
                         dir = d;
                     return dir.Contains(cmdDirectionFilter, StringComparison.OrdinalIgnoreCase);
@@ -339,7 +365,10 @@ else
     {
         get
         {
-            lock (_gate) { return _commands?.Count ?? 0; }
+            lock (_gate)
+            {
+                return _commands?.Count ?? 0;
+            }
         }
     }
 
@@ -348,7 +377,11 @@ else
         get
         {
             List<CommandLogEventDto> snap;
-            lock (_gate) { snap = (_commands ?? new List<CommandLogEventDto>()).ToList(); }
+            lock (_gate)
+            {
+                snap = (_commands ?? new List<CommandLogEventDto>()).ToList();
+            }
+
             return snap
                 .GroupBy(c => string.IsNullOrWhiteSpace(c.Kind) ? "(none)" : c.Kind)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
@@ -365,8 +398,8 @@ else
         var span = end - start;
         if (span.TotalSeconds < 1) return "<1s";
         if (span.TotalMinutes < 1) return $"{(int)span.TotalSeconds}s";
-        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m {(int)(span.Seconds)}s";
-        return $"{(int)span.TotalHours}h {(int)(span.Minutes)}m";
+        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m {(int)span.Seconds}s";
+        return $"{(int)span.TotalHours}h {(int)span.Minutes}m";
     }
 
     private async Task CopyRunId()
@@ -400,12 +433,19 @@ else
         // If the component is re-parameterized (e.g., same page navigated quickly), make sure we don't stack connections
         if (_conn is not null)
         {
-            try { await _conn.DisposeAsync(); } catch { }
+            try
+            {
+                await _conn.DisposeAsync();
+            }
+            catch
+            {
+            }
+
             _conn = null;
         }
 
         var http = HttpFactory.CreateClient("hub");
-        bool got404 = false;
+        var got404 = false;
 
         try
         {
@@ -418,10 +458,15 @@ else
             else
             {
                 var run = await resp.Content.ReadFromJsonAsync<ResultRunSummaryDto>();
-                lock (_gate) { _run = run; }
+                lock (_gate)
+                {
+                    _run = run;
+                }
             }
         }
-        catch { }
+        catch
+        {
+        }
 
         // Try to enable server-driven paging: query count and load first page
         var enabledServerPaging = await TryEnableServerPagingAsync();
@@ -434,13 +479,21 @@ else
                 var cmds = (cmdsResp.IsSuccessStatusCode
                     ? await cmdsResp.Content.ReadFromJsonAsync<List<CommandLogEventDto>>()
                     : new List<CommandLogEventDto>()) ?? new List<CommandLogEventDto>();
-                lock (_gate) { _commands = cmds; }
+                lock (_gate)
+                {
+                    _commands = cmds;
+                }
+
                 ResetCmdPage();
                 ClampPage();
             }
             catch
             {
-                lock (_gate) { _commands = new List<CommandLogEventDto>(); }
+                lock (_gate)
+                {
+                    _commands = new List<CommandLogEventDto>();
+                }
+
                 ResetCmdPage();
                 ClampPage();
             }
@@ -455,6 +508,7 @@ else
 
                 runNotFound = got404 && _run is null && _commands.Count == 0;
             }
+
             // Ensure pagination is consistent after initial load/seeding
             ResetCmdPage();
             ClampPage();
@@ -468,7 +522,7 @@ else
             var scheme = uri.Scheme switch { "ws" => "http", "wss" => "https", _ => uri.Scheme };
             var resultsWs = $"{scheme}://{uri.Authority}/results-ws";
 
-            _conn = new Microsoft.AspNetCore.SignalR.Client.HubConnectionBuilder()
+            _conn = new HubConnectionBuilder()
                 .WithUrl(resultsWs)
                 .WithAutomaticReconnect()
                 .Build();
@@ -483,6 +537,7 @@ else
                         _run = run;
                         runNotFound = false;
                     }
+
                     StateHasChanged();
                 }));
 
@@ -503,6 +558,7 @@ else
                         {
                             _ = LoadServerPageAsync(CmdPage);
                         }
+
                         _ = InvokeAsync(StateHasChanged);
                     }
                 }
@@ -516,8 +572,10 @@ else
                             if (string.Equals(it.RunId, runId, StringComparison.OrdinalIgnoreCase))
                                 _commands.Add(it);
                         }
+
                         _commands = _commands.OrderBy(c => c.TimestampUtc).TakeLast(1000).ToList();
                     }
+
                     ClampPage();
                     _ = InvokeAsync(StateHasChanged);
                 }
@@ -537,8 +595,22 @@ else
         _disposed = true;
         if (_conn != null)
         {
-            try { await _conn.SendAsync("LeaveRun", runId); } catch { }
-            try { await _conn.DisposeAsync(); } catch { }
+            try
+            {
+                await _conn.SendAsync("LeaveRun", runId);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                await _conn.DisposeAsync();
+            }
+            catch
+            {
+            }
+
             _conn = null;
         }
     }
@@ -549,14 +621,14 @@ else
             ? string.Empty
             : string.Join(" ", ev.Props.Select(kv => $"{kv.Key}={kv.Value}"));
         var text = $"{ev.TimestampUtc:o} [{ev.Kind}] {ev.Message} {props}".Trim();
-        try 
-        { 
-            await JS.InvokeVoidAsync("copyText", text); 
-            await JS.InvokeVoidAsync("alert", "Command copied to clipboard"); 
-        } 
-        catch (Exception ex) 
-        { 
-            Console.Error.WriteLine($"Copy failed: {ex.Message}"); 
+        try
+        {
+            await JS.InvokeVoidAsync("copyText", text);
+            await JS.InvokeVoidAsync("alert", "Command copied to clipboard");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Copy failed: {ex.Message}");
         }
     }
 
@@ -568,7 +640,7 @@ else
         var dirBadge = string.IsNullOrWhiteSpace(dir) ? string.Empty : $"<span class=\"badge bg-{badgeClass} me-2\">{dir}</span>";
 
         var text = ev.Message ?? string.Empty;
-        string pretty = text;
+        var pretty = text;
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(text);
@@ -577,7 +649,10 @@ else
                 WriteIndented = true
             });
         }
-        catch { /* leave as-is if not JSON */ }
+        catch
+        {
+            /* leave as-is if not JSON */
+        }
 
         // Encode content to avoid HTML injection; keep our own badges unencoded
         var encoded = System.Net.WebUtility.HtmlEncode(pretty);
@@ -585,7 +660,10 @@ else
         return new MarkupString(html);
     }
 
-    private static string Short(string id) => id?.Length > 8 ? id.Substring(0, 8) : id;
+    private static string Short(string id)
+    {
+        return id?.Length > 8 ? id.Substring(0, 8) : id;
+    }
 
     private static string StatusBadgeClass(string status)
     {
@@ -604,8 +682,11 @@ else
     }
 
     private bool _stopping = false;
+
     private static bool IsRunningStatus(string? status)
-        => string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase) || string.Equals(status, "InProgress", StringComparison.OrdinalIgnoreCase);
+    {
+        return string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase) || string.Equals(status, "InProgress", StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task StopRunAsync()
     {
@@ -616,7 +697,7 @@ else
         try
         {
             var http = HttpFactory.CreateClient("hub");
-            var resp = await http.PostAsync($"/results/{id}/stop", content: null);
+            var resp = await http.PostAsync($"/results/{id}/stop", null);
             if (!resp.IsSuccessStatusCode)
             {
                 var txt = await resp.Content.ReadAsStringAsync();
@@ -683,7 +764,11 @@ else
         return list;
     }
 
-    private sealed class CountResponse { public int count { get; set; } public int Count { get; set; } }
+    private sealed class CountResponse
+    {
+        public int count { get; set; }
+        public int Count { get; set; }
+    }
 
     private async Task<bool> TryEnableServerPagingAsync()
     {
@@ -693,7 +778,7 @@ else
             var resp = await http.GetAsync($"/results/{runId}/commands/count");
             if (!resp.IsSuccessStatusCode) return false;
             var payload = await resp.Content.ReadFromJsonAsync<CountResponse>();
-            var count = payload?.count > 0 ? payload!.count : (payload?.Count ?? 0);
+            var count = payload?.count > 0 ? payload!.count : payload?.Count ?? 0;
             _useServerPaging = true;
             _serverCmdCount = Math.Max(0, count);
             await LoadServerPageAsync(1);
@@ -724,4 +809,5 @@ else
             _pageBuffer = new List<CommandLogEventDto>();
         }
     }
+
 }
