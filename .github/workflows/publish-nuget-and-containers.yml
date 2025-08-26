@@ -255,6 +255,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -271,6 +276,7 @@ jobs:
           context: ./hub
           file: ./hub/Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-hub:${{ needs.build.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-hub:latest
@@ -283,6 +289,7 @@ jobs:
           context: ./worker
           file: ./worker/Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-worker:${{ needs.build.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-worker:latest
@@ -295,6 +302,7 @@ jobs:
           context: ./dashboard
           file: ./dashboard/Dockerfile
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-dashboard:${{ needs.build.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-dashboard:latest
@@ -330,6 +338,36 @@ jobs:
         id: vars
         run: echo "image=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-${{ matrix.component }}:${{ needs.build.outputs.version }}" >> $GITHUB_OUTPUT
 
+      - name: Wait for image to be available and pull it
+        run: |
+          # Add a short delay to ensure the image is available
+          sleep 10
+
+          # Try to pull the image with retries
+          max_attempts=5
+          attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts: Pulling ${{ steps.vars.outputs.image }}"
+
+            if docker pull ${{ steps.vars.outputs.image }}; then
+              echo "✅ Successfully pulled image"
+              break
+            else
+              echo "⚠️ Failed to pull image, retrying in 10 seconds..."
+              sleep 10
+              attempt=$((attempt+1))
+            fi
+          done
+
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ Failed to pull image after $max_attempts attempts"
+            exit 1
+          fi
+
+      - name: List available images
+        run: docker images
+
       - name: Trivy scan (SARIF)
         uses: aquasecurity/trivy-action@0.24.0
         with:
@@ -341,6 +379,9 @@ jobs:
           ignore-unfixed: true
           exit-code: '0'
           scanners: 'vuln'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Trivy SARIF to code scanning
         uses: github/codeql-action/upload-sarif@v3
