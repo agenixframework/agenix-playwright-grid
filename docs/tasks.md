@@ -46,7 +46,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 40. [ ] Harden Docker images: run as non-root user, drop capabilities, read-only filesystem with writable temp for Playwright.
 41. [ ] Slim Docker images further: prune caches (npm, dotnet), multi-stage for Node assets, consolidate OS packages, consider distroless base.
 42. [ ] Add multi-arch builds (linux/amd64, linux/arm64) for Hub/Worker via buildx.
-43. [ ] Add image vulnerability scanning (Trivy/GHCR) and SBOM generation during CI.
+43. [X] Add image vulnerability scanning (Trivy/GHCR) and SBOM generation during CI.
 44. [ ] Introduce GitHub Actions CI: build, unit tests, integration tests (with Testcontainers), publish artifacts, and optional Docker image publish.
 45. [ ] Add workflow caching for dotnet restore, npm playwright installs, and docker layers to speed up CI.
 46. [ ] Expand unit tests for label matching, options parsing (POOL_CONFIG), and secret handling edge cases.
@@ -57,7 +57,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 51. [ ] Introduce a structured configuration guide (docs/configuration.md) with examples and common pitfalls.
 52. [ ] Add architecture diagrams (C4 model: Context, Container, Component) and sequence diagram for borrow/return.
 53. [X] Create CONTRIBUTING.md (coding standards, commit messages, branching, PR checklist).
-54. [ ] Establish versioning and release notes; tag releases and publish Agenix.PlaywrightGrid.HubClient to NuGet.
+54. [X] Establish versioning and release notes; tag releases and publish Agenix.PlaywrightGrid.HubClient to NuGet.
 55. [ ] Add compatibility matrix documenting supported Playwright versions and Docker base image tags.
 56. [ ] Implement feature flags for borrow strategies and dashboard features to allow safe rollout.
 57. [ ] Add configuration to toggle wildcards separately from trailing fallback/prefix expansion per-environment.
