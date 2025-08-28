@@ -324,6 +324,22 @@ jobs:
           echo "Resolved compose generated at ./artifacts/compose/docker-compose-${{ needs.build.outputs.version }}.yml (and copied as docker-compose.yml)"
           head -n 50 ./artifacts/compose/docker-compose-${{ needs.build.outputs.version }}.yml || true
 
+          echo "Including configuration directories (prometheus, provisioning)"
+          if [ -d "./prometheus" ]; then
+            cp -R ./prometheus ./artifacts/compose/prometheus
+          fi
+          if [ -f "./prometheus.yml" ]; then
+            # Legacy fallback if a single-file layout is used somewhere
+            cp ./prometheus.yml ./artifacts/compose/prometheus.yml
+          fi
+          if [ -d "./provisioning" ]; then
+            cp -R ./provisioning ./artifacts/compose/provisioning
+          fi
+
+          echo "Copying source compose files for reference"
+          cp docker-compose.yml ./artifacts/compose/_source-docker-compose.yml
+          cp docker-compose.images.yml ./artifacts/compose/_source-docker-compose.images.yml
+
       - name: Upload docker-compose artifact
         uses: actions/upload-artifact@v4
         with:
