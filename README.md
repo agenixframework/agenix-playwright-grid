@@ -131,7 +131,7 @@ HTTP API summary
 Metrics and observability
 
 - Hub and Workers expose Prometheus metrics at `http://<host-port>/metrics` (compose maps hub 5100, workers 5200+).
-- Prometheus is preconfigured to scrape hub and workers (see prometheus.yml).
+- Prometheus is preconfigured to scrape hub and workers (see prometheus/prometheus.yml).
 - Grafana is provisioned; open http://127.0.0.1:3000 and explore dashboards.
 
 Testing (GridTests)
