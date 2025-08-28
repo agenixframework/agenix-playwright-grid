@@ -309,6 +309,28 @@ jobs:
           cache-from: type=gha,scope=dashboard
           cache-to: type=gha,scope=dashboard,mode=max
 
+      - name: Generate docker-compose artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Preparing docker-compose artifact from published images..."
+          mkdir -p ./artifacts/compose
+          export GHCR_OWNER="${{ github.repository_owner }}"
+          export GHCR_REPO="${{ github.event.repository.name }}"
+          export IMAGE_TAG="${{ needs.build.outputs.version }}"
+          docker compose version || true
+          docker compose -f docker-compose.yml -f docker-compose.images.yml config > ./artifacts/compose/docker-compose-${{ needs.build.outputs.version }}.yml
+          cp ./artifacts/compose/docker-compose-${{ needs.build.outputs.version }}.yml ./artifacts/compose/docker-compose.yml
+          echo "Resolved compose generated at ./artifacts/compose/docker-compose-${{ needs.build.outputs.version }}.yml (and copied as docker-compose.yml)"
+          head -n 50 ./artifacts/compose/docker-compose-${{ needs.build.outputs.version }}.yml || true
+
+      - name: Upload docker-compose artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-${{ needs.build.outputs.version }}
+          path: ./artifacts/compose/
+          retention-days: 30
+
   scan-and-sbom:
     runs-on: ubuntu-latest
     needs: [publish-containers, build]
@@ -386,15 +408,15 @@ jobs:
       - name: Upload Trivy SARIF to code scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: trivy-${{ matrix.component }}.sarif
-          category: trivy-${{ matrix.component }}
+          sarif_file: "trivy-${{ matrix.component }}.sarif"
+          category: "trivy-${{ matrix.component }}"
 
       - name: Upload Trivy SARIF as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-sarif-${{ matrix.component }}
-          path: trivy-${{ matrix.component }}.sarif
-          retention-days: 14
+          name: "trivy-sarif-${{ matrix.component }}"
+          path: "trivy-${{ matrix.component }}.sarif"
+          retention-days: "14"
 
       - name: Generate SBOM (CycloneDX)
         uses: anchore/sbom-action@v0
@@ -403,6 +425,68 @@ jobs:
           format: cyclonedx-json
           upload-artifact: true
           artifact-name: sbom-${{ matrix.component }}
+
+      - name: Trivy SBOM (CycloneDX JSON)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ steps.vars.outputs.image }}
+          format: 'cyclonedx'
+          output: trivy-sbom-${{ matrix.component }}.cdx.json
+          exit-code: '0'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Render Trivy SBOM summary (markdown)
+        id: sbom-summary
+        shell: bash
+        run: |
+          FILE="trivy-sbom-${{ matrix.component }}.cdx.json"
+          OUT="sbom-summary-${{ matrix.component }}.md"
+
+          echo "# SBOM Summary - ${{ matrix.component }}" > "$OUT"
+          echo "" >> "$OUT"
+          echo "- Image: ${{ steps.vars.outputs.image }}" >> "$OUT"
+          echo "- Components: $(jq -r '(.components // []) | length' "$FILE" 2>/dev/null || echo 0)" >> "$OUT"
+
+          echo "" >> "$OUT"
+          echo "## Counts by type" >> "$OUT"
+          echo "" >> "$OUT"
+          echo "| Type | Count |" >> "$OUT"
+          echo "|------|-------|" >> "$OUT"
+          jq -r '(.components // []) | sort_by(.type // "unknown") | group_by(.type) | map({k:(.[0].type // "unknown"), c:length}) | .[] | "| \(.k) | \(.c) |"' "$FILE" 2>/dev/null >> "$OUT" || true
+
+          echo "" >> "$OUT"
+          echo "## Sample components (first 20)" >> "$OUT"
+          echo "" >> "$OUT"
+          echo "| Name | Version | Type | License |" >> "$OUT"
+          echo "|------|---------|------|---------|" >> "$OUT"
+          jq -r '(.components // []) | sort_by(.name) | .[0:20] | .[] | "| \(.name // "-") | \(.version // "-") | \(.type // "-") | \(((.licenses[0].license.id // .licenses[0].license.name) // "-")) |"' "$FILE" 2>/dev/null >> "$OUT" || true
+
+          {
+            echo "## SBOM Summary - ${{ matrix.component }}";
+            echo "";
+            cat "$OUT";
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "summary-file=$OUT" >> $GITHUB_OUTPUT
+
+      - name: Upload SBOM summary and JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-sbom-${{ matrix.component }}
+          path: |
+            trivy-sbom-${{ matrix.component }}.cdx.json
+            sbom-summary-${{ matrix.component }}.md
+          retention-days: 14
+
+      - name: Comment SBOM summary on PR
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-file: ${{ steps.sbom-summary.outputs.summary-file }}
+          edit-mode: replace
 
   # Notification Job
   notify:

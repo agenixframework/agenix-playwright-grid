@@ -1,0 +1,41 @@
+version: "3.8"
+
+# Override file to run the stack using published images on GHCR instead of local builds.
+# Usage:
+#   export GHCR_OWNER=<your-gh-org-or-username>
+#   # optional overrides
+#   export GHCR_REPO=agenix-playwright-grid   # defaults to repo name
+#   export IMAGE_TAG=latest                   # or a specific version like v1.2.3
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+#
+# Notes:
+# - This file nullifies `build:` on services that normally build locally and replaces them with `image:`.
+# - pull_policy: always ensures the latest tag is pulled when using :latest or mutable tags.
+# - Required env: GHCR_OWNER. You can also set via .env file in the project root.
+
+services:
+  hub:
+    # Remove local build and use published image
+    build: null
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER not set}/${GHCR_REPO:-agenix-playwright-grid}-hub:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  worker1:
+    build: null
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER not set}/${GHCR_REPO:-agenix-playwright-grid}-worker:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  worker2:
+    build: null
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER not set}/${GHCR_REPO:-agenix-playwright-grid}-worker:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  worker3:
+    build: null
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER not set}/${GHCR_REPO:-agenix-playwright-grid}-worker:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  dashboard:
+    build: null
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER not set}/${GHCR_REPO:-agenix-playwright-grid}-dashboard:${IMAGE_TAG:-latest}
+    pull_policy: always
