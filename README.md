@@ -243,3 +243,32 @@ PR checklist: include relevant documentation updates when changing endpoints, da
 [1]: .assets/logos/agenix-logo-large.png "Agenix"
 
 [2]: .assets/icons/icon-64.png "Agenix"
+
+
+Run with published images (GHCR)
+--------------------------------
+If you don't want to build locally, you can run the stack against images published to GitHub Container Registry.
+
+Prereqs
+- If images are private: docker login ghcr.io
+
+Environment variables (can also be placed in a .env file at repo root)
+- GHCR_OWNER = your GitHub org or username (required)
+- GHCR_REPO  = agenix-playwright-grid (defaults to this repo name if not set)
+- IMAGE_TAG  = latest, or a specific version produced by CI (e.g., 1.2.3)
+
+Start the stack using the images override file
+
+    export GHCR_OWNER=<your-gh-username-or-org>
+    # optional overrides
+    export IMAGE_TAG=latest
+    # export GHCR_REPO=agenix-playwright-grid
+
+    docker compose -f docker-compose.yml -f docker-compose.images.yml pull
+    docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+
+Notes
+- The override file disables local builds and points hub/worker/dashboard to ghcr.io/${GHCR_OWNER}/${GHCR_REPO}-<service>:${IMAGE_TAG}.
+- Available services: -hub, -worker, -dashboard. Redis/Prometheus/Grafana already use public images.
+- CI pushes multi-arch images (linux/amd64, linux/arm64) and tags both ${IMAGE_TAG} (e.g., 1.2.3) and latest.
+- To scale workers, either duplicate worker sections/ports in docker-compose.yml or use: docker compose up -d --scale worker1=2 (when using a generalized worker service). In this repo workers are declared as worker1/2/3; adjust POOL_CONFIG and ports accordingly.

@@ -45,10 +45,10 @@ The following is an ordered, actionable checklist covering architectural and cod
 39. [ ] Provide Helm chart/Kubernetes manifests with sensible defaults, probes, and resource limits.
 40. [ ] Harden Docker images: run as non-root user, drop capabilities, read-only filesystem with writable temp for Playwright.
 41. [ ] Slim Docker images further: prune caches (npm, dotnet), multi-stage for Node assets, consolidate OS packages, consider distroless base.
-42. [ ] Add multi-arch builds (linux/amd64, linux/arm64) for Hub/Worker via buildx.
+42. [X] Add multi-arch builds (linux/amd64, linux/arm64) for Hub/Worker via buildx.
 43. [X] Add image vulnerability scanning (Trivy/GHCR) and SBOM generation during CI.
-44. [ ] Introduce GitHub Actions CI: build, unit tests, integration tests (with Testcontainers), publish artifacts, and optional Docker image publish.
-45. [ ] Add workflow caching for dotnet restore, npm playwright installs, and docker layers to speed up CI.
+44. [X] Introduce GitHub Actions CI: build, unit tests, integration tests (with Testcontainers), publish artifacts, and optional Docker image publish.
+45. [X] Add workflow caching for dotnet restore, npm playwright installs, and docker layers to speed up CI.
 46. [ ] Expand unit tests for label matching, options parsing (POOL_CONFIG), and secret handling edge cases.
 47. [ ] Add integration tests for: secret mismatch (401), capacity exhaustion (503), borrow queue timeout, and node eviction scenarios.
 48. [ ] Add flaky-test mitigations: deterministic time helpers, extended health timeouts via env, and richer test diagnostics.
