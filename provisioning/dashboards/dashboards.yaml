@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: "Local JSON"
+  - name: "Playwright Grid"
     orgId: 1
-    folder: "Playwright"
+    folder: "Playwright Grid"
     type: file
     allowUiUpdates: true
     disableDeletion: false

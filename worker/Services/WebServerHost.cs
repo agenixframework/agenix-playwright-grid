@@ -3,6 +3,9 @@ using Prometheus;
 using StackExchange.Redis;
 using WorkerService.Application.Ports;
 using WorkerService.Infrastructure;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
 
 namespace WorkerService.Services;
 
@@ -27,6 +30,55 @@ public sealed class WebServerHost
         // Suppress verbose framework logs like OkObjectResult JSON writing and EndpointMiddleware exec logs
         builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+
+        // OpenTelemetry setup (env-driven exporters)
+        var workerServiceName = "playwright-worker";
+        var workerServiceVersion = typeof(WebServerHost).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+        var enableOtlp = string.Equals(builder.Configuration["ENABLE_OTLP"], "1", StringComparison.OrdinalIgnoreCase);
+        var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1", StringComparison.OrdinalIgnoreCase);
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
+        var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc";
+
+        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
+            .AddService(serviceName: workerServiceName, serviceVersion: workerServiceVersion, serviceInstanceId: _options.NodeId);
+
+
+        builder.Services.AddOpenTelemetry()
+            .ConfigureResource(rb => rb.AddService(serviceName: workerServiceName, serviceVersion: workerServiceVersion, serviceInstanceId: _options.NodeId))
+            .WithTracing(t =>
+            {
+                t.SetResourceBuilder(resourceBuilder);
+                t.AddAspNetCoreInstrumentation();
+                t.AddHttpClientInstrumentation();
+                if (enableOtlp)
+                {
+                    t.AddOtlpExporter(o =>
+                    {
+                        o.Endpoint = new Uri(otlpEndpoint);
+                        o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
+                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
+                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                    });
+                }
+            })
+            .WithMetrics(m =>
+            {
+                m.SetResourceBuilder(resourceBuilder);
+                m.AddAspNetCoreInstrumentation();
+                m.AddRuntimeInstrumentation();
+                if (enableOtlp)
+                {
+                    m.AddOtlpExporter(o =>
+                    {
+                        o.Endpoint = new Uri(otlpEndpoint);
+                        o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
+                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
+                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                    });
+                }
+            });
+
+
         var app = builder.Build();
 
         app.UseMetricServer();
@@ -186,6 +238,15 @@ public sealed class WebServerHost
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
 
+            // Try to resolve runId for this browser from Redis mapping to propagate correlation
+            string? runId = null;
+            try
+            {
+                var v = await _db.StringGetAsync($"browser_run:{browserId}");
+                if (!v.IsNullOrEmpty) runId = v.ToString();
+            }
+            catch { }
+
             try
             {
                 void Forward(string direction, string message)
@@ -208,6 +269,12 @@ public sealed class WebServerHost
                                 client.DefaultRequestHeaders.Remove("x-hub-secret");
                                 client.DefaultRequestHeaders.TryAddWithoutValidation("x-hub-secret",
                                     _options.NodeSecret);
+                                // Add correlation header if runId is known for this browserId
+                                if (!string.IsNullOrWhiteSpace(runId))
+                                {
+                                    client.DefaultRequestHeaders.Remove("Correlation-Id");
+                                    client.DefaultRequestHeaders.TryAddWithoutValidation("Correlation-Id", runId);
+                                }
                                 var payload = new
                                 {
                                     text = message,

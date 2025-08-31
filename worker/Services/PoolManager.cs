@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using StackExchange.Redis;
 using WorkerService.Application.Ports;
 using WorkerService.Infrastructure;
+using Agenix.PlaywrightGrid.Domain;
 
 namespace WorkerService.Services;
 
@@ -67,8 +68,16 @@ public sealed class PoolManager(
     public async Task WarmLabelAsync(string labelKey, int count)
     {
         var map = Pools.GetOrAdd(labelKey, _ => new ConcurrentDictionary<string, Slot>());
-        var parts = labelKey.Split(':', StringSplitOptions.TrimEntries);
-        var browserType = NormalizeBrowser(parts.Length >= 2 ? parts[1] : "Chromium");
+        string browserType;
+        if (LabelKey.TryParse(labelKey, out var lk, new LabelKeyParsingOptions { EnforceBrowserSecond = false }))
+        {
+            browserType = string.IsNullOrWhiteSpace(lk!.Browser) ? "Chromium" : lk.Browser;
+        }
+        else
+        {
+            var parts = labelKey.Split(':', StringSplitOptions.TrimEntries);
+            browserType = NormalizeBrowser(parts.Length >= 2 ? parts[1] : "Chromium");
+        }
         var availableKey = $"available:{labelKey}";
 
         // Local helper: validate that the internal WS endpoint accepts a WebSocket handshake

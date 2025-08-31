@@ -69,7 +69,7 @@ public class PoolTests
         }
 
         // Defaults that align with common labels used in this repo
-        return new[] { "AppB:Chromium:UAT", "AppB:Firefox:UAT", "AppB:Webkit:UAT" };
+        return ["AppB:Chromium:UAT", "AppB:Firefox:UAT", "AppB:Webkit:UAT"];
     }
 
     private static int GetInt(string name, int def)

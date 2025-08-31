@@ -20,4 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Agenix.PlaywrightGrid.HubClient\Agenix.PlaywrightGrid.HubClient.csproj"/>
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj" />
+  </ItemGroup>
 </Project>

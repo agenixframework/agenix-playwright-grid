@@ -1,0 +1,155 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Borrow latency quantiles (P50/P90/P99) by label",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum(rate(hub_borrow_latency_seconds_bucket[5m])) by (le, label))",
+          "legendFormat": "P50 {{label}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "B",
+          "expr": "histogram_quantile(0.9, sum(rate(hub_borrow_latency_seconds_bucket[5m])) by (le, label))",
+          "legendFormat": "P90 {{label}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum(rate(hub_borrow_latency_seconds_bucket[5m])) by (le, label))",
+          "legendFormat": "P99 {{label}}"
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Borrow outcomes rate by label and outcome",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "sum by (label, outcome) (rate(hub_borrow_outcomes_total[5m]))",
+          "legendFormat": "{{label}} {{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pool utilization ratio by label",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "hub_pool_utilization_ratio",
+          "legendFormat": "{{label}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Borrow queue length by label",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "hub_borrow_queue_length",
+          "legendFormat": "{{label}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pool available count by label",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "hub_pool_available_total",
+          "legendFormat": "{{label}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "type": "text",
+      "title": "Node heartbeats",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 23 },
+      "options": {
+        "content": "Heartbeat/liveness is tracked via Redis TTL keys (node_alive:*) and LastSeen; a dedicated Prometheus metric can be added in the future. Use Sweeper logs and Workers panel for liveness until then.",
+        "mode": "markdown"
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["playwright", "grid"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Playwright Grid – Hub Metrics",
+  "uid": "pw-grid-hub-metrics",
+  "version": 1,
+  "weekStart": ""
+}

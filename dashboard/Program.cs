@@ -11,6 +11,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Exporter;
 
 const string hubSignalRConfigKey = "HUB_SIGNALR";
 
@@ -18,6 +22,53 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Reduce noisy framework info logs in Dashboard (e.g., /health pipeline messages)
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+
+// OpenTelemetry setup (env-driven exporters)
+var dashboardServiceName = "playwright-dashboard";
+var dashboardServiceVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
+var enableOtlp = string.Equals(builder.Configuration["ENABLE_OTLP"], "1", StringComparison.OrdinalIgnoreCase);
+var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1", StringComparison.OrdinalIgnoreCase);
+var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
+var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc";
+
+var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
+    .AddService(serviceName: dashboardServiceName, serviceVersion: dashboardServiceVersion);
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(rb => rb.AddService(serviceName: dashboardServiceName, serviceVersion: dashboardServiceVersion))
+    .WithTracing(t =>
+    {
+        t.SetResourceBuilder(resourceBuilder);
+        t.AddAspNetCoreInstrumentation();
+        t.AddHttpClientInstrumentation();
+        if (enableOtlp)
+        {
+            t.AddOtlpExporter(o =>
+            {
+                o.Endpoint = new Uri(otlpEndpoint);
+                o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
+                    ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
+                    : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+            });
+        }
+    })
+    .WithMetrics(m =>
+    {
+        m.SetResourceBuilder(resourceBuilder);
+        m.AddAspNetCoreInstrumentation();
+        m.AddRuntimeInstrumentation();
+        if (enableOtlp)
+        {
+            m.AddOtlpExporter(o =>
+            {
+                o.Endpoint = new Uri(otlpEndpoint);
+                o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
+                    ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
+                    : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+            });
+        }
+    });
+
 
 // Services
 builder.Services.AddRazorPages();
@@ -100,6 +151,7 @@ app.UseStaticFiles();
 
 // Optional simple health endpoint
 app.MapGet("/health", () => Results.Ok(new { ok = true }));
+
 
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");

@@ -136,6 +136,10 @@ public sealed class HubClient : IDisposable
     /// Requires HUB_RUNNER_SECRET and that the browserId is already attributed to a run (BorrowAsync with runId).
     /// Use the convenience overloads to omit the direction; they default to "runner".
     /// </summary>
+    /// <param name="browserId">The hub-issued browser/session identifier.</param>
+    /// <param name="text">The log line to send; empty/whitespace is ignored.</param>
+    /// <param name="timestampUtc">Optional timestamp (UTC). If null, DateTime.UtcNow is used.</param>
+    /// <param name="direction">Optional direction tag, e.g., "runner" or "server".</param>
     public async Task SendApiLogAsync(string browserId, string text, DateTime? timestampUtc = null,
         string? direction = null)
     {
@@ -213,7 +217,9 @@ public sealed class HubClient : IDisposable
     /// Requests a browser session from the hub for the provided label key.
     /// Returns a tuple of browserId, wsEndpoint, labelKey, and browserType.
     /// </summary>
+    /// <param name="labelKey">Label key describing the desired session capacity (e.g., App:Browser:Env).</param>
     /// <param name="runId">Optional run identifier to be attributed by the hub (sent as query runId).</param>
+    /// <returns>A tuple with the borrowed browser id, WebSocket endpoint, the echoed label key and optional browser type.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     public async Task<(string browserId, string wsEndpoint, string labelKey, string? browserType)> BorrowAsync(
         string labelKey, string? runId = null)
@@ -222,7 +228,19 @@ public sealed class HubClient : IDisposable
         var url = string.IsNullOrWhiteSpace(runId)
             ? "/session/borrow"
             : $"/session/borrow?runId={WebUtility.UrlEncode(runId)}";
-        var resp = await _retry.ExecuteAsync(() => _http.PostAsJsonAsync(url, body));
+
+        var resp = await _retry.ExecuteAsync(() =>
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = JsonContent.Create(body)
+            };
+            if (!string.IsNullOrWhiteSpace(runId))
+            {
+                req.Headers.TryAddWithoutValidation("Correlation-Id", runId);
+            }
+            return _http.SendAsync(req);
+        });
 
         switch (resp.StatusCode)
         {
@@ -265,7 +283,18 @@ public sealed class HubClient : IDisposable
         var url = string.IsNullOrWhiteSpace(runId)
             ? "/session/return"
             : $"/session/return?runId={WebUtility.UrlEncode(runId)}";
-        var resp = await _retry.ExecuteAsync(() => _http.PostAsJsonAsync(url, body));
+        var resp = await _retry.ExecuteAsync(() =>
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = JsonContent.Create(body)
+            };
+            if (!string.IsNullOrWhiteSpace(runId))
+            {
+                req.Headers.TryAddWithoutValidation("Correlation-Id", runId);
+            }
+            return _http.SendAsync(req);
+        });
         resp.EnsureSuccessStatusCode();
     }
 }

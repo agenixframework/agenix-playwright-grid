@@ -4,16 +4,16 @@ Generated: 2025-08-21 18:55 local time
 
 The following is an ordered, actionable checklist covering architectural and code-level improvements across Hub, Worker, Dashboard, HubClient, tests, and containerization. Check items as they are completed.
 
-1. [ ] Establish a shared Domain model package for LabelKey parsing/validation to ensure consistent rules across Hub, Worker, Dashboard, and tests.
-2. [ ] Introduce a central Label Matching strategy service with unit tests (exact → trailing fallback → prefix expansion → optional wildcards) and pluggable settings.
-3. [ ] Add input validation and normalization for label keys (trim, case policy, segment count min/max, forbidden characters) with clear 4xx errors.
-4. [ ] Define API versioning (e.g., /api/v1) for Hub endpoints and reserve room for breaking changes.
-5. [ ] Introduce ProblemDetails-based error responses in Hub for consistent 4xx/5xx payloads.
-6. [ ] Add OpenAPI/Swagger to Hub with minimal surface (security header documented) and examples for borrow/return.
-7. [ ] Implement request correlation (Correlation-Id header or generated) propagated as runId/browserId across Hub, Worker, and Dashboard logs.
-8. [ ] Add distributed tracing via OpenTelemetry (traces, metrics, logs) with exporters configurable (OTLP/Prometheus).
-9. [ ] Expand Prometheus metrics: borrow latency histogram, borrow outcomes (success/timeout/denied), pool utilization per label, queue length, node heartbeats.
-10. [ ] Introduce a capacity queue in Hub for pending borrows with timeout and fairness (per-label and per-run caps) to reduce thundering herd.
+1. [X] Establish a shared Domain model package for LabelKey parsing/validation to ensure consistent rules across Hub, Worker, Dashboard, and tests.
+2. [X] Introduce a central Label Matching strategy service with unit tests (exact → trailing fallback → prefix expansion → optional wildcards) and pluggable settings.
+3. [X] Add input validation and normalization for label keys (trim, case policy, segment count min/max, forbidden characters) with clear 4xx errors.
+4. [X] Define API versioning (e.g., /api/v1) for Hub endpoints and reserve room for breaking changes.
+5. [X] Introduce ProblemDetails-based error responses in Hub for consistent 4xx/5xx payloads.
+6. [X] Add OpenAPI/Swagger to Hub with minimal surface (security header documented) and examples for borrow/return.
+7. [X] Implement request correlation (Correlation-Id header or generated) propagated as runId/browserId across Hub, Worker, and Dashboard logs.
+8. [X] Add distributed tracing via OpenTelemetry (traces, metrics, logs) with exporters configurable (OTLP/Prometheus).
+9. [X] Expand Prometheus metrics: borrow latency histogram, borrow outcomes (success/timeout/denied), pool utilization per label, queue length, node heartbeats.
+10. [X] Introduce a capacity queue in Hub for pending borrows with timeout and fairness (per-label and per-run caps) to reduce thundering herd.
 11. [ ] Implement node heartbeat/liveness tracker with configurable timeout; evict stale nodes and reclaim/expire orphaned sessions.
 12. [ ] Add borrow TTL and auto-return on timeout; persist session state to Redis to survive Hub restarts.
 13. [ ] Harden Redis usage: resilience (timeouts, retries with jitter, circuit breaker), connection settings, and health checks integrated into readiness.
@@ -27,8 +27,8 @@ The following is an ordered, actionable checklist covering architectural and cod
 21. [ ] Strengthen Worker sidecar management: sidecar health endpoint, restart/backoff strategy, and clear error surfacing to Hub.
 22. [ ] Make PLAYWRIGHT_VERSION reporting authoritative: validate against sidecar; surface mismatch in Dashboard and metrics.
 23. [ ] Improve WorkerOptions.FromEnvironment() with strong typing, defaults, range checks, and detailed validation errors.
-24. [ ] Replace ad-hoc HttpClient usage in HubClient with IHttpClientFactory and resilience (timeouts, retries, transient error policy).
-25. [ ] Add CancellationToken overloads to HubClient methods (BorrowAsync, ReturnAsync, SendApiLogAsync, SetCurrentTestAsync).
+24. [X] Replace ad-hoc HttpClient usage in HubClient with IHttpClientFactory and resilience (timeouts, retries, transient error policy).
+25. [ ] Add CancellationToken overloads to HubClient methods (BorrowAsync, ReturnAsync, SendApiLogAsync).
 26. [ ] Introduce domain-specific exceptions in HubClient (CapacityUnavailableException, AuthenticationException, ProtocolException).
 27. [ ] Batch and rate-limit HubClient log sending; add async buffering to minimize impact on runner.
 28. [ ] Add optional log redaction in PlaywrightEventForwarder (query param scrub, headers whitelist) and sampling controls.
@@ -38,7 +38,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 32. [ ] Provide configurable log levels and per-component overrides via environment.
 33. [ ] Add graceful error pages and dashboard error boundaries for SignalR disconnections with auto-retry/backoff.
 34. [ ] Implement virtualization/pagination for Dashboard results and command logs to prevent UI slowdowns on large runs.
-35. [ ] Add filtering/search on Dashboard (by App, Browser, Env, Region, Status, runId, testId) and deep links.
+35. [X] Add filtering/search on Dashboard (by App, Browser, Env, Region, Status, runId) and deep links.
 36. [ ] Introduce authentication for Dashboard (OIDC/OAuth2) with role-based access (viewer/admin); secure SignalR hub accordingly.
 37. [ ] Add retention policies for run results and logs (TTL in Redis; optional durable store adapter e.g., PostgreSQL/SQLite).
 38. [ ] Add API to export run details (JSON/NDJSON) for external archiving.
@@ -75,7 +75,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 69. [ ] Add per-run storage quotas for logs to prevent Redis bloat; evict with LRU and surface warnings.
 70. [ ] Provide end-to-end example repo or script showing borrowing via HubClient and capturing a screenshot.
 71. [ ] Add support for custom labels (e.g., Channel, Headless) with controlled cardinality to avoid metrics explosion.
-72. [ ] Refactor Dashboard Results pages to use server-driven paging and streaming for command logs.
+72. [X] Refactor Dashboard Results pages to use server-driven paging and streaming for command logs.
 73. [ ] Ensure all public APIs and DTOs have XML docs and nullable annotations; generate API docs from XML.
 74. [ ] Introduce coding analyzers (StyleCop/IDisposable analyzers) and fix high-signal warnings.
 75. [ ] Add guardrails for Redis key naming to avoid collisions; centralize key patterns with tests.

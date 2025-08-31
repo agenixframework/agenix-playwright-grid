@@ -127,8 +127,13 @@ public sealed class TestEnvironment
 
             var forceBuildEnv = Environment.GetEnvironmentVariable("GRID_TESTS_FORCE_BUILD");
             var forceBuild = string.IsNullOrWhiteSpace(forceBuildEnv) || IsTruthy(forceBuildEnv);
-            await EnsureImageAsync(hubImageName, hubDir, TestContext.Progress, forceBuild);
-            await EnsureImageAsync(workerImageName, workerDir, TestContext.Progress, forceBuild);
+
+            var dockerfileHub = Path.Combine(hubDir, "Dockerfile");
+            var dockerfileWorker = Path.Combine(workerDir, "Dockerfile");
+
+            // Build using repository root as context to include shared projects (e.g., Agenix.PlaywrightGrid.Domain)
+            await EnsureImageAsync(hubImageName, root!, dockerfileHub, TestContext.Progress, forceBuild);
+            await EnsureImageAsync(workerImageName, root!, dockerfileWorker, TestContext.Progress, forceBuild);
 
             // Reuse mode: stable names to allow fast subsequent runs
             var reuse = IsTruthy(Environment.GetEnvironmentVariable("GRID_TESTS_REUSE"));
@@ -684,14 +689,18 @@ public sealed class TestEnvironment
                || v.Equals("on", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task EnsureImageAsync(string imageName, string dockerfileDir, TextWriter log, bool forceBuild)
+    private static async Task EnsureImageAsync(string imageName, string contextDir, string dockerfilePath, TextWriter log, bool forceBuild)
     {
         var docker = OperatingSystem.IsWindows() ? "docker.exe" : "docker";
         try
         {
-            if (!Directory.Exists(dockerfileDir))
+            if (!Directory.Exists(contextDir))
             {
-                throw new DirectoryNotFoundException($"Dockerfile directory not found: {dockerfileDir}");
+                throw new DirectoryNotFoundException($"Build context directory not found: {contextDir}");
+            }
+            if (!File.Exists(dockerfilePath))
+            {
+                throw new FileNotFoundException($"Dockerfile not found: {dockerfilePath}");
             }
 
             if (!forceBuild)
@@ -704,10 +713,11 @@ public sealed class TestEnvironment
                 }
             }
 
-            await log.WriteLineAsync($"[GridTests] Building image {imageName} from {dockerfileDir} (docker build)...");
-            var quotedDir = dockerfileDir.Contains(' ') ? $"\"{dockerfileDir}\"" : dockerfileDir;
+            var quotedContext = contextDir.Contains(' ') ? $"\"{contextDir}\"" : contextDir;
+            var quotedDockerfile = dockerfilePath.Contains(' ') ? $"\"{dockerfilePath}\"" : dockerfilePath;
+            await log.WriteLineAsync($"[GridTests] Building image {imageName} with {dockerfilePath} (context {contextDir})...");
             var (buildCode, buildOut, buildErr) =
-                await RunCommandAsync(docker, $"build -t {imageName} {quotedDir}", 60 * 60 * 1000);
+                await RunCommandAsync(docker, $"build -t {imageName} -f {quotedDockerfile} {quotedContext}", 60 * 60 * 1000);
             if (buildCode != 0)
             {
                 await log.WriteLineAsync(

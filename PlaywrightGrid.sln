@@ -17,6 +17,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agenix.PlaywrightGrid.HubCl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dashboard.Tests", "Dashboard.Tests\Dashboard.Tests.csproj", "{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agenix.PlaywrightGrid.Domain", "Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj", "{151151AE-E008-47DA-8195-0CCF9A5100B8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agenix.PlaywrightGrid.Domain.Tests", "Agenix.PlaywrightGrid.Domain.Tests\Agenix.PlaywrightGrid.Domain.Tests.csproj", "{A0D0E4E7-3B68-4A2C-B7DE-8D8E0B6B2F90}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -54,5 +58,13 @@ Global
 		{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5E6E6B78-3D0E-4E72-8C8B-8D8F55E2B1A3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{151151AE-E008-47DA-8195-0CCF9A5100B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{151151AE-E008-47DA-8195-0CCF9A5100B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{151151AE-E008-47DA-8195-0CCF9A5100B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{151151AE-E008-47DA-8195-0CCF9A5100B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0D0E4E7-3B68-4A2C-B7DE-8D8E0B6B2F90}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0D0E4E7-3B68-4A2C-B7DE-8D8E0B6B2F90}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0D0E4E7-3B68-4A2C-B7DE-8D8E0B6B2F90}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0D0E4E7-3B68-4A2C-B7DE-8D8E0B6B2F90}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

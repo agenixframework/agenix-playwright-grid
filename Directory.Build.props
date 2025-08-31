@@ -41,7 +41,7 @@
   </PropertyGroup>
   <!-- Source Projects -->
   <PropertyGroup Condition="!$(MSBuildProjectName.EndsWith('.Tests'))">
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GenerateDocumentationFile Condition="'$(IsPackable)'=='true'">true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <!-- Test Projects -->
