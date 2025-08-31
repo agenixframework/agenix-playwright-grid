@@ -1,5 +1,12 @@
-using System.Text.Json;
 using System.IO;
+using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.OpenApi.Models;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
 using PlaywrightHub.Infrastructure.Adapters.Background;
@@ -8,13 +15,6 @@ using PlaywrightHub.Infrastructure.Adapters.Results;
 using PlaywrightHub.Infrastructure.Web;
 using Prometheus;
 using StackExchange.Redis;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.OpenApi.Models;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Exporter;
 
 namespace PlaywrightHub.Services;
 
@@ -98,6 +98,7 @@ public static class HubServiceRunner
         builder.Services.AddSingleton<IPoolStateReader, RedisPoolStateReader>();
         builder.Services.AddHostedService<RedisPoolStateBroadcastService>();
         builder.Services.AddHostedService<NodeSweeperService>();
+        builder.Services.AddHostedService<BorrowTtlSweeperService>();
         builder.Services.AddHostedService<RunCleanupService>();
 
         // ProblemDetails for consistent error payloads

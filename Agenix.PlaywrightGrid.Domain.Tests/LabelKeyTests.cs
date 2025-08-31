@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using Agenix.PlaywrightGrid.Domain;
+using NUnit.Framework;
 
 namespace Agenix.PlaywrightGrid.Domain.Tests;
 

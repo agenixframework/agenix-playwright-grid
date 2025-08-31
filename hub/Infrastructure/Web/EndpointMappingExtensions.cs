@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
+using Agenix.PlaywrightGrid.Domain;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,8 +12,6 @@ using PlaywrightHub.Application.Ports;
 using PlaywrightHub.Infrastructure.Adapters.SignalR;
 using Prometheus;
 using StackExchange.Redis;
-using Agenix.PlaywrightGrid.Domain;
-using Microsoft.AspNetCore.OpenApi;
 
 namespace PlaywrightHub.Infrastructure.Web;
 
@@ -180,6 +180,9 @@ public static class EndpointMappingExtensions
             !bool.TryParse(config["HUB_BORROW_TRAILING_FALLBACK"], out var tf) || tf; // default true
         var enablePrefixExpand = !bool.TryParse(config["HUB_BORROW_PREFIX_EXPAND"], out var pe) || pe; // default true
         var enableWildcards = bool.TryParse(config["HUB_BORROW_WILDCARDS"], out var wc) && wc; // default false
+
+        // Borrow TTL configuration (seconds)
+        var defaultBorrowTtlSeconds = int.TryParse(config["HUB_BORROW_TTL_SECONDS"], out var bttl) ? Math.Max(60, bttl) : 900;
 
         // Capacity queue configuration
         var queueTimeoutSeconds = int.TryParse(config["HUB_BORROW_QUEUE_TIMEOUT_SECONDS"], out var qto) ? Math.Max(1, qto) : 30;
@@ -466,6 +469,13 @@ return nil
                            ?? req.Headers["Correlation-Id"].FirstOrDefault()
                            ?? $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
 
+                // Borrow TTL: allow override via request body, else use default from config
+                var ttlSeconds = defaultBorrowTtlSeconds;
+                if (body.TryGetValue("ttlSeconds", out var ttlStr) && int.TryParse(ttlStr, out var ttlParsed))
+                {
+                    ttlSeconds = Math.Clamp(ttlParsed, 60, 24 * 60 * 60);
+                }
+
                 var now = DateTime.UtcNow;
                 var ev = new CommandLogEventDto
                 {
@@ -617,6 +627,34 @@ return nil
                     {
                         serverEv.Props["browserId"] = bid;
                     }
+
+                    // Persist session state and lease TTL to Redis so sessions survive Hub restarts
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(bid))
+                        {
+                            await db.StringSetAsync($"borrow_ttl:{bid}", "1", TimeSpan.FromSeconds(ttlSeconds));
+
+                            string? nodeIdPersist = null;
+                            if (item.Value.TryGetProperty("nodeId", out var nodeIdEl) && nodeIdEl.ValueKind == JsonValueKind.String)
+                            {
+                                nodeIdPersist = nodeIdEl.GetString();
+                            }
+
+                            var sessionKey = $"session:{bid}";
+                            var fields = new HashEntry[]
+                            {
+                                new("browserId", bid),
+                                new("labelKey", labelKey),
+                                new("runId", runId),
+                                new("nodeId", nodeIdPersist ?? string.Empty),
+                                new("borrowedAtUtc", now.ToString("o")),
+                                new("ttlSeconds", ttlSeconds.ToString())
+                            };
+                            await db.HashSetAsync(sessionKey, fields);
+                        }
+                    }
+                    catch { }
 
                     if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion))
                     {
@@ -777,6 +815,13 @@ return nil
                                ?? req.Headers["Correlation-Id"].FirstOrDefault()
                                ?? $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
 
+                    // Borrow TTL: allow override via request body, else use default from config
+                    var ttlSeconds = defaultBorrowTtlSeconds;
+                    if (body.TryGetValue("ttlSeconds", out var ttlStr2) && int.TryParse(ttlStr2, out var ttlParsed2))
+                    {
+                        ttlSeconds = Math.Clamp(ttlParsed2, 60, 24 * 60 * 60);
+                    }
+
                     var now = DateTime.UtcNow;
                     var ev = new CommandLogEventDto
                     {
@@ -925,6 +970,34 @@ return nil
                         {
                             serverEv.Props["browserId"] = bid!;
                         }
+
+                        // Persist session state and lease TTL to Redis so sessions survive Hub restarts
+                        try
+                        {
+                            if (!string.IsNullOrWhiteSpace(bid))
+                            {
+                                await db.StringSetAsync($"borrow_ttl:{bid}", "1", TimeSpan.FromSeconds(ttlSeconds));
+
+                                string? nodeIdPersist = null;
+                                if (item.Value.TryGetProperty("nodeId", out var nodeIdEl2) && nodeIdEl2.ValueKind == JsonValueKind.String)
+                                {
+                                    nodeIdPersist = nodeIdEl2.GetString();
+                                }
+
+                                var sessionKey = $"session:{bid}";
+                                var fields = new HashEntry[]
+                                {
+                                    new("browserId", bid),
+                                    new("labelKey", labelKey),
+                                    new("runId", runId!),
+                                    new("nodeId", nodeIdPersist ?? string.Empty),
+                                    new("borrowedAtUtc", now.ToString("o")),
+                                    new("ttlSeconds", ttlSeconds.ToString())
+                                };
+                                await db.HashSetAsync(sessionKey, fields);
+                            }
+                        }
+                        catch { }
 
                         if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion))
                         {
@@ -1176,6 +1249,9 @@ return nil
             if (res.IsNull)
             {
                 // Treat return as idempotent: if browserId is not in the in-use list, consider it already returned
+                // Clean up any persisted session state/lease
+                try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); } catch { }
+                try { await db.KeyDeleteAsync($"session:{browserId}"); } catch { }
                 return Results.Ok(new { returned = browserId, note = "already returned" });
             }
 
@@ -1231,6 +1307,10 @@ return nil
                 // Propagate correlation id back to caller
                 try { req.HttpContext.Response.Headers["Correlation-Id"] = runId2!; } catch { }
             }
+
+            // Always cleanup persisted session state/lease keys on return
+            try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); } catch { }
+            try { await db.KeyDeleteAsync($"session:{browserId}"); } catch { }
 
             return Results.Ok(new { returned = browserId });
         })

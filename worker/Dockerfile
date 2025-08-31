@@ -2,13 +2,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Restore first for better layer caching with root context
-COPY worker/WorkerService.csproj worker/
-COPY Agenix.PlaywrightGrid.Domain/Agenix.PlaywrightGrid.Domain.csproj Agenix.PlaywrightGrid.Domain/
-RUN dotnet restore worker/WorkerService.csproj
-
-# Bring in the rest and publish
+# Copy source
 COPY . .
+# Restore
+RUN dotnet restore worker/WorkerService.csproj
+# Publish
 RUN dotnet publish worker/WorkerService.csproj -c Release -o /app/publish
 
 

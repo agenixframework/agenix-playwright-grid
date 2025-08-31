@@ -3,13 +3,11 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
-# Restore using only the project file for better layer caching
-COPY dashboard/Dashboard.csproj dashboard/
-COPY Agenix.PlaywrightGrid.Domain/Agenix.PlaywrightGrid.Domain.csproj Agenix.PlaywrightGrid.Domain/
-RUN dotnet restore dashboard/Dashboard.csproj
-
-# Build and publish
+# Copy source
 COPY . .
+# Restore
+RUN dotnet restore dashboard/Dashboard.csproj
+# Publish
 RUN dotnet publish dashboard/Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # Runtime stage

@@ -111,6 +111,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                                 await db.SetRemoveAsync("nodes", nodeId);
                                 await db.KeyDeleteAsync(key);
                                 await PruneAvailableEntriesForNodeAsync(nodeId);
+                                await PruneInuseEntriesForNodeAsync(nodeId);
 
                                 expired++;
                             }
@@ -196,5 +197,48 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Removes orphaned in-use entries associated with the specified node from Redis and
+    /// clears lightweight browser mappings (browser_run:/browser_test:) when encountered.
+    /// This prevents capacity from being stuck when a worker disappears.
+    /// </summary>
+    private async Task PruneInuseEntriesForNodeAsync(string nodeId)
+    {
+        var server = mux.GetServer(mux.GetEndPoints()[0]);
+        var nodePattern = $"\"nodeId\":\"{nodeId}\"";
+        foreach (var rk in server.Keys(pattern: "inuse:*"))
+        {
+            var key = rk.ToString();
+            var list = await db.ListRangeAsync(key);
+            foreach (var item in list)
+            {
+                var s = item.ToString();
+                if (s.Contains(nodePattern, StringComparison.Ordinal))
+                {
+                    await db.ListRemoveAsync(key, item);
+
+                    // Best-effort: remove browser mappings if browserId is present in the JSON blob
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(s);
+                        if (doc.RootElement.TryGetProperty("browserId", out var bidEl) &&
+                            bidEl.ValueKind == JsonValueKind.String)
+                        {
+                            var browserId = bidEl.GetString();
+                            if (!string.IsNullOrWhiteSpace(browserId))
+                            {
+                                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); } catch { }
+                                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); } catch { }
+                            }
+                        }
+                    }
+                    catch { }
+
+                    Console.WriteLine($"[Sweeper] Pruned orphaned in-use entry from {key} for node {nodeId}");
+                }
+            }
+        }
     }
 }
