@@ -4,10 +4,10 @@ WORKDIR /src
 
 # Copy source
 COPY . .
-# Restore
-RUN dotnet restore worker/WorkerService.csproj
-# Publish
-RUN dotnet publish worker/WorkerService.csproj -c Release -o /app/publish
+# Restore and publish using robust path detection to support different build contexts
+WORKDIR /src
+RUN if [ -f "WorkerService.csproj" ]; then dotnet restore WorkerService.csproj; else dotnet restore worker/WorkerService.csproj; fi
+RUN if [ -f "WorkerService.csproj" ]; then dotnet publish WorkerService.csproj -c Release -o /app/publish; else dotnet publish worker/WorkerService.csproj -c Release -o /app/publish; fi
 
 
 # ---------- Runtime stage ----------

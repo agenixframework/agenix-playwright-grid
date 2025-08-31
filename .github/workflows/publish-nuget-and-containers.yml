@@ -295,7 +295,7 @@ jobs:
       - name: Build & push hub
         uses: docker/build-push-action@v6
         with:
-          context: ./hub
+          context: .
           file: ./hub/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
@@ -308,7 +308,7 @@ jobs:
       - name: Build & push worker
         uses: docker/build-push-action@v6
         with:
-          context: ./worker
+          context: .
           file: ./worker/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
@@ -321,7 +321,7 @@ jobs:
       - name: Build & push dashboard
         uses: docker/build-push-action@v6
         with:
-          context: ./dashboard
+          context: .
           file: ./dashboard/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
