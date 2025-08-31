@@ -4,12 +4,13 @@ ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 # Restore using only the project file for better layer caching
-COPY Dashboard.csproj ./
-RUN dotnet restore ./Dashboard.csproj
+COPY dashboard/Dashboard.csproj dashboard/
+COPY Agenix.PlaywrightGrid.Domain/Agenix.PlaywrightGrid.Domain.csproj Agenix.PlaywrightGrid.Domain/
+RUN dotnet restore dashboard/Dashboard.csproj
 
 # Build and publish
 COPY . .
-RUN dotnet publish ./Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish dashboard/Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim AS final

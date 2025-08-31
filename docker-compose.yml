@@ -35,7 +35,9 @@ services:
     restart: unless-stopped
 
   hub:
-    build: ./hub
+    build:
+      context: .
+      dockerfile: hub/Dockerfile
     ports:
       - "5100:5000"
     dns:
@@ -53,7 +55,8 @@ services:
 
   worker1:
     build:
-      context: ./worker
+      context: .
+      dockerfile: worker/Dockerfile
       args:
         PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
     ports:
@@ -82,7 +85,8 @@ services:
 
   worker2:
       build:
-        context: ./worker
+        context: .
+        dockerfile: worker/Dockerfile
         args:
           PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
       ports:
@@ -112,7 +116,8 @@ services:
       
   worker3:
     build:
-      context: ./worker
+      context: .
+      dockerfile: worker/Dockerfile
       args:
         PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
     ports:
@@ -141,7 +146,9 @@ services:
       
       
   dashboard:
-    build: ./dashboard
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
     ports:
       - "3001:3001"
     environment:

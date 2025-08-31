@@ -10,8 +10,142 @@ using PlaywrightHub.Application.Ports;
 using PlaywrightHub.Infrastructure.Adapters.SignalR;
 using Prometheus;
 using StackExchange.Redis;
+using Agenix.PlaywrightGrid.Domain;
+using Microsoft.AspNetCore.OpenApi;
 
 namespace PlaywrightHub.Infrastructure.Web;
+
+internal static class EndpointCapacityQueue
+{
+    private sealed class Waiter
+    {
+        public required string Label { get; init; }
+        public required string RunId { get; init; }
+        public TaskCompletionSource<bool> Tcs { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public volatile bool Canceled;
+    }
+
+    private static readonly object Sync = new();
+    private static readonly Dictionary<string, Queue<Waiter>> Queues = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, int> PendingPerRun = new(StringComparer.Ordinal);
+
+    private static int _perLabelCap = 100;
+    private static int _perRunCap = 5;
+
+    public static void Configure(int perLabelCap, int perRunCap)
+    {
+        lock (Sync)
+        {
+            _perLabelCap = perLabelCap > 0 ? perLabelCap : 100;
+            _perRunCap = perRunCap > 0 ? perRunCap : 5;
+        }
+    }
+
+    // Test helper: reset static state for deterministic tests
+    internal static void Reset()
+    {
+        lock (Sync)
+        {
+            Queues.Clear();
+            PendingPerRun.Clear();
+            _perLabelCap = 100;
+            _perRunCap = 5;
+        }
+    }
+
+    public static (object? token, string? reason) TryEnqueue(string label, string runId)
+    {
+        lock (Sync)
+        {
+            if (!Queues.TryGetValue(label, out var q))
+            {
+                q = new Queue<Waiter>();
+                Queues[label] = q;
+            }
+
+            if (q.Count >= _perLabelCap)
+            {
+                return (null, "per-label-cap");
+            }
+
+            var pending = PendingPerRun.TryGetValue(runId, out var pr) ? pr : 0;
+            if (pending >= _perRunCap)
+            {
+                return (null, "per-run-cap");
+            }
+
+            var w = new Waiter { Label = label, RunId = runId };
+            q.Enqueue(w);
+            PendingPerRun[runId] = pending + 1;
+            return (w, null);
+        }
+    }
+
+    public static void Remove(object token)
+    {
+        if (token is not Waiter w) return;
+        lock (Sync)
+        {
+            w.Canceled = true;
+            if (PendingPerRun.TryGetValue(w.RunId, out var pr))
+            {
+                pr = Math.Max(0, pr - 1);
+                if (pr == 0) PendingPerRun.Remove(w.RunId); else PendingPerRun[w.RunId] = pr;
+            }
+        }
+    }
+
+    public static void Signal(string label)
+    {
+        lock (Sync)
+        {
+            if (!Queues.TryGetValue(label, out var q) || q.Count == 0)
+            {
+                return;
+            }
+
+            while (q.Count > 0)
+            {
+                var w = q.Dequeue();
+                if (w.Canceled)
+                {
+                    continue;
+                }
+
+                // Decrement pending-per-run when granting
+                if (PendingPerRun.TryGetValue(w.RunId, out var pr))
+                {
+                    pr = Math.Max(0, pr - 1);
+                    if (pr == 0) PendingPerRun.Remove(w.RunId); else PendingPerRun[w.RunId] = pr;
+                }
+
+                // Wake the waiter
+                _ = w.Tcs.TrySetResult(true);
+                break;
+            }
+        }
+    }
+
+    public static int GetQueueLength(string label)
+    {
+        lock (Sync)
+        {
+            return Queues.TryGetValue(label, out var q) ? q.Count : 0;
+        }
+    }
+
+    public static async Task<bool> WaitAsync(object token, TimeSpan timeout, CancellationToken ct = default)
+    {
+        if (token is not Waiter w) return false;
+        var delayTask = Task.Delay(timeout, ct);
+        var completed = await Task.WhenAny(w.Tcs.Task, delayTask).ConfigureAwait(false);
+        if (completed == w.Tcs.Task)
+        {
+            return w.Tcs.Task.IsCompletedSuccessfully && w.Tcs.Task.Result;
+        }
+        return false;
+    }
+}
 
 public static class EndpointMappingExtensions
 {
@@ -19,6 +153,17 @@ public static class EndpointMappingExtensions
     {
         var config = app.Configuration;
         var services = app.Services;
+
+        // API versioning alias: allow /api/v1/... to route to existing endpoints without breaking existing clients.
+        // This reserves the /api/vX space for future breaking changes while keeping current mappings intact.
+        app.Use((context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api/v1", out var remainder))
+            {
+                context.Request.Path = remainder;
+            }
+            return next();
+        });
 
         var db = services.GetRequiredService<IDatabase>();
         var mux = services.GetRequiredService<IConnectionMultiplexer>();
@@ -36,6 +181,12 @@ public static class EndpointMappingExtensions
         var enablePrefixExpand = !bool.TryParse(config["HUB_BORROW_PREFIX_EXPAND"], out var pe) || pe; // default true
         var enableWildcards = bool.TryParse(config["HUB_BORROW_WILDCARDS"], out var wc) && wc; // default false
 
+        // Capacity queue configuration
+        var queueTimeoutSeconds = int.TryParse(config["HUB_BORROW_QUEUE_TIMEOUT_SECONDS"], out var qto) ? Math.Max(1, qto) : 30;
+        var queuePerLabelCap = int.TryParse(config["HUB_BORROW_QUEUE_MAX_PER_LABEL"], out var qpl) ? Math.Max(1, qpl) : 100;
+        var queuePerRunCap = int.TryParse(config["HUB_BORROW_QUEUE_MAX_PER_RUN"], out var qpr) ? Math.Max(1, qpr) : 5;
+        EndpointCapacityQueue.Configure(queuePerLabelCap, queuePerRunCap);
+
         // Metrics used by endpoints
         var borrowRequests = Metrics.CreateCounter(
             "hub_borrow_requests_total",
@@ -47,9 +198,27 @@ public static class EndpointMappingExtensions
             "Borrow latency",
             new HistogramConfiguration { LabelNames = ["label"] });
 
+        // Borrow outcome metrics: outcome in {success, timeout, denied}
+        var borrowOutcomes = Metrics.CreateCounter(
+            "hub_borrow_outcomes_total",
+            "Borrow outcomes by requested label and outcome",
+            new CounterConfiguration { LabelNames = ["label", "outcome"] });
+
+        // Pool metrics
         var poolAvailableGauge = Metrics.CreateGauge(
             "hub_pool_available_total",
             "Available endpoints",
+            new GaugeConfiguration { LabelNames = ["label"] });
+
+        var poolUtilizationGauge = Metrics.CreateGauge(
+            "hub_pool_utilization_ratio",
+            "Pool utilization ratio per label (borrowed/total)",
+            new GaugeConfiguration { LabelNames = ["label"] });
+
+        // Borrow queue length (no queue yet → reports 0 for now)
+        var borrowQueueGauge = Metrics.CreateGauge(
+            "hub_borrow_queue_length",
+            "Borrow queue length per label (0 until queueing feature is enabled)",
             new GaugeConfiguration { LabelNames = ["label"] });
 
         // Simple Lua scripts operate on available:{labelKey}
@@ -194,14 +363,40 @@ return nil
         {
             if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
             {
+                // Authentication denied
+                try { borrowOutcomes.WithLabels("unknown", "denied").Inc(); } catch { }
                 return Results.Unauthorized();
             }
 
             var body = await req.ReadFromJsonAsync<Dictionary<string, string>>() ?? new Dictionary<string, string>();
             if (!body.TryGetValue("labelKey", out var labelKey) || string.IsNullOrEmpty(labelKey))
             {
+                try { borrowOutcomes.WithLabels("unknown", "denied").Inc(); } catch { }
                 return Results.BadRequest("missing labelKey");
             }
+
+            LabelKey? parsed;
+            bool parsedOk;
+            string? parseError;
+            if (enableWildcards && labelKey.Contains('*'))
+            {
+                // Allow wildcard segment in any position by relaxing browser enforcement
+                var parseOpts = new LabelKeyParsingOptions { EnforceBrowserSecond = false };
+                parsedOk = LabelKey.TryParseDetailed(labelKey, out parsed, out parseError, parseOpts);
+            }
+            else
+            {
+                parsedOk = LabelKey.TryParseDetailed(labelKey, out parsed, out parseError);
+            }
+
+            if (!parsedOk)
+            {
+                try { borrowOutcomes.WithLabels(labelKey, "denied").Inc(); } catch { }
+                return Results.BadRequest($"invalid labelKey: {parseError}");
+            }
+
+            // Normalize formatting (trim, case policy) for internal use
+            labelKey = parsed!.Normalized;
 
             // Metrics use requested label key for request/latency tracking
             borrowRequests.WithLabels(labelKey).Inc();
@@ -265,26 +460,336 @@ return nil
             var item = await TryBorrowForAsync(labelKey);
             if (item is not null)
             {
-                // Optional results emission if runId provided via header or query
-                var runId = req.Headers["x-run-id"].FirstOrDefault() ?? req.Query["runId"].FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(runId))
+                // Determine correlation id to use as runId
+                var runId = req.Headers["x-run-id"].FirstOrDefault()
+                           ?? req.Query["runId"].FirstOrDefault()
+                           ?? req.Headers["Correlation-Id"].FirstOrDefault()
+                           ?? $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
+
+                var now = DateTime.UtcNow;
+                var ev = new CommandLogEventDto
                 {
+                    RunId = runId,
+                    TimestampUtc = now,
+                    Kind = "Borrow",
+                    Message = $"Borrowed for {labelKey}",
+                    Props = new Dictionary<string, string> { ["labelKey"] = labelKey }
+                };
+
+                await resultsStore.AppendCommandAsync(ev);
+
+                // Upsert and enrich run summary with metadata from borrowed item
+                var run = await resultsStore.GetRunAsync(runId) ?? new ResultRunSummaryDto
+                {
+                    RunId = runId,
+                    App = parsed!.App,
+                    Browser = string.IsNullOrWhiteSpace(parsed!.Browser) ? "Chromium" : parsed!.Browser,
+                    Env = parsed!.Env,
+                    StartedAtUtc = now
+                };
+                run.Status = "Running";
+
+                try
+                {
+                    string? nodeId = null, browserVer = null, region = null, os = null, pwVer = null;
+                    if (item.Value.TryGetProperty("nodeId", out var nodeEl) &&
+                        nodeEl.ValueKind == JsonValueKind.String)
+                    {
+                        nodeId = nodeEl.GetString();
+                    }
+
+                    if (item.Value.TryGetProperty("browserVersion", out var bvEl) &&
+                        bvEl.ValueKind == JsonValueKind.String)
+                    {
+                        browserVer = bvEl.GetString();
+                    }
+
+                    if (item.Value.TryGetProperty("labels", out var labelsEl) &&
+                        labelsEl.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var p in labelsEl.EnumerateObject())
+                        {
+                            if (string.Equals(p.Name, "region", StringComparison.OrdinalIgnoreCase) &&
+                                p.Value.ValueKind == JsonValueKind.String)
+                            {
+                                region = p.Value.GetString();
+                            }
+
+                            if (string.Equals(p.Name, "os", StringComparison.OrdinalIgnoreCase) &&
+                                p.Value.ValueKind == JsonValueKind.String)
+                            {
+                                os = p.Value.GetString();
+                            }
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(nodeId))
+                    {
+                        var pwVal = await db.HashGetAsync($"node:{nodeId}", "PlaywrightVersion");
+                        if (!pwVal.IsNullOrEmpty)
+                        {
+                            pwVer = pwVal.ToString();
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(region) || !string.IsNullOrWhiteSpace(os))
+                    {
+                        run = run with { Region = region ?? run.Region, OS = os ?? run.OS };
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(nodeId))
+                    {
+                        run.WorkerNodeId = nodeId;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(pwVer))
+                    {
+                        run.PlaywrightVersion = pwVer;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(browserVer))
+                    {
+                        run.BrowserVersion = browserVer;
+                    }
+                }
+                catch { }
+
+                await resultsStore.UpsertRunAsync(run);
+
+                CommandLogEventDto? serverEv = null;
+                try
+                {
+                    string? ws = null, bt = null, args = null, bid = null;
+                    if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl) &&
+                        wsEl.ValueKind == JsonValueKind.String)
+                    {
+                        ws = wsEl.GetString();
+                    }
+
+                    if (item.Value.TryGetProperty("browserType", out var btEl) &&
+                        btEl.ValueKind == JsonValueKind.String)
+                    {
+                        bt = btEl.GetString();
+                    }
+
+                    if (item.Value.TryGetProperty("args", out var argsEl) &&
+                        argsEl.ValueKind == JsonValueKind.String)
+                    {
+                        args = argsEl.GetString();
+                    }
+
+                    if (item.Value.TryGetProperty("browserId", out var bidEl) &&
+                        bidEl.ValueKind == JsonValueKind.String)
+                    {
+                        bid = bidEl.GetString();
+                    }
+
+                    // Map browserId to runId so worker-sourced command logs can be attributed
+                    if (!string.IsNullOrWhiteSpace(bid))
+                    {
+                        await db.StringSetAsync($"browser_run:{bid}", runId, TimeSpan.FromHours(6));
+                    }
+
+                    serverEv = new CommandLogEventDto
+                    {
+                        RunId = runId,
+                        TimestampUtc = now.AddMilliseconds(-1),
+                        Kind = "ServerLaunch",
+                        Message = "Playwright server started",
+                        Props = new Dictionary<string, string>()
+                    };
+                    if (!string.IsNullOrWhiteSpace(ws))
+                    {
+                        serverEv.Props["wsEndpoint"] = ws;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(bt))
+                    {
+                        serverEv.Props["browserType"] = bt;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(args))
+                    {
+                        serverEv.Props["args"] = args;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(bid))
+                    {
+                        serverEv.Props["browserId"] = bid;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion))
+                    {
+                        serverEv.Props["playwrightVersion"] = run.PlaywrightVersion;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(run.BrowserVersion))
+                    {
+                        serverEv.Props["browserVersion"] = run.BrowserVersion;
+                    }
+
+                    serverEv.Props["labelKey"] = labelKey;
+                    await resultsStore.AppendCommandAsync(serverEv);
+                }
+                catch { }
+
+                var toSend = serverEv is not null ? new[] { serverEv, ev } : new[] { ev };
+                await resultsHubCtx.Clients.Group($"run:{runId}").CommandLogChunk(toSend);
+                await resultsHubCtx.Clients.Group($"run:{runId}").RunUpdate(run);
+
+                // Propagate correlation id back to caller
+                try { req.HttpContext.Response.Headers["Correlation-Id"] = runId; } catch { }
+
+                // Metrics: outcome success for requested label; queue length currently 0
+                try
+                {
+                    borrowOutcomes.WithLabels(labelKey, "success").Inc();
+                    borrowQueueGauge.WithLabels(labelKey).Set(0);
+
+                    var avail = await db.ListLengthAsync($"available:{labelKey}");
+                    var inuse = await db.ListLengthAsync($"inuse:{labelKey}");
+                    var total = (double)(avail + inuse);
+                    var ratio = total > 0 ? (double)inuse / total : 0.0;
+                    poolUtilizationGauge.WithLabels(labelKey).Set(ratio);
+                }
+                catch { }
+
+                return Results.Ok(item);
+            }
+
+            // Build candidate list according to configuration
+            var candidates = new List<string>();
+
+            // 2) Trailing-segment fallback: drop trailing segments from the requested label
+            if (enableTrailingFallback)
+            {
+                var s = labelKey;
+                while (true)
+                {
+                    var idx = s.LastIndexOf(':');
+                    if (idx <= 0)
+                    {
+                        break;
+                    }
+
+                    s = s[..idx];
+                    if (!string.Equals(s, labelKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        candidates.Add(s);
+                    }
+                }
+            }
+
+            // 3) Prefix expansion: treat missing trailing segments as ANY by matching more specific pools
+            if (enablePrefixExpand)
+            {
+                var pattern = $"available:{labelKey}:*";
+                foreach (var ep in mux.GetEndPoints())
+                {
+                    var server = mux.GetServer(ep);
+                    if (server is null || !server.IsConnected)
+                    {
+                        continue;
+                    }
+
+                    foreach (var key in server.Keys(pattern: pattern))
+                    {
+                        var k = key.ToString();
+                        if (k.StartsWith("available:", StringComparison.Ordinal))
+                        {
+                            var label = k["available:".Length..];
+                            if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
+                            {
+                                candidates.Add(label);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4) Wildcards: allow '*' in any segment if enabled
+            if (enableWildcards && labelKey.Contains('*'))
+            {
+                var pattern = $"available:{labelKey}";
+                foreach (var ep in mux.GetEndPoints())
+                {
+                    var server = mux.GetServer(ep);
+                    if (server is null || !server.IsConnected)
+                    {
+                        continue;
+                    }
+
+                    foreach (var key in server.Keys(pattern: pattern))
+                    {
+                        var k = key.ToString();
+                        if (k.StartsWith("available:", StringComparison.Ordinal))
+                        {
+                            var label = k["available:".Length..];
+                            if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
+                            {
+                                candidates.Add(label);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Order and select candidates using the central LabelMatcher (exact → trailing fallback → prefix expansion → wildcards)
+            var matchingOptions = new LabelMatchingOptions
+            {
+                TrailingFallbackEnabled = enableTrailingFallback,
+                PrefixExpansionEnabled = enablePrefixExpand,
+                WildcardsEnabled = enableWildcards,
+                MinSegmentsForFallback = 2
+            };
+            var matcher = new LabelMatcher(matchingOptions);
+
+            var requestedKey = parsed!; // already parsed earlier
+
+            // Parse candidate strings into LabelKey values (skip invalid)
+            var availableKeys = new List<LabelKey>();
+            foreach (var s in candidates)
+            {
+                if (LabelKey.TryParse(s, out var lk))
+                {
+                    availableKeys.Add(lk!);
+                }
+            }
+
+            // Iterate by matcher-priority; attempt to borrow for each chosen label until success
+            var poolKeys = new List<LabelKey>(availableKeys);
+            while (poolKeys.Count > 0)
+            {
+                var chosen = matcher.TryMatch(requestedKey, poolKeys);
+                if (chosen is null) break;
+
+                var matchedLabel = chosen.Normalized;
+                item = await TryBorrowForAsync(matchedLabel);
+
+                // Remove the attempted label and continue if not available
+                poolKeys.RemoveAll(x => string.Equals(x.Normalized, matchedLabel, StringComparison.Ordinal));
+
+                if (item is not null)
+                {
+                    // Determine correlation id to use as runId
+                    var runId = req.Headers["x-run-id"].FirstOrDefault()
+                               ?? req.Query["runId"].FirstOrDefault()
+                               ?? req.Headers["Correlation-Id"].FirstOrDefault()
+                               ?? $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
+
                     var now = DateTime.UtcNow;
                     var ev = new CommandLogEventDto
                     {
                         RunId = runId,
                         TimestampUtc = now,
                         Kind = "Borrow",
-                        Message = $"Borrowed for {labelKey}",
-                        Props = new Dictionary<string, string> { ["labelKey"] = labelKey }
+                        Message = $"Borrowed for {labelKey} via fallback {matchedLabel}",
+                        Props = new Dictionary<string, string> { ["labelKey"] = labelKey, ["matchedLabel"] = matchedLabel }
                     };
-
                     await resultsStore.AppendCommandAsync(ev);
-
-                    // Upsert and enrich run summary with metadata from borrowed item
                     var run = await resultsStore.GetRunAsync(runId) ?? new ResultRunSummaryDto
                     {
-                        RunId = runId,
+                        RunId = runId!,
                         App = labelKey.Split(':').FirstOrDefault() ?? "",
                         Browser = labelKey.Split(':').Skip(1).FirstOrDefault() ?? "Chromium",
                         Env = labelKey.Split(':').Skip(2).FirstOrDefault() ?? "",
@@ -390,12 +895,12 @@ return nil
                         // Map browserId to runId so worker-sourced command logs can be attributed
                         if (!string.IsNullOrWhiteSpace(bid))
                         {
-                            await db.StringSetAsync($"browser_run:{bid}", runId, TimeSpan.FromHours(6));
+                            await db.StringSetAsync($"browser_run:{bid}", runId!, TimeSpan.FromHours(6));
                         }
 
                         serverEv = new CommandLogEventDto
                         {
-                            RunId = runId,
+                            RunId = runId!,
                             TimestampUtc = now.AddMilliseconds(-1),
                             Kind = "ServerLaunch",
                             Message = "Playwright server started",
@@ -413,25 +918,26 @@ return nil
 
                         if (!string.IsNullOrWhiteSpace(args))
                         {
-                            serverEv.Props["args"] = args;
+                            serverEv.Props["args"] = args!;
                         }
 
                         if (!string.IsNullOrWhiteSpace(bid))
                         {
-                            serverEv.Props["browserId"] = bid;
+                            serverEv.Props["browserId"] = bid!;
                         }
 
                         if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion))
                         {
-                            serverEv.Props["playwrightVersion"] = run.PlaywrightVersion;
+                            serverEv.Props["playwrightVersion"] = run.PlaywrightVersion!;
                         }
 
                         if (!string.IsNullOrWhiteSpace(run.BrowserVersion))
                         {
-                            serverEv.Props["browserVersion"] = run.BrowserVersion;
+                            serverEv.Props["browserVersion"] = run.BrowserVersion!;
                         }
 
                         serverEv.Props["labelKey"] = labelKey;
+                        serverEv.Props["matchedLabel"] = matchedLabel;
                         await resultsStore.AppendCommandAsync(serverEv);
                     }
                     catch { }
@@ -439,285 +945,191 @@ return nil
                     var toSend = serverEv is not null ? new[] { serverEv, ev } : new[] { ev };
                     await resultsHubCtx.Clients.Group($"run:{runId}").CommandLogChunk(toSend);
                     await resultsHubCtx.Clients.Group($"run:{runId}").RunUpdate(run);
-                }
 
-                return Results.Ok(item);
-            }
+                    // Propagate correlation id back to caller
+                    try { req.HttpContext.Response.Headers["Correlation-Id"] = runId; } catch { }
 
-            // Build candidate list according to configuration
-            var candidates = new List<string>();
-
-            // 2) Trailing-segment fallback: drop trailing segments from the requested label
-            if (enableTrailingFallback)
-            {
-                var s = labelKey;
-                while (true)
-                {
-                    var idx = s.LastIndexOf(':');
-                    if (idx <= 0)
+                    // Metrics: outcome success for requested label; queue length currently 0
+                    try
                     {
-                        break;
+                        borrowOutcomes.WithLabels(labelKey, "success").Inc();
+                        borrowQueueGauge.WithLabels(labelKey).Set(0);
+
+                        var avail = await db.ListLengthAsync($"available:{labelKey}");
+                        var inuse = await db.ListLengthAsync($"inuse:{labelKey}");
+                        var total = (double)(avail + inuse);
+                        var ratio = total > 0 ? (double)inuse / total : 0.0;
+                        poolUtilizationGauge.WithLabels(labelKey).Set(ratio);
                     }
-
-                    s = s[..idx];
-                    if (!string.Equals(s, labelKey, StringComparison.OrdinalIgnoreCase))
-                    {
-                        candidates.Add(s);
-                    }
-                }
-            }
-
-            // 3) Prefix expansion: treat missing trailing segments as ANY by matching more specific pools
-            if (enablePrefixExpand)
-            {
-                var pattern = $"available:{labelKey}:*";
-                foreach (var ep in mux.GetEndPoints())
-                {
-                    var server = mux.GetServer(ep);
-                    if (server is null || !server.IsConnected)
-                    {
-                        continue;
-                    }
-
-                    foreach (var key in server.Keys(pattern: pattern))
-                    {
-                        var k = key.ToString();
-                        if (k.StartsWith("available:", StringComparison.Ordinal))
-                        {
-                            var label = k["available:".Length..];
-                            if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
-                            {
-                                candidates.Add(label);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 4) Wildcards: allow '*' in any segment if enabled
-            if (enableWildcards && labelKey.Contains('*'))
-            {
-                var pattern = $"available:{labelKey}";
-                foreach (var ep in mux.GetEndPoints())
-                {
-                    var server = mux.GetServer(ep);
-                    if (server is null || !server.IsConnected)
-                    {
-                        continue;
-                    }
-
-                    foreach (var key in server.Keys(pattern: pattern))
-                    {
-                        var k = key.ToString();
-                        if (k.StartsWith("available:", StringComparison.Ordinal))
-                        {
-                            var label = k["available:".Length..];
-                            if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
-                            {
-                                candidates.Add(label);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Sort candidates by specificity: prefer those closest to the requested key (fewest extra segments)
-            candidates.Sort((a, b) =>
-            {
-                int Segments(string s)
-                {
-                    return s.Split(':').Length;
-                }
-
-                var da = Math.Abs(Segments(a) - Segments(labelKey));
-                var dbb = Math.Abs(Segments(b) - Segments(labelKey));
-                var cmp = da.CompareTo(dbb);
-                return cmp != 0 ? cmp : string.Compare(a, b, StringComparison.Ordinal);
-            });
-
-            foreach (var c in candidates)
-            {
-                item = await TryBorrowForAsync(c);
-                if (item is not null)
-                {
-                    var runId = req.Headers["x-run-id"].FirstOrDefault() ?? req.Query["runId"].FirstOrDefault();
-                    if (!string.IsNullOrWhiteSpace(runId))
-                    {
-                        var now = DateTime.UtcNow;
-                        var ev = new CommandLogEventDto
-                        {
-                            RunId = runId,
-                            TimestampUtc = now,
-                            Kind = "Borrow",
-                            Message = $"Borrowed for {labelKey} via fallback {c}",
-                            Props = new Dictionary<string, string> { ["labelKey"] = labelKey, ["matchedLabel"] = c }
-                        };
-                        await resultsStore.AppendCommandAsync(ev);
-                        var run = await resultsStore.GetRunAsync(runId) ?? new ResultRunSummaryDto
-                        {
-                            RunId = runId!,
-                            App = labelKey.Split(':').FirstOrDefault() ?? "",
-                            Browser = labelKey.Split(':').Skip(1).FirstOrDefault() ?? "Chromium",
-                            Env = labelKey.Split(':').Skip(2).FirstOrDefault() ?? "",
-                            StartedAtUtc = now
-                        };
-                        run.Status = "Running";
-
-                        try
-                        {
-                            string? nodeId = null, browserVer = null, region = null, os = null, pwVer = null;
-                            if (item.Value.TryGetProperty("nodeId", out var nodeEl) &&
-                                nodeEl.ValueKind == JsonValueKind.String)
-                            {
-                                nodeId = nodeEl.GetString();
-                            }
-
-                            if (item.Value.TryGetProperty("browserVersion", out var bvEl) &&
-                                bvEl.ValueKind == JsonValueKind.String)
-                            {
-                                browserVer = bvEl.GetString();
-                            }
-
-                            if (item.Value.TryGetProperty("labels", out var labelsEl) &&
-                                labelsEl.ValueKind == JsonValueKind.Object)
-                            {
-                                foreach (var p in labelsEl.EnumerateObject())
-                                {
-                                    if (string.Equals(p.Name, "region", StringComparison.OrdinalIgnoreCase) &&
-                                        p.Value.ValueKind == JsonValueKind.String)
-                                    {
-                                        region = p.Value.GetString();
-                                    }
-
-                                    if (string.Equals(p.Name, "os", StringComparison.OrdinalIgnoreCase) &&
-                                        p.Value.ValueKind == JsonValueKind.String)
-                                    {
-                                        os = p.Value.GetString();
-                                    }
-                                }
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(nodeId))
-                            {
-                                var pwVal = await db.HashGetAsync($"node:{nodeId}", "PlaywrightVersion");
-                                if (!pwVal.IsNullOrEmpty)
-                                {
-                                    pwVer = pwVal.ToString();
-                                }
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(region) || !string.IsNullOrWhiteSpace(os))
-                            {
-                                run = run with { Region = region ?? run.Region, OS = os ?? run.OS };
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(nodeId))
-                            {
-                                run.WorkerNodeId = nodeId;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(pwVer))
-                            {
-                                run.PlaywrightVersion = pwVer;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(browserVer))
-                            {
-                                run.BrowserVersion = browserVer;
-                            }
-                        }
-                        catch { }
-
-                        await resultsStore.UpsertRunAsync(run);
-
-                        CommandLogEventDto? serverEv = null;
-                        try
-                        {
-                            string? ws = null, bt = null, args = null, bid = null;
-                            if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl) &&
-                                wsEl.ValueKind == JsonValueKind.String)
-                            {
-                                ws = wsEl.GetString();
-                            }
-
-                            if (item.Value.TryGetProperty("browserType", out var btEl) &&
-                                btEl.ValueKind == JsonValueKind.String)
-                            {
-                                bt = btEl.GetString();
-                            }
-
-                            if (item.Value.TryGetProperty("args", out var argsEl) &&
-                                argsEl.ValueKind == JsonValueKind.String)
-                            {
-                                args = argsEl.GetString();
-                            }
-
-                            if (item.Value.TryGetProperty("browserId", out var bidEl) &&
-                                bidEl.ValueKind == JsonValueKind.String)
-                            {
-                                bid = bidEl.GetString();
-                            }
-
-                            // Map browserId to runId so worker-sourced command logs can be attributed
-                            if (!string.IsNullOrWhiteSpace(bid))
-                            {
-                                await db.StringSetAsync($"browser_run:{bid}", runId!, TimeSpan.FromHours(6));
-                            }
-
-                            serverEv = new CommandLogEventDto
-                            {
-                                RunId = runId!,
-                                TimestampUtc = now.AddMilliseconds(-1),
-                                Kind = "ServerLaunch",
-                                Message = "Playwright server started",
-                                Props = new Dictionary<string, string>()
-                            };
-                            if (!string.IsNullOrWhiteSpace(ws))
-                            {
-                                serverEv.Props["wsEndpoint"] = ws;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(bt))
-                            {
-                                serverEv.Props["browserType"] = bt;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(args))
-                            {
-                                serverEv.Props["args"] = args!;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(bid))
-                            {
-                                serverEv.Props["browserId"] = bid!;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(run.PlaywrightVersion))
-                            {
-                                serverEv.Props["playwrightVersion"] = run.PlaywrightVersion!;
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(run.BrowserVersion))
-                            {
-                                serverEv.Props["browserVersion"] = run.BrowserVersion!;
-                            }
-
-                            serverEv.Props["labelKey"] = labelKey;
-                            serverEv.Props["matchedLabel"] = c;
-                            await resultsStore.AppendCommandAsync(serverEv);
-                        }
-                        catch { }
-
-                        var toSend = serverEv is not null ? new[] { serverEv, ev } : new[] { ev };
-                        await resultsHubCtx.Clients.Group($"run:{runId}").CommandLogChunk(toSend);
-                        await resultsHubCtx.Clients.Group($"run:{runId}").RunUpdate(run);
-                    }
+                    catch { }
 
                     return Results.Ok(item);
                 }
             }
 
+            // Capacity queue: attempt to wait for capacity with timeout and fairness
+            var runIdForQueue = req.Headers["x-run-id"].FirstOrDefault()
+                               ?? req.Query["runId"].FirstOrDefault()
+                               ?? req.Headers["Correlation-Id"].FirstOrDefault()
+                               ?? "anonymous";
+
+            var enq = EndpointCapacityQueue.TryEnqueue(labelKey, runIdForQueue);
+            if (enq.token is not null)
+            {
+                try { borrowQueueGauge.WithLabels(labelKey).Set(EndpointCapacityQueue.GetQueueLength(labelKey)); } catch { }
+
+                var signaled = await EndpointCapacityQueue.WaitAsync(enq.token, TimeSpan.FromSeconds(queueTimeoutSeconds), req.HttpContext.RequestAborted);
+                if (!signaled)
+                {
+                    EndpointCapacityQueue.Remove(enq.token);
+                    try { borrowOutcomes.WithLabels(labelKey, "timeout").Inc(); } catch { }
+                    try { borrowQueueGauge.WithLabels(labelKey).Set(EndpointCapacityQueue.GetQueueLength(labelKey)); } catch { }
+                    return Results.Problem($"Borrow timed out after {queueTimeoutSeconds}s for {labelKey}", statusCode: 503);
+                }
+
+                // After being signaled, try to borrow again (exact + fallback)
+                var item2 = await TryBorrowForAsync(labelKey);
+                if (item2 is null)
+                {
+                    // Recompute candidates and attempt fallback again
+                    var endpoints2 = mux.GetEndPoints();
+                    var candidates2 = new List<string>();
+                    foreach (var ep in endpoints2)
+                    {
+                        try
+                        {
+                            var srv = mux.GetServer(ep);
+                            foreach (var key in srv.Keys(pattern: "available:*"))
+                            {
+                                var label = key.ToString().AsSpan("available:".Length).ToString();
+                                if (!string.IsNullOrWhiteSpace(label))
+                                {
+                                    var len = await db.ListLengthAsync($"available:{label}");
+                                    if (len > 0)
+                                    {
+                                        if (!candidates2.Contains(label, StringComparer.OrdinalIgnoreCase))
+                                        {
+                                            candidates2.Add(label);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    var matchingOptions2 = new LabelMatchingOptions
+                    {
+                        TrailingFallbackEnabled = enableTrailingFallback,
+                        PrefixExpansionEnabled = enablePrefixExpand,
+                        WildcardsEnabled = enableWildcards,
+                        MinSegmentsForFallback = 2
+                    };
+                    var matcher2 = new LabelMatcher(matchingOptions2);
+                    var requestedKey2 = LabelKey.TryParse(labelKey, out var lkTmp) ? lkTmp! : parsed!;
+                    var availableKeys2 = new List<LabelKey>();
+                    foreach (var s in candidates2)
+                    {
+                        if (LabelKey.TryParse(s, out var lk))
+                        {
+                            availableKeys2.Add(lk!);
+                        }
+                    }
+                    var poolKeys2 = new List<LabelKey>(availableKeys2);
+                    while (poolKeys2.Count > 0 && item2 is null)
+                    {
+                        var chosen2 = matcher2.TryMatch(requestedKey2, poolKeys2);
+                        if (chosen2 is null) break;
+                        var matched2 = chosen2.Normalized;
+                        item2 = await TryBorrowForAsync(matched2);
+                        poolKeys2.RemoveAll(x => string.Equals(x.Normalized, matched2, StringComparison.Ordinal));
+                    }
+                }
+
+                try { borrowQueueGauge.WithLabels(labelKey).Set(EndpointCapacityQueue.GetQueueLength(labelKey)); } catch { }
+
+                if (item2 is not null)
+                {
+                    try
+                    {
+                        borrowOutcomes.WithLabels(labelKey, "success").Inc();
+                        var avail2 = await db.ListLengthAsync($"available:{labelKey}");
+                        var inuse2 = await db.ListLengthAsync($"inuse:{labelKey}");
+                        var total2 = (double)(avail2 + inuse2);
+                        var ratio2 = total2 > 0 ? (double)inuse2 / total2 : 0.0;
+                        poolUtilizationGauge.WithLabels(labelKey).Set(ratio2);
+                    }
+                    catch { }
+
+                    return Results.Ok(item2);
+                }
+            }
+            else
+            {
+                // Queue rejected; treat as denied to avoid amplifying pressure
+                try { borrowOutcomes.WithLabels(labelKey, "denied").Inc(); } catch { }
+            }
+
             return Results.Problem($"No browser available for {labelKey}", statusCode: 503);
+        })
+        .WithOpenApi(op =>
+        {
+            op.Summary = "Borrow a browser session";
+            op.Description = "Requests a browser session for the provided labelKey. Requires x-hub-secret header equal to HUB_RUNNER_SECRET.";
+            op.Parameters ??= new List<Microsoft.OpenApi.Models.OpenApiParameter>();
+            op.Parameters.Add(new Microsoft.OpenApi.Models.OpenApiParameter
+            {
+                Name = "runId",
+                In = Microsoft.OpenApi.Models.ParameterLocation.Query,
+                Required = false,
+                Description = "Optional run identifier to attribute logs and results",
+                Schema = new Microsoft.OpenApi.Models.OpenApiSchema { Type = "string" }
+            });
+            op.RequestBody = new Microsoft.OpenApi.Models.OpenApiRequestBody
+            {
+                Required = true,
+                Content =
+                {
+                    ["application/json"] = new Microsoft.OpenApi.Models.OpenApiMediaType
+                    {
+                        Example = new Microsoft.OpenApi.Any.OpenApiObject
+                        {
+                            ["labelKey"] = new Microsoft.OpenApi.Any.OpenApiString("AppB:Chromium:UAT")
+                        }
+                    }
+                }
+            };
+            var ok = new Microsoft.OpenApi.Models.OpenApiResponse
+            {
+                Description = "Borrow successful",
+                Content =
+                {
+                    ["application/json"] = new Microsoft.OpenApi.Models.OpenApiMediaType
+                    {
+                        Example = new Microsoft.OpenApi.Any.OpenApiObject
+                        {
+                            ["browserId"] = new Microsoft.OpenApi.Any.OpenApiString("b-123"),
+                            ["webSocketEndpoint"] = new Microsoft.OpenApi.Any.OpenApiString("ws://127.0.0.1:5200/ws/b-123"),
+                            ["browserType"] = new Microsoft.OpenApi.Any.OpenApiString("chromium"),
+                            ["labelKey"] = new Microsoft.OpenApi.Any.OpenApiString("AppB:Chromium:UAT")
+                        }
+                    }
+                }
+            };
+            op.Responses["200"] = ok;
+            op.Responses["401"] = new Microsoft.OpenApi.Models.OpenApiResponse { Description = "Unauthorized (missing or invalid x-hub-secret)" };
+            op.Responses["400"] = new Microsoft.OpenApi.Models.OpenApiResponse { Description = "Bad Request (invalid or missing labelKey)" };
+            op.Responses["503"] = new Microsoft.OpenApi.Models.OpenApiResponse { Description = "No capacity available for the requested label" };
+            op.Security = new List<Microsoft.OpenApi.Models.OpenApiSecurityRequirement>
+            {
+                new()
+                {
+                    [ new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                        { Reference = new Microsoft.OpenApi.Models.OpenApiReference { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "HubSecret" } }
+                    ] = new List<string>()
+                }
+            };
+            return op;
         });
 
         // Return { "labelKey": "...", "browserId": "..." }
@@ -734,6 +1146,13 @@ return nil
                 return Results.BadRequest("missing labelKey|browserId");
             }
 
+            // Validate and normalize labelKey
+            if (!LabelKey.TryParseDetailed(labelKey, out var parsedReturn, out var parseErr, new LabelKeyParsingOptions { EnforceBrowserSecond = false }))
+            {
+                return Results.BadRequest($"invalid labelKey: {parseErr}");
+            }
+            labelKey = parsedReturn!.Normalized;
+
             var inuseKey = $"inuse:{labelKey}";
             var availKey = $"available:{labelKey}";
 
@@ -747,14 +1166,33 @@ return nil
             try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
             catch { }
 
+            if (!res.IsNull)
+            {
+                // Capacity is now available; wake one waiter for this label
+                try { EndpointCapacityQueue.Signal(labelKey); } catch { }
+                try { borrowQueueGauge.WithLabels(labelKey).Set(EndpointCapacityQueue.GetQueueLength(labelKey)); } catch { }
+            }
+
             if (res.IsNull)
             {
                 // Treat return as idempotent: if browserId is not in the in-use list, consider it already returned
                 return Results.Ok(new { returned = browserId, note = "already returned" });
             }
 
-            // Optional results emission if runId provided
-            var runId2 = req.Headers["x-run-id"].FirstOrDefault() ?? req.Query["runId"].FirstOrDefault();
+            // Optional results emission if runId provided or inferred via Correlation-Id or existing mapping
+            var runId2 = req.Headers["x-run-id"].FirstOrDefault()
+                        ?? req.Query["runId"].FirstOrDefault()
+                        ?? req.Headers["Correlation-Id"].FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(runId2))
+            {
+                try
+                {
+                    var v = await db.StringGetAsync($"browser_run:{browserId}");
+                    if (!v.IsNullOrEmpty) runId2 = v.ToString();
+                }
+                catch { }
+            }
+
             if (!string.IsNullOrWhiteSpace(runId2))
             {
                 var now = DateTime.UtcNow;
@@ -789,9 +1227,67 @@ return nil
 
                 try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
                 catch { }
+
+                // Propagate correlation id back to caller
+                try { req.HttpContext.Response.Headers["Correlation-Id"] = runId2!; } catch { }
             }
 
             return Results.Ok(new { returned = browserId });
+        })
+        .WithOpenApi(op =>
+        {
+            op.Summary = "Return a borrowed browser";
+            op.Description = "Returns a borrowed browser back to the pool. Requires x-hub-secret header equal to HUB_RUNNER_SECRET.";
+            op.Parameters ??= new List<Microsoft.OpenApi.Models.OpenApiParameter>();
+            op.Parameters.Add(new Microsoft.OpenApi.Models.OpenApiParameter
+            {
+                Name = "runId",
+                In = Microsoft.OpenApi.Models.ParameterLocation.Query,
+                Required = false,
+                Description = "Optional run identifier used for attributing logs",
+                Schema = new Microsoft.OpenApi.Models.OpenApiSchema { Type = "string" }
+            });
+            op.RequestBody = new Microsoft.OpenApi.Models.OpenApiRequestBody
+            {
+                Required = true,
+                Content =
+                {
+                    ["application/json"] = new Microsoft.OpenApi.Models.OpenApiMediaType
+                    {
+                        Example = new Microsoft.OpenApi.Any.OpenApiObject
+                        {
+                            ["labelKey"] = new Microsoft.OpenApi.Any.OpenApiString("AppB:Chromium:UAT"),
+                            ["browserId"] = new Microsoft.OpenApi.Any.OpenApiString("b-123")
+                        }
+                    }
+                }
+            };
+            op.Responses["200"] = new Microsoft.OpenApi.Models.OpenApiResponse
+            {
+                Description = "Return successful",
+                Content =
+                {
+                    ["application/json"] = new Microsoft.OpenApi.Models.OpenApiMediaType
+                    {
+                        Example = new Microsoft.OpenApi.Any.OpenApiObject
+                        {
+                            ["returned"] = new Microsoft.OpenApi.Any.OpenApiString("b-123")
+                        }
+                    }
+                }
+            };
+            op.Responses["401"] = new Microsoft.OpenApi.Models.OpenApiResponse { Description = "Unauthorized (missing or invalid x-hub-secret)" };
+            op.Responses["400"] = new Microsoft.OpenApi.Models.OpenApiResponse { Description = "Bad Request (missing labelKey or browserId)" };
+            op.Security = new List<Microsoft.OpenApi.Models.OpenApiSecurityRequirement>
+            {
+                new()
+                {
+                    [ new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                        { Reference = new Microsoft.OpenApi.Models.OpenApiReference { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "HubSecret" } }
+                    ] = new List<string>()
+                }
+            };
+            return op;
         });
 
         // ResultsHub + Results HTTP endpoints
@@ -961,6 +1457,13 @@ return nil
             {
                 return Results.Unauthorized();
             }
+
+            // Validate and normalize the route labelKey
+            if (!LabelKey.TryParseDetailed(labelKey, out var parsedAdmin, out var adminErr, new LabelKeyParsingOptions { EnforceBrowserSecond = false }))
+            {
+                return Results.BadRequest($"invalid labelKey: {adminErr}");
+            }
+            labelKey = parsedAdmin!.Normalized;
 
             // Enter maintenance and snapshot current counts
             var availKey = $"available:{labelKey}";

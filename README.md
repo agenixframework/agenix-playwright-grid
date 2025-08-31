@@ -12,9 +12,10 @@ What you get
 
 - Flexible, ordered label keys for routing capacity across apps, browsers, envs, regions, OS, channels, etc.
 - Pre‑warmed pools per label for low‑latency borrows.
-- Configurable matching: exact, trailing‑segment fallback, prefix expansion, optional wildcards.
+- Configurable matching: exact, trailing‑segment fallback, prefix expansion, optional wildcards (see docs/Label-Matching.md).
 - Simple HTTP APIs for borrow/return; secure via shared secrets.
 - Built‑in metrics (Prometheus) and dashboards (Grafana provisioning).
+- See docs/Metrics-and-Grafana.md for a comprehensive metrics and Grafana guide.
 
 Components and default ports
 
@@ -48,6 +49,8 @@ Quickstart
 Label schema (routing keys)
 Labels are ordered, `:`‑separated segments. Keep `Browser` second for consistent routing and metrics.
 
+See also: [Session distribution across workers](#session-distribution) for how capacity is aggregated across workers. For detailed matching strategy, see docs/Label-Matching.md. For a deep dive, see docs/distribution.md.
+
 - 3‑part (baseline): `App:Browser:Env`
 - 4‑part: `App:Browser:Env:Region`
 - 5‑part: `App:Browser:Env:Region:OS`
@@ -73,13 +76,15 @@ Each worker advertises capacity as: `labelKey=count` comma‑separated.
     - Channels/headless mix: `AppB:Chromium:UAT:stable:headless=2,AppB:Chromium:UAT:beta:headed=1`
 
 Borrowing and matching (Hub)
-Clients request capacity with a label key. The more specific, the tighter the match. Strategy (configurable):
+For the full label matching strategy (exact → trailing fallback → prefix expansion → optional wildcards) and configuration knobs, see docs/Label-Matching.md.
 
-1) Exact match on the full label.
-2) Trailing fallback (optional): drop last segment repeatedly (`App:Browser:Env:Region → App:Browser:Env`).
-3) Prefix expansion (optional): treat missing trailing segments as ANY; match more specific pools starting with the
-   requested prefix (e.g., request `App:Browser:Env` matches `App:Browser:Env:EU`).
-4) Wildcards (optional): allow `*` in any segment (e.g., `App:Chromium:*:EU`, `*:Firefox:Staging`).
+<a id="session-distribution"></a>
+## Session distribution across workers
+
+- Borrows are distributed across workers that advertise capacity for the matched label. Aggregate capacity is the sum across workers.
+- A single borrowed session is pinned to the selected worker; it does not move during the session.
+
+See docs/distribution.md for details on how sessions are spread across workers.
 
 Hub configuration (env)
 

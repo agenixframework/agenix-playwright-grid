@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.IO;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
 using PlaywrightHub.Infrastructure.Adapters.Background;
@@ -7,6 +8,13 @@ using PlaywrightHub.Infrastructure.Adapters.Results;
 using PlaywrightHub.Infrastructure.Web;
 using Prometheus;
 using StackExchange.Redis;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.OpenApi.Models;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Exporter;
 
 namespace PlaywrightHub.Services;
 
@@ -31,6 +39,54 @@ public static class HubServiceRunner
         builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
 
+        // OpenTelemetry setup (env-driven exporters)
+        var hubServiceName = "playwright-hub";
+        var hubServiceVersion = typeof(HubServiceRunner).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+        var enableOtlp = string.Equals(builder.Configuration["ENABLE_OTLP"], "1", StringComparison.OrdinalIgnoreCase);
+        var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1", StringComparison.OrdinalIgnoreCase);
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
+        var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc";
+
+        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
+            .AddService(serviceName: hubServiceName, serviceVersion: hubServiceVersion);
+
+
+        builder.Services.AddOpenTelemetry()
+            .ConfigureResource(rb => rb.AddService(serviceName: hubServiceName, serviceVersion: hubServiceVersion))
+            .WithTracing(t =>
+            {
+                t.SetResourceBuilder(resourceBuilder);
+                t.AddAspNetCoreInstrumentation();
+                t.AddHttpClientInstrumentation();
+                if (enableOtlp)
+                {
+                    t.AddOtlpExporter(o =>
+                    {
+                        o.Endpoint = new Uri(otlpEndpoint);
+                        o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
+                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
+                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                    });
+                }
+            })
+            .WithMetrics(m =>
+            {
+                m.SetResourceBuilder(resourceBuilder);
+                m.AddAspNetCoreInstrumentation();
+                m.AddRuntimeInstrumentation();
+                if (enableOtlp)
+                {
+                    m.AddOtlpExporter(o =>
+                    {
+                        o.Endpoint = new Uri(otlpEndpoint);
+                        o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
+                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
+                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                    });
+                }
+            });
+
+
         var redisUrl = builder.Configuration["REDIS_URL"] ?? "redis:6379";
         var mux = await ConnectionMultiplexer.ConnectAsync(redisUrl);
         var db = mux.GetDatabase();
@@ -43,6 +99,17 @@ public static class HubServiceRunner
         builder.Services.AddHostedService<RedisPoolStateBroadcastService>();
         builder.Services.AddHostedService<NodeSweeperService>();
         builder.Services.AddHostedService<RunCleanupService>();
+
+        // ProblemDetails for consistent error payloads
+        builder.Services.AddProblemDetails(options =>
+        {
+            options.CustomizeProblemDetails = ctx =>
+            {
+                var traceId = ctx.HttpContext.TraceIdentifier;
+                ctx.ProblemDetails.Extensions["traceId"] = traceId;
+            };
+        });
+
         // Results store (configurable: memory (default) or redis)
         var resultsBackend = builder.Configuration["HUB_RESULTS_BACKEND"] ?? "memory";
         if (string.Equals(resultsBackend, "redis", StringComparison.OrdinalIgnoreCase))
@@ -56,10 +123,125 @@ public static class HubServiceRunner
             Console.WriteLine("[hub] ResultsStore backend: memory (default)");
         }
 
+        // OpenAPI/Swagger (minimal surface)
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "Playwright Grid Hub API",
+                Version = "v1",
+                Description = "Minimal API surface for borrowing and returning sessions."
+            });
+
+            var scheme = new OpenApiSecurityScheme
+            {
+                Name = "x-hub-secret",
+                In = ParameterLocation.Header,
+                Type = SecuritySchemeType.ApiKey,
+                Description = "Shared secret header required for most endpoints (HUB_RUNNER_SECRET for runners, HUB_NODE_SECRET for nodes).",
+                Reference = new OpenApiReference { Id = "HubSecret", Type = ReferenceType.SecurityScheme }
+            };
+
+            c.AddSecurityDefinition("HubSecret", scheme);
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                { scheme, Array.Empty<string>() }
+            });
+        });
+
         var app = builder.Build();
+
+        // Convert unhandled exceptions into RFC7807 ProblemDetails
+        app.UseExceptionHandler(errorApp =>
+        {
+            errorApp.Run(async context =>
+            {
+                var feature = context.Features.Get<IExceptionHandlerFeature>();
+                var ex = feature?.Error;
+                var status = 500;
+                var pd = new ProblemDetails
+                {
+                    Status = status,
+                    Title = "An unexpected error occurred.",
+                    Detail = ex?.Message,
+                    Type = "https://httpstatuses.com/500",
+                    Instance = context.Request.Path
+                };
+                pd.Extensions["traceId"] = context.TraceIdentifier;
+                context.Response.StatusCode = status;
+                context.Response.ContentType = "application/problem+json";
+                await JsonSerializer.SerializeAsync(context.Response.Body, pd);
+            });
+        });
+
+        // Normalize all 4xx/5xx responses to ProblemDetails and preserve any existing error text as detail
+        app.Use(async (context, next) =>
+        {
+            var originalBody = context.Response.Body;
+            await using var buffer = new MemoryStream();
+            context.Response.Body = buffer;
+            try
+            {
+                await next();
+
+                var status = context.Response.StatusCode;
+                buffer.Position = 0;
+                string existingBody = string.Empty;
+                if (buffer.Length > 0)
+                {
+                    using var reader = new StreamReader(buffer, leaveOpen: true);
+                    existingBody = await reader.ReadToEndAsync();
+                    buffer.Position = 0;
+                }
+
+                var contentType = context.Response.ContentType ?? string.Empty;
+                var isProblem = contentType.StartsWith("application/problem+json", StringComparison.OrdinalIgnoreCase);
+                if (status >= 400 && !isProblem)
+                {
+                    // Build ProblemDetails with reason phrase and prior content as detail if present
+                    var title = Microsoft.AspNetCore.WebUtilities.ReasonPhrases.GetReasonPhrase(status) ?? "Error";
+                    var pd = new Microsoft.AspNetCore.Mvc.ProblemDetails
+                    {
+                        Status = status,
+                        Title = title,
+                        Detail = string.IsNullOrWhiteSpace(existingBody) ? null : existingBody,
+                        Type = $"https://httpstatuses.com/{status}",
+                        Instance = context.Request.Path
+                    };
+                    pd.Extensions["traceId"] = context.TraceIdentifier;
+
+                    context.Response.ContentType = "application/problem+json";
+
+                    // Replace body with ProblemDetails JSON
+                    buffer.SetLength(0);
+                    await System.Text.Json.JsonSerializer.SerializeAsync(buffer, pd);
+                    buffer.Position = 0;
+                }
+
+                await buffer.CopyToAsync(originalBody);
+            }
+            finally
+            {
+                context.Response.Body = originalBody;
+            }
+        });
 
         app.UseMetricServer();
         app.UseHttpMetrics();
+
+        // Swagger middleware (enabled in Development or when HUB_SWAGGER=1)
+        var enableSwagger = app.Environment.IsDevelopment() || string.Equals(app.Configuration["HUB_SWAGGER"], "1", StringComparison.OrdinalIgnoreCase);
+        if (enableSwagger)
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Hub API v1");
+                c.DocumentTitle = "Playwright Grid Hub API";
+            });
+        }
+
         app.MapHubEndpoints();
 
         // Startup diagnostics dump (effective config + labels per node)

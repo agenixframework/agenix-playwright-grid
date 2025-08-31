@@ -9,6 +9,22 @@ on:
     tags:
       - 'v*.*.*'
       - 'v*.*.*-*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish_nuget:
+        description: "Publish to NuGet?"
+        required: true
+        type: choice
+        options: [ "no", "yes" ]
+        default: "no"
+      publish_containers:
+        description: "Publish container images?"
+        required: true
+        type: choice
+        options: [ "no", "yes" ]
+        default: "no"
 
 permissions:
   contents: write
@@ -172,13 +188,16 @@ jobs:
       always() &&
       needs.build.result == 'success' &&
       (needs.security-scan.result == 'success' || needs.security-scan.result == 'skipped') &&
-      github.event_name == 'push' &&
       (
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/develop' ||
-        startsWith(github.ref, 'refs/heads/release/') ||
-        startsWith(github.ref, 'refs/heads/hotfix/') ||
-        startsWith(github.ref, 'refs/tags/v')
+        github.event_name == 'release' ||
+        (github.event_name == 'workflow_dispatch' && inputs.publish_nuget == 'yes') ||
+        (github.event_name == 'push' && (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/develop' ||
+          startsWith(github.ref, 'refs/heads/release/') ||
+          startsWith(github.ref, 'refs/heads/hotfix/') ||
+          startsWith(github.ref, 'refs/tags/v')
+        ))
       )
 
     environment:
@@ -242,13 +261,16 @@ jobs:
       always() &&
       needs.build.result == 'success' &&
       (needs.security-scan.result == 'success' || needs.security-scan.result == 'skipped') &&
-      github.event_name == 'push' &&
       (
-        github.ref == 'refs/heads/main' ||
-        github.ref == 'refs/heads/develop' ||
-        startsWith(github.ref, 'refs/heads/release/') ||
-        startsWith(github.ref, 'refs/heads/hotfix/') ||
-        startsWith(github.ref, 'refs/tags/v')
+        github.event_name == 'release' ||
+        (github.event_name == 'workflow_dispatch' && inputs.publish_containers == 'yes') ||
+        (github.event_name == 'push' && (
+          github.ref == 'refs/heads/main' ||
+          github.ref == 'refs/heads/develop' ||
+          startsWith(github.ref, 'refs/heads/release/') ||
+          startsWith(github.ref, 'refs/heads/hotfix/') ||
+          startsWith(github.ref, 'refs/tags/v')
+        ))
       )
 
     steps:

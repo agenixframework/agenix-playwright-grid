@@ -65,6 +65,13 @@ public class ExampleSuite
 }
 ```
 
+## Session distribution across workers
+- Borrows are distributed across workers that advertise capacity for the requested label; aggregate capacity is the sum across workers.
+- A single borrowed session is pinned to the selected Worker; it does not move during the session.
+- Important: The `webSocketEndpoint` returned by `/session/borrow` points to the selected Worker’s public WS endpoint, not the Hub. Ensure `PUBLIC_WS_HOST/PORT/SCHEME` are reachable from your runner.
+
+See docs/distribution.md for a deeper explanation.
+
 Notes
 - labelKey identifies which pool to borrow from (for example App:Browser:Env[:Region[:OS…]]).
 - Passing runId to BorrowAsync lets the Hub associate all logs with a specific run and browser session.
