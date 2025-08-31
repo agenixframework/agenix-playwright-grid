@@ -14,8 +14,8 @@ The following is an ordered, actionable checklist covering architectural and cod
 8. [X] Add distributed tracing via OpenTelemetry (traces, metrics, logs) with exporters configurable (OTLP/Prometheus).
 9. [X] Expand Prometheus metrics: borrow latency histogram, borrow outcomes (success/timeout/denied), pool utilization per label, queue length, node heartbeats.
 10. [X] Introduce a capacity queue in Hub for pending borrows with timeout and fairness (per-label and per-run caps) to reduce thundering herd.
-11. [ ] Implement node heartbeat/liveness tracker with configurable timeout; evict stale nodes and reclaim/expire orphaned sessions.
-12. [ ] Add borrow TTL and auto-return on timeout; persist session state to Redis to survive Hub restarts.
+11. [X] Implement node heartbeat/liveness tracker with configurable timeout; evict stale nodes and reclaim/expire orphaned sessions.
+12. [X] Add borrow TTL and auto-return on timeout; persist session state to Redis to survive Hub restarts.
 13. [ ] Harden Redis usage: resilience (timeouts, retries with jitter, circuit breaker), connection settings, and health checks integrated into readiness.
 14. [ ] Support secret rotation: accept multiple HUB_RUNNER_SECRET/HUB_NODE_SECRET values (comma-separated) and log deprecation windows.
 15. [ ] Redact secrets and PII in logs; ensure headers and sensitive values never appear in structured logs.

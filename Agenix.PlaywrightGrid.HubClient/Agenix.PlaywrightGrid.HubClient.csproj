@@ -20,7 +20,4 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.8"/>
     <PackageReference Include="Microsoft.Playwright" Version="1.54.0"/>
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj" />
-  </ItemGroup>
 </Project>

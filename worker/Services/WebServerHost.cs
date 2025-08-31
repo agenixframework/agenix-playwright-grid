@@ -1,11 +1,11 @@
 using System.Net.WebSockets;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Prometheus;
 using StackExchange.Redis;
 using WorkerService.Application.Ports;
 using WorkerService.Infrastructure;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
-using OpenTelemetry.Resources;
 
 namespace WorkerService.Services;
 

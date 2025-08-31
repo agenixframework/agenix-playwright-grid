@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Agenix.PlaywrightGrid.Domain;
 using StackExchange.Redis;
 using WorkerService.Application.Ports;
 using WorkerService.Infrastructure;
-using Agenix.PlaywrightGrid.Domain;
 
 namespace WorkerService.Services;
 

@@ -1,13 +1,10 @@
 # Build stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-# Copy project files preserving folder structure for faster restores
-COPY hub/PlaywrightHub.csproj hub/
-COPY Agenix.PlaywrightGrid.Domain/Agenix.PlaywrightGrid.Domain.csproj Agenix.PlaywrightGrid.Domain/
-# Restore using the hub project relative to /src
-RUN dotnet restore hub/PlaywrightHub.csproj
-# Copy the rest of the source
+# Copy source
 COPY . .
+# Restore using the hub project
+RUN dotnet restore hub/PlaywrightHub.csproj
 # Publish the hub project
 RUN dotnet publish hub/PlaywrightHub.csproj -c Release -o /app/publish
 
