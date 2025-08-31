@@ -5,10 +5,10 @@ WORKDIR /src
 
 # Copy source
 COPY . .
-# Restore
-RUN dotnet restore dashboard/Dashboard.csproj
-# Publish
-RUN dotnet publish dashboard/Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+# Restore and publish using robust path detection to support different build contexts
+WORKDIR /src
+RUN if [ -f "Dashboard.csproj" ]; then dotnet restore Dashboard.csproj; else dotnet restore dashboard/Dashboard.csproj; fi
+RUN if [ -f "Dashboard.csproj" ]; then dotnet publish Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false; else dotnet publish dashboard/Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false; fi
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim AS final

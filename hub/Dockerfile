@@ -3,10 +3,10 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 # Copy source
 COPY . .
-# Restore using the hub project
-RUN dotnet restore hub/PlaywrightHub.csproj
-# Publish the hub project
-RUN dotnet publish hub/PlaywrightHub.csproj -c Release -o /app/publish
+# Restore and publish using robust path detection to support different build contexts
+WORKDIR /src
+RUN if [ -f "PlaywrightHub.csproj" ]; then dotnet restore PlaywrightHub.csproj; else dotnet restore hub/PlaywrightHub.csproj; fi
+RUN if [ -f "PlaywrightHub.csproj" ]; then dotnet publish PlaywrightHub.csproj -c Release -o /app/publish; else dotnet publish hub/PlaywrightHub.csproj -c Release -o /app/publish; fi
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
