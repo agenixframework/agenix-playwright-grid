@@ -1,24 +1,42 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using Microsoft.Playwright;
 
 namespace Agenix.PlaywrightGrid.HubClient;
 
 /// <summary>
-/// Optional helper that wires Playwright .NET page events to the Grid Hub via HubClient.SendApiLogAsync.
-/// Use to auto-forward human-readable API-level messages (direction = "runner").
+///     Optional helper that wires Playwright .NET page events to the Grid Hub via HubClient.SendApiLogAsync.
+///     Use to auto-forward human-readable API-level messages (direction = "runner").
 /// </summary>
 public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
 {
-    private readonly IPage _page;
-    private readonly HubClient _client;
     private readonly string _browserId;
+    private readonly HubClient _client;
     private readonly Options _opts;
+    private readonly IPage _page;
 
     private EventHandler<IConsoleMessage>? _onConsole;
     private EventHandler<string>? _onPageError;
     private EventHandler<IRequest>? _onRequest;
-    private EventHandler<IResponse>? _onResponse;
-    private EventHandler<IRequest>? _onRequestFinished;
     private EventHandler<IRequest>? _onRequestFailed;
+    private EventHandler<IRequest>? _onRequestFinished;
+    private EventHandler<IResponse>? _onResponse;
 
     private PlaywrightEventForwarder(IPage page, HubClient client, string browserId, Options opts)
     {
@@ -29,21 +47,21 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         Attach();
     }
 
-    /// <summary>
-    /// Options controlling which events are forwarded.
-    /// </summary>
-    public sealed class Options
+    public ValueTask DisposeAsync()
     {
-        public bool Console { get; init; } = true;
-        public bool PageError { get; init; } = true;
-        public bool Request { get; init; } = true;
-        public bool Response { get; init; } = true;
-        public bool RequestFinished { get; init; } = false;
-        public bool RequestFailed { get; init; } = true;
+        Detach();
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        Detach();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
-    /// Attaches event listeners to the given page and starts forwarding messages to the hub.
+    ///     Attaches event listeners to the given page and starts forwarding messages to the hub.
     /// </summary>
     public static PlaywrightEventForwarder Attach(IPage page, HubClient client, string browserId,
         Options? options = null)
@@ -183,24 +201,24 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         _onRequestFailed = null;
     }
 
-    public void Dispose()
+    /// <summary>
+    ///     Options controlling which events are forwarded.
+    /// </summary>
+    public sealed class Options
     {
-        Detach();
-        GC.SuppressFinalize(this);
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        Detach();
-        GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
+        public bool Console { get; init; } = true;
+        public bool PageError { get; init; } = true;
+        public bool Request { get; init; } = true;
+        public bool Response { get; init; } = true;
+        public bool RequestFinished { get; init; } = false;
+        public bool RequestFailed { get; init; } = true;
     }
 }
 
 public static class PlaywrightEventForwarderExtensions
 {
     /// <summary>
-    /// Convenience extension to attach forwarding to a page.
+    ///     Convenience extension to attach forwarding to a page.
     /// </summary>
     public static PlaywrightEventForwarder ForwardApiLogs(this IPage page, HubClient client, string browserId,
         PlaywrightEventForwarder.Options? options = null)

@@ -1,0 +1,35 @@
+/* Minimal overrides for Material theme used by Playwright Grid docs */
+:root {
+  /* Brand-ish colors (tweak as needed) */
+  --md-primary-fg-color: #2563eb; /* blue-600 */
+  --md-accent-fg-color: #22c55e;  /* green-500 */
+}
+
+/* Typography */
+.md-typeset {
+  -webkit-font-smoothing: antialiased;
+}
+.md-typeset h1, .md-typeset h2, .md-typeset h3 {
+  letter-spacing: 0.2px;
+}
+.md-typeset p {
+  margin: 0.5em 0 0.9em;
+}
+
+/* Inline code */
+.md-typeset :not(pre) > code {
+  padding: 0.1em 0.25em;
+  border-radius: 0.25rem;
+  white-space: break-spaces;
+}
+
+/* Code blocks */
+.md-typeset pre {
+  margin: 0.75rem 0;
+}
+.md-typeset pre > code {
+  display: block;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  white-space: pre-wrap; /* wrap long lines */
+}

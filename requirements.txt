@@ -1,0 +1,7 @@
+# Python dependencies for documentation build and CI caching
+# CI uses actions/setup-python@v5 with cache: pip.
+# mkdocs.yml references the Material theme and multiple pymdownx extensions.
+mkdocs>=1.5
+mkdocs-material>=9.5
+pymdown-extensions>=10.0
+mkdocs-exclude>=1.0.2

@@ -14,7 +14,7 @@
     <ProjectReference Include="..\worker\WorkerService.csproj"/>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj" />
-    <ProjectReference Include="..\hub\PlaywrightHub.csproj" />
+    <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj"/>
+    <ProjectReference Include="..\hub\PlaywrightHub.csproj"/>
   </ItemGroup>
 </Project>

@@ -1,7 +1,25 @@
-using System.IO;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.OpenApi.Models;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
@@ -19,14 +37,14 @@ using StackExchange.Redis;
 namespace PlaywrightHub.Services;
 
 /// <summary>
-/// Responsible for initializing and running the PlaywrightHub service,
-/// including setting up logging, Redis connections, hosted services,
-/// and ASP.NET Core application settings.
+///     Responsible for initializing and running the PlaywrightHub service,
+///     including setting up logging, Redis connections, hosted services,
+///     and ASP.NET Core application settings.
 /// </summary>
 public static class HubServiceRunner
 {
     /// <summary>
-    /// Runs the Playwright Hub service with the specified configuration and services.
+    ///     Runs the Playwright Hub service with the specified configuration and services.
     /// </summary>
     /// <param name="args">An array of command-line arguments for configuring the application.</param>
     /// <returns>A task representing the asynchronous operation for running the service.</returns>
@@ -43,16 +61,17 @@ public static class HubServiceRunner
         var hubServiceName = "playwright-hub";
         var hubServiceVersion = typeof(HubServiceRunner).Assembly.GetName().Version?.ToString() ?? "0.0.0";
         var enableOtlp = string.Equals(builder.Configuration["ENABLE_OTLP"], "1", StringComparison.OrdinalIgnoreCase);
-        var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1", StringComparison.OrdinalIgnoreCase);
+        var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1",
+            StringComparison.OrdinalIgnoreCase);
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
         var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc";
 
-        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
-            .AddService(serviceName: hubServiceName, serviceVersion: hubServiceVersion);
+        var resourceBuilder = ResourceBuilder.CreateDefault()
+            .AddService(hubServiceName, serviceVersion: hubServiceVersion);
 
 
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(rb => rb.AddService(serviceName: hubServiceName, serviceVersion: hubServiceVersion))
+            .ConfigureResource(rb => rb.AddService(hubServiceName, serviceVersion: hubServiceVersion))
             .WithTracing(t =>
             {
                 t.SetResourceBuilder(resourceBuilder);
@@ -64,8 +83,8 @@ public static class HubServiceRunner
                     {
                         o.Endpoint = new Uri(otlpEndpoint);
                         o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
-                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
-                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                            ? OtlpExportProtocol.HttpProtobuf
+                            : OtlpExportProtocol.Grpc;
                     });
                 }
             })
@@ -80,8 +99,8 @@ public static class HubServiceRunner
                     {
                         o.Endpoint = new Uri(otlpEndpoint);
                         o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
-                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
-                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                            ? OtlpExportProtocol.HttpProtobuf
+                            : OtlpExportProtocol.Grpc;
                     });
                 }
             });
@@ -128,27 +147,26 @@ public static class HubServiceRunner
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
-            c.SwaggerDoc("v1", new OpenApiInfo
-            {
-                Title = "Playwright Grid Hub API",
-                Version = "v1",
-                Description = "Minimal API surface for borrowing and returning sessions."
-            });
+            c.SwaggerDoc("v1",
+                new OpenApiInfo
+                {
+                    Title = "Playwright Grid Hub API",
+                    Version = "v1",
+                    Description = "Minimal API surface for borrowing and returning sessions."
+                });
 
             var scheme = new OpenApiSecurityScheme
             {
                 Name = "x-hub-secret",
                 In = ParameterLocation.Header,
                 Type = SecuritySchemeType.ApiKey,
-                Description = "Shared secret header required for most endpoints (HUB_RUNNER_SECRET for runners, HUB_NODE_SECRET for nodes).",
+                Description =
+                    "Shared secret header required for most endpoints (HUB_RUNNER_SECRET for runners, HUB_NODE_SECRET for nodes).",
                 Reference = new OpenApiReference { Id = "HubSecret", Type = ReferenceType.SecurityScheme }
             };
 
             c.AddSecurityDefinition("HubSecret", scheme);
-            c.AddSecurityRequirement(new OpenApiSecurityRequirement
-            {
-                { scheme, Array.Empty<string>() }
-            });
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement { { scheme, Array.Empty<string>() } });
         });
 
         var app = builder.Build();
@@ -188,7 +206,7 @@ public static class HubServiceRunner
 
                 var status = context.Response.StatusCode;
                 buffer.Position = 0;
-                string existingBody = string.Empty;
+                var existingBody = string.Empty;
                 if (buffer.Length > 0)
                 {
                     using var reader = new StreamReader(buffer, leaveOpen: true);
@@ -201,8 +219,8 @@ public static class HubServiceRunner
                 if (status >= 400 && !isProblem)
                 {
                     // Build ProblemDetails with reason phrase and prior content as detail if present
-                    var title = Microsoft.AspNetCore.WebUtilities.ReasonPhrases.GetReasonPhrase(status) ?? "Error";
-                    var pd = new Microsoft.AspNetCore.Mvc.ProblemDetails
+                    var title = ReasonPhrases.GetReasonPhrase(status) ?? "Error";
+                    var pd = new ProblemDetails
                     {
                         Status = status,
                         Title = title,
@@ -216,7 +234,7 @@ public static class HubServiceRunner
 
                     // Replace body with ProblemDetails JSON
                     buffer.SetLength(0);
-                    await System.Text.Json.JsonSerializer.SerializeAsync(buffer, pd);
+                    await JsonSerializer.SerializeAsync(buffer, pd);
                     buffer.Position = 0;
                 }
 
@@ -232,7 +250,8 @@ public static class HubServiceRunner
         app.UseHttpMetrics();
 
         // Swagger middleware (enabled in Development or when HUB_SWAGGER=1)
-        var enableSwagger = app.Environment.IsDevelopment() || string.Equals(app.Configuration["HUB_SWAGGER"], "1", StringComparison.OrdinalIgnoreCase);
+        var enableSwagger = app.Environment.IsDevelopment() ||
+                            string.Equals(app.Configuration["HUB_SWAGGER"], "1", StringComparison.OrdinalIgnoreCase);
         if (enableSwagger)
         {
             app.UseSwagger();

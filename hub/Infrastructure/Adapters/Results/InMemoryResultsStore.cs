@@ -1,3 +1,21 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Collections.Concurrent;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
@@ -5,18 +23,18 @@ using PlaywrightHub.Application.Ports;
 namespace PlaywrightHub.Infrastructure.Adapters.Results;
 
 /// <summary>
-/// Default in-memory implementation of IResultsStore used by the Hub to keep
-/// transient run summaries, command logs, and test cases. This store is suitable
-/// for development and local testing: data lives only in the Hub process memory,
-/// is capped (e.g., last 5000 commands per run), and is lost on hub restart or
-/// scale-out. A durable adapter (e.g., Redis/DB) can replace this via DI.
+///     Default in-memory implementation of IResultsStore used by the Hub to keep
+///     transient run summaries, command logs, and test cases. This store is suitable
+///     for development and local testing: data lives only in the Hub process memory,
+///     is capped (e.g., last 5000 commands per run), and is lost on hub restart or
+///     scale-out. A durable adapter (e.g., Redis/DB) can replace this via DI.
 /// </summary>
 public sealed class InMemoryResultsStore : IResultsStore
 {
-    private readonly ConcurrentDictionary<string, ResultRunSummaryDto> _runs = new(StringComparer.OrdinalIgnoreCase);
-
     private readonly ConcurrentDictionary<string, ConcurrentQueue<CommandLogEventDto>> _cmd =
         new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ConcurrentDictionary<string, ResultRunSummaryDto> _runs = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ResultTestCaseDto>> _tests =
         new(StringComparer.OrdinalIgnoreCase);

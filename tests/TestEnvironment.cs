@@ -1,12 +1,25 @@
-using System;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Diagnostics;
-using System.IO;
 using System.IO.Pipes;
-using System.Linq;
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
@@ -18,11 +31,11 @@ namespace GridTests;
 [SetUpFixture]
 public sealed class TestEnvironment
 {
-    private TestcontainersContainer _redis;
     private TestcontainersContainer _hub;
+    private IDockerNetwork _network;
+    private TestcontainersContainer _redis;
     private TestcontainersContainer _workerChromium;
     private TestcontainersContainer _workerFxWk;
-    private IDockerNetwork _network;
 
     [OneTimeSetUp]
     public async Task GlobalSetup()
@@ -611,26 +624,24 @@ public sealed class TestEnvironment
 
                 return false;
             }
-            else
+
+            const string defaultSock = "/var/run/docker.sock";
+            if (File.Exists(defaultSock))
             {
-                const string defaultSock = "/var/run/docker.sock";
-                if (File.Exists(defaultSock))
-                {
-                    return true;
-                }
-
-                if (CanConnectTcp("127.0.0.1", 2375, TimeSpan.FromMilliseconds(150)))
-                {
-                    return true;
-                }
-
-                if (CanConnectTcp("127.0.0.1", 2376, TimeSpan.FromMilliseconds(150)))
-                {
-                    return true;
-                }
-
-                return false;
+                return true;
             }
+
+            if (CanConnectTcp("127.0.0.1", 2375, TimeSpan.FromMilliseconds(150)))
+            {
+                return true;
+            }
+
+            if (CanConnectTcp("127.0.0.1", 2376, TimeSpan.FromMilliseconds(150)))
+            {
+                return true;
+            }
+
+            return false;
         }
         catch
         {
@@ -689,7 +700,8 @@ public sealed class TestEnvironment
                || v.Equals("on", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task EnsureImageAsync(string imageName, string contextDir, string dockerfilePath, TextWriter log, bool forceBuild)
+    private static async Task EnsureImageAsync(string imageName, string contextDir, string dockerfilePath,
+        TextWriter log, bool forceBuild)
     {
         var docker = OperatingSystem.IsWindows() ? "docker.exe" : "docker";
         try
@@ -698,6 +710,7 @@ public sealed class TestEnvironment
             {
                 throw new DirectoryNotFoundException($"Build context directory not found: {contextDir}");
             }
+
             if (!File.Exists(dockerfilePath))
             {
                 throw new FileNotFoundException($"Dockerfile not found: {dockerfilePath}");
@@ -715,9 +728,11 @@ public sealed class TestEnvironment
 
             var quotedContext = contextDir.Contains(' ') ? $"\"{contextDir}\"" : contextDir;
             var quotedDockerfile = dockerfilePath.Contains(' ') ? $"\"{dockerfilePath}\"" : dockerfilePath;
-            await log.WriteLineAsync($"[GridTests] Building image {imageName} with {dockerfilePath} (context {contextDir})...");
+            await log.WriteLineAsync(
+                $"[GridTests] Building image {imageName} with {dockerfilePath} (context {contextDir})...");
             var (buildCode, buildOut, buildErr) =
-                await RunCommandAsync(docker, $"build -t {imageName} -f {quotedDockerfile} {quotedContext}", 60 * 60 * 1000);
+                await RunCommandAsync(docker, $"build -t {imageName} -f {quotedDockerfile} {quotedContext}",
+                    60 * 60 * 1000);
             if (buildCode != 0)
             {
                 await log.WriteLineAsync(
@@ -770,10 +785,10 @@ public sealed class TestEnvironment
     // Stream adapter to forward container stdout/stderr to NUnit's TestContext.Progress.
     private sealed class ProgressStream(TextWriter writer, string prefix = "") : Stream
     {
-        private readonly TextWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
-        private readonly string _prefix = prefix ?? string.Empty;
         private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
         private readonly object _gate = new();
+        private readonly string _prefix = prefix ?? string.Empty;
+        private readonly TextWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
 
         public override bool CanRead => false;
         public override bool CanSeek => false;

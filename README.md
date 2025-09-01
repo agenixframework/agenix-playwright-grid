@@ -12,7 +12,8 @@ What you get
 
 - Flexible, ordered label keys for routing capacity across apps, browsers, envs, regions, OS, channels, etc.
 - Pre‑warmed pools per label for low‑latency borrows.
-- Configurable matching: exact, trailing‑segment fallback, prefix expansion, optional wildcards (see docs/Label-Matching.md).
+- Configurable matching: exact, trailing‑segment fallback, prefix expansion, optional wildcards (see
+  docs/Label-Matching.md).
 - Simple HTTP APIs for borrow/return; secure via shared secrets.
 - Built‑in metrics (Prometheus) and dashboards (Grafana provisioning).
 - See docs/Metrics-and-Grafana.md for a comprehensive metrics and Grafana guide.
@@ -49,7 +50,8 @@ Quickstart
 Label schema (routing keys)
 Labels are ordered, `:`‑separated segments. Keep `Browser` second for consistent routing and metrics.
 
-See also: [Session distribution across workers](#session-distribution) for how capacity is aggregated across workers. For detailed matching strategy, see docs/Label-Matching.md. For a deep dive, see docs/distribution.md.
+See also: [Session distribution across workers](#session-distribution) for how capacity is aggregated across workers.
+For detailed matching strategy, see docs/Label-Matching.md. For a deep dive, see docs/distribution.md.
 
 - 3‑part (baseline): `App:Browser:Env`
 - 4‑part: `App:Browser:Env:Region`
@@ -76,12 +78,15 @@ Each worker advertises capacity as: `labelKey=count` comma‑separated.
     - Channels/headless mix: `AppB:Chromium:UAT:stable:headless=2,AppB:Chromium:UAT:beta:headed=1`
 
 Borrowing and matching (Hub)
-For the full label matching strategy (exact → trailing fallback → prefix expansion → optional wildcards) and configuration knobs, see docs/Label-Matching.md.
+For the full label matching strategy (exact → trailing fallback → prefix expansion → optional wildcards) and
+configuration knobs, see docs/Label-Matching.md.
 
 <a id="session-distribution"></a>
+
 ## Session distribution across workers
 
-- Borrows are distributed across workers that advertise capacity for the matched label. Aggregate capacity is the sum across workers.
+- Borrows are distributed across workers that advertise capacity for the matched label. Aggregate capacity is the sum
+  across workers.
 - A single borrowed session is pinned to the selected worker; it does not move during the session.
 
 See docs/distribution.md for details on how sessions are spread across workers.
@@ -212,6 +217,7 @@ context: ./worker
 args:
 PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
 environment:
+
 - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
 - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox
 
@@ -255,12 +261,14 @@ Run with published images (GHCR)
 If you don't want to build locally, you can run the stack against images published to GitHub Container Registry.
 
 Prereqs
+
 - If images are private: docker login ghcr.io
 
 Environment variables (can also be placed in a .env file at repo root)
+
 - GHCR_OWNER = your GitHub org or username (required)
-- GHCR_REPO  = agenix-playwright-grid (defaults to this repo name if not set)
-- IMAGE_TAG  = latest, or a specific version produced by CI (e.g., 1.2.3)
+- GHCR_REPO = agenix-playwright-grid (defaults to this repo name if not set)
+- IMAGE_TAG = latest, or a specific version produced by CI (e.g., 1.2.3)
 
 Start the stack using the images override file
 
@@ -273,7 +281,11 @@ Start the stack using the images override file
     docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
 
 Notes
-- The override file disables local builds and points hub/worker/dashboard to ghcr.io/${GHCR_OWNER}/${GHCR_REPO}-<service>:${IMAGE_TAG}.
+
+- The override file disables local builds and points hub/worker/dashboard to ghcr.io/${GHCR_OWNER}/$
+  {GHCR_REPO}-<service>:${IMAGE_TAG}.
 - Available services: -hub, -worker, -dashboard. Redis/Prometheus/Grafana already use public images.
 - CI pushes multi-arch images (linux/amd64, linux/arm64) and tags both ${IMAGE_TAG} (e.g., 1.2.3) and latest.
-- To scale workers, either duplicate worker sections/ports in docker-compose.yml or use: docker compose up -d --scale worker1=2 (when using a generalized worker service). In this repo workers are declared as worker1/2/3; adjust POOL_CONFIG and ports accordingly.
+- To scale workers, either duplicate worker sections/ports in docker-compose.yml or use: docker compose up -d --scale
+  worker1=2 (when using a generalized worker service). In this repo workers are declared as worker1/2/3; adjust
+  POOL_CONFIG and ports accordingly.

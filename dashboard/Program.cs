@@ -1,16 +1,26 @@
-using System;
-using System.Linq;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
+using System.Reflection;
 using Dashboard;
 using Dashboard.Application.Ports;
-using Dashboard.Infrastructure.Adapters.SignalR;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -25,17 +35,18 @@ builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 
 // OpenTelemetry setup (env-driven exporters)
 var dashboardServiceName = "playwright-dashboard";
-var dashboardServiceVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
+var dashboardServiceVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
 var enableOtlp = string.Equals(builder.Configuration["ENABLE_OTLP"], "1", StringComparison.OrdinalIgnoreCase);
-var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1", StringComparison.OrdinalIgnoreCase);
+var enablePromOtel =
+    string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1", StringComparison.OrdinalIgnoreCase);
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
 var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc";
 
-var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
-    .AddService(serviceName: dashboardServiceName, serviceVersion: dashboardServiceVersion);
+var resourceBuilder = ResourceBuilder.CreateDefault()
+    .AddService(dashboardServiceName, serviceVersion: dashboardServiceVersion);
 
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(rb => rb.AddService(serviceName: dashboardServiceName, serviceVersion: dashboardServiceVersion))
+    .ConfigureResource(rb => rb.AddService(dashboardServiceName, serviceVersion: dashboardServiceVersion))
     .WithTracing(t =>
     {
         t.SetResourceBuilder(resourceBuilder);
@@ -47,8 +58,8 @@ builder.Services.AddOpenTelemetry()
             {
                 o.Endpoint = new Uri(otlpEndpoint);
                 o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
-                    ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
-                    : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                    ? OtlpExportProtocol.HttpProtobuf
+                    : OtlpExportProtocol.Grpc;
             });
         }
     })
@@ -63,8 +74,8 @@ builder.Services.AddOpenTelemetry()
             {
                 o.Endpoint = new Uri(otlpEndpoint);
                 o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
-                    ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
-                    : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                    ? OtlpExportProtocol.HttpProtobuf
+                    : OtlpExportProtocol.Grpc;
             });
         }
     });

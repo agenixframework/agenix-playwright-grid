@@ -1,4 +1,24 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Net.WebSockets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Agenix.PlaywrightGrid.Domain;
@@ -14,12 +34,12 @@ public sealed class PoolManager(
     IMetricsPort metrics,
     ISidecarLauncher sidecarLauncher)
 {
+    // Tracks active client WebSocket connections per browserId to prevent recycling in-use slots
+    private readonly ConcurrentDictionary<string, int> _activeWs = new(StringComparer.OrdinalIgnoreCase);
+
     // labelKey -> (browserId -> Slot)
     public ConcurrentDictionary<string, ConcurrentDictionary<string, Slot>> Pools { get; } =
         new(StringComparer.OrdinalIgnoreCase);
-
-    // Tracks active client WebSocket connections per browserId to prevent recycling in-use slots
-    private readonly ConcurrentDictionary<string, int> _activeWs = new(StringComparer.OrdinalIgnoreCase);
 
     public void MarkConnectionStart(string browserId)
     {
@@ -50,7 +70,7 @@ public sealed class PoolManager(
         return await sidecarLauncher.StartAsync(browserType);
     }
 
-    private static int SafePid(System.Diagnostics.Process proc)
+    private static int SafePid(Process proc)
     {
         try { return proc.Id; }
         catch { return 0; }
@@ -78,6 +98,7 @@ public sealed class PoolManager(
             var parts = labelKey.Split(':', StringSplitOptions.TrimEntries);
             browserType = NormalizeBrowser(parts.Length >= 2 ? parts[1] : "Chromium");
         }
+
         var availableKey = $"available:{labelKey}";
 
         // Local helper: validate that the internal WS endpoint accepts a WebSocket handshake
@@ -85,16 +106,16 @@ public sealed class PoolManager(
         {
             try
             {
-                using var cws = new System.Net.WebSockets.ClientWebSocket();
+                using var cws = new ClientWebSocket();
                 cws.Options.KeepAliveInterval = TimeSpan.FromSeconds(10);
                 using var cts = new CancellationTokenSource(timeout);
                 await cws.ConnectAsync(new Uri(wsUrl), cts.Token);
-                var ok = cws.State == System.Net.WebSockets.WebSocketState.Open;
+                var ok = cws.State == WebSocketState.Open;
                 try
                 {
                     if (ok)
                     {
-                        await cws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "ok",
+                        await cws.CloseAsync(WebSocketCloseStatus.NormalClosure, "ok",
                             CancellationToken.None);
                     }
                 }
@@ -230,12 +251,12 @@ public sealed class PoolManager(
                 browserId = id,
                 webSocketEndpoint = wsPublic,
                 browserType,
-                browserVersion = res.browserVersion,
+                res.browserVersion,
                 args = argsEnv,
                 labels = options.Labels.ToDictionary(k => k.Key, v => v.Value),
                 isContainer,
                 containerId,
-                workerPid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                workerPid = Process.GetCurrentProcess().Id,
                 sidecarPid = SafePid(res.proc)
             });
             await db.ListRightPushAsync(availableKey, item);
@@ -297,16 +318,16 @@ public sealed class PoolManager(
                 {
                     try
                     {
-                        using var cws = new System.Net.WebSockets.ClientWebSocket();
+                        using var cws = new ClientWebSocket();
                         cws.Options.KeepAliveInterval = TimeSpan.FromSeconds(10);
                         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                         await cws.ConnectAsync(new Uri(res.ws), cts.Token);
-                        validated = cws.State == System.Net.WebSockets.WebSocketState.Open;
+                        validated = cws.State == WebSocketState.Open;
                         try
                         {
                             if (validated)
                             {
-                                await cws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "ok",
+                                await cws.CloseAsync(WebSocketCloseStatus.NormalClosure, "ok",
                                     CancellationToken.None);
                             }
                         }
@@ -410,12 +431,12 @@ public sealed class PoolManager(
                 browserId = newId,
                 webSocketEndpoint = wsPublic,
                 browserType,
-                browserVersion = res.browserVersion,
+                res.browserVersion,
                 args = argsEnv,
                 labels = options.Labels.ToDictionary(k => k.Key, v => v.Value),
                 isContainer,
                 containerId,
-                workerPid = System.Diagnostics.Process.GetCurrentProcess().Id,
+                workerPid = Process.GetCurrentProcess().Id,
                 sidecarPid = SafePid(res.proc)
             });
             await db.ListRightPushAsync(availableKey, item);
@@ -585,7 +606,7 @@ public sealed class PoolManager(
                             browserId = newId,
                             webSocketEndpoint = wsPublic,
                             browserType = slot.BrowserType,
-                            browserVersion = res.browserVersion,
+                            res.browserVersion,
                             labels = options.Labels.ToDictionary(k => k.Key, v => v.Value)
                         });
                         await db.ListRightPushAsync(availableKey, item);
