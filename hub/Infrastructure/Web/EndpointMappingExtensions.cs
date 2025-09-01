@@ -190,6 +190,10 @@ internal static class EndpointCapacityQueue
 
 public static class EndpointMappingExtensions
 {
+    private static long _redisBreakerUntilTicks;
+    private static int _redisConsecutiveFailures;
+    private static volatile bool _acceptingBorrows = true;
+
     public static void MapHubEndpoints(this WebApplication app)
     {
         var config = app.Configuration;
@@ -211,6 +215,13 @@ public static class EndpointMappingExtensions
         var mux = services.GetRequiredService<IConnectionMultiplexer>();
         var resultsStore = services.GetRequiredService<IResultsStore>();
         var resultsHubCtx = services.GetRequiredService<IHubContext<ResultsHub, IResultsClient>>();
+
+        // Graceful shutdown: stop accepting new borrow requests when application is stopping
+        app.Lifetime.ApplicationStopping.Register(() =>
+        {
+            _acceptingBorrows = false;
+            try { Console.WriteLine("[hub] ApplicationStopping: stop accepting new borrows"); } catch { }
+        });
 
         var hubRunnerSecret = config["HUB_RUNNER_SECRET"] ?? "runner-secret";
         var hubNodeSecret = config["HUB_NODE_SECRET"] ?? "node-secret";
@@ -418,6 +429,14 @@ return nil
                     catch { }
 
                     return Results.Unauthorized();
+                }
+
+                // During graceful shutdown, deny new borrows with 503
+                if (!_acceptingBorrows)
+                {
+                    try { req.HttpContext.Response.Headers.Append("Retry-After", "30"); } catch { }
+                    try { borrowOutcomes.WithLabels("unknown", "denied").Inc(); } catch { }
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
                 }
 
                 var body = await req.ReadFromJsonAsync<Dictionary<string, string>>() ??
@@ -2230,6 +2249,63 @@ return nil
 
         app.MapGet("/nodes", () => Results.Ok(db.SetMembers("nodes").Select(x => x.ToString())));
         app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+        app.MapGet("/health/ready", async () =>
+        {
+            // During graceful shutdown, report not ready
+            if (!_acceptingBorrows)
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+            try
+            {
+                var timeoutMs = int.TryParse(config["REDIS_HEALTH_TIMEOUT_MS"], out var ms) ? Math.Max(100, ms) : 1000;
+                var breakerThreshold = int.TryParse(config["REDIS_BREAKER_THRESHOLD"], out var th) ? Math.Max(1, th) : 3;
+                var breakerCooldownMs = int.TryParse(config["REDIS_BREAKER_COOLDOWN_MS"], out var cd) ? Math.Max(500, cd) : 5000;
+
+                // Circuit breaker: if open, fail fast
+                var nowTicks = DateTime.UtcNow.Ticks;
+                if (System.Threading.Interlocked.Read(ref _redisBreakerUntilTicks) > nowTicks)
+                {
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+
+                if (!mux.IsConnected)
+                {
+                    var until = nowTicks + (long)breakerCooldownMs * TimeSpan.TicksPerMillisecond;
+                    System.Threading.Interlocked.Exchange(ref _redisBreakerUntilTicks, until);
+                    System.Threading.Interlocked.Exchange(ref _redisConsecutiveFailures, 0);
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var pingTask = db.PingAsync();
+                var completed = await Task.WhenAny(pingTask, Task.Delay(timeoutMs));
+                if (completed != pingTask)
+                {
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+                await pingTask; // propagate any errors
+                sw.Stop();
+
+                // Success: reset failure counters and breaker
+                System.Threading.Interlocked.Exchange(ref _redisConsecutiveFailures, 0);
+                System.Threading.Interlocked.Exchange(ref _redisBreakerUntilTicks, 0);
+                return Results.Ok(new { status = "ready", redis = new { pingMs = sw.ElapsedMilliseconds } });
+            }
+            catch
+            {
+                var threshold = System.Threading.Interlocked.Increment(ref _redisConsecutiveFailures);
+                var breakerThreshold = int.TryParse(config["REDIS_BREAKER_THRESHOLD"], out var th2) ? Math.Max(1, th2) : 3;
+                var breakerCooldownMs = int.TryParse(config["REDIS_BREAKER_COOLDOWN_MS"], out var cd2) ? Math.Max(500, cd2) : 5000;
+                if (threshold >= breakerThreshold)
+                {
+                    var until = DateTime.UtcNow.Ticks + (long)breakerCooldownMs * TimeSpan.TicksPerMillisecond;
+                    System.Threading.Interlocked.Exchange(ref _redisBreakerUntilTicks, until);
+                    System.Threading.Interlocked.Exchange(ref _redisConsecutiveFailures, 0);
+                }
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+        });
     }
 
     private static bool CheckSecret(HttpRequest req, string header, string expected)

@@ -16,12 +16,12 @@ The following is an ordered, actionable checklist covering architectural and cod
 10. [X] Introduce a capacity queue in Hub for pending borrows with timeout and fairness (per-label and per-run caps) to reduce thundering herd.
 11. [X] Implement node heartbeat/liveness tracker with configurable timeout; evict stale nodes and reclaim/expire orphaned sessions.
 12. [X] Add borrow TTL and auto-return on timeout; persist session state to Redis to survive Hub restarts.
-13. [ ] Harden Redis usage: resilience (timeouts, retries with jitter, circuit breaker), connection settings, and health checks integrated into readiness.
+13. [X] Harden Redis usage: resilience (timeouts, retries with jitter, circuit breaker), connection settings, and health checks integrated into readiness.
 14. [ ] Support secret rotation: accept multiple HUB_RUNNER_SECRET/HUB_NODE_SECRET values (comma-separated) and log deprecation windows.
 15. [ ] Redact secrets and PII in logs; ensure headers and sensitive values never appear in structured logs.
 16. [ ] Add rate limiting (per IP and per runner id) on Hub borrow/return to protect from abuse; return 429 with Retry-After.
 17. [ ] Add optional IP allowlist or token-based auth (e.g., PAT via header) for Hub API alongside shared secrets.
-18. [ ] Implement graceful shutdown: Hub stops accepting new borrows; Worker drains sessions and returns cleanly on SIGTERM.
+18. [X] Implement graceful shutdown: Hub stops accepting new borrows; Worker drains sessions and returns cleanly on SIGTERM.
 19. [ ] Enforce maximum WebSocket message size and idle timeouts in Worker; send periodic pings and close dead connections.
 20. [ ] Add backpressure controls in Worker WS proxy (bounded channels, drop policy, and metrics for drops).
 21. [ ] Strengthen Worker sidecar management: sidecar health endpoint, restart/backoff strategy, and clear error surfacing to Hub.
