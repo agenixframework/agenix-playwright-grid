@@ -4,6 +4,6 @@
     <RootNamespace>Agenix.PlaywrightGrid.Domain.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../Agenix.PlaywrightGrid.Domain/Agenix.PlaywrightGrid.Domain.csproj" />
+    <ProjectReference Include="../Agenix.PlaywrightGrid.Domain/Agenix.PlaywrightGrid.Domain.csproj"/>
   </ItemGroup>
 </Project>

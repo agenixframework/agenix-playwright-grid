@@ -10,9 +10,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin  
     restart: unless-stopped
 
   prometheus:
@@ -29,6 +26,8 @@ services:
       - "3000:3000"
     environment:
       - GF_LOG_LEVEL=debug
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - ./provisioning/datasources:/etc/grafana/provisioning/datasources
       - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
@@ -42,7 +41,7 @@ services:
       - "5100:5000"
     dns:
       - 1.1.1.1
-      - 8.8.8.8    
+      - 8.8.8.8
     environment:
       - REDIS_URL=redis:6379
       - HUB_NODE_SECRET=node-secret
@@ -112,8 +111,8 @@ services:
           condition: service_healthy
       shm_size: "1gb"
       restart: unless-stopped
-      
-      
+
+
   worker3:
     build:
       context: .
@@ -142,9 +141,9 @@ services:
       hub:
         condition: service_healthy
     shm_size: "1gb"
-    restart: unless-stopped  
-      
-      
+    restart: unless-stopped
+
+
   dashboard:
     build:
       context: .
@@ -162,5 +161,4 @@ services:
       timeout: 3s
       retries: 5
       start_period: 20s
-    
-  
+

@@ -81,3 +81,196 @@ The following is an ordered, actionable checklist covering architectural and cod
 75. [ ] Add guardrails for Redis key naming to avoid collisions; centralize key patterns with tests.
 76. [ ] Provide sample Grafana dashboards for new metrics (latency, queue, utilization, errors) and alerts.
 
+
+
+---
+
+#### Documentation — MkDocs (Material) Site Plan
+
+Goal: Publish docs/ as a polished documentation site using MkDocs with the Material theme, deployed to GitHub Pages via gh-pages.
+
+Scope:
+- Source directory: docs/
+- Styling: docs/assets/styles.css (small overrides)
+- Navigation: docs/index.md + existing Markdown pages
+- Deployment: GitHub Actions → gh-pages branch → GitHub Pages
+
+Tasks:
+1) Create MkDocs configuration
+- Add mkdocs.yml at repo root.
+- Set site_name, site_url, repo_url, docs_dir: docs.
+- Enable Material theme, common features, and wire extra_css: .assets/styles.css.
+- Define nav using current files (Borrow-TTL-and-Session-Persistence.md, Node-Liveness-and-Sweeper.md, tasks.md). 
+
+2) Prepare docs/index.md
+- Create a brief landing page with links to the key guides.
+- Keep relative links so the site works under /<repo>.
+
+3) Add custom CSS
+- Place docs/.assets/styles.css with minimal, tasteful overrides (typography, code blocks). Keep it small since Material already provides excellent defaults.
+
+4) Local preview docs
+- Install: pip install mkdocs-material.
+- Run locally: mkdocs serve and validate the site (nav, styling, internal links).
+
+5) GitHub Actions workflow for deploy
+- Add .github/workflows/docs.yml that:
+  - Triggers on changes to docs/** or mkdocs.yml.
+  - Builds with mkdocs build --strict.
+  - Publishes ./site to gh-pages using peaceiris/actions-gh-pages.
+
+6) Enable GitHub Pages
+- Settings → Pages → Deploy from a branch → gh-pages, folder “/”.
+- Verify the site URL and that assets (CSS, images) load correctly.
+
+7) Documentation hygiene
+- Ensure images (if any) live under docs/.assets/img/ and are referenced relatively.
+- Keep links relative (no hard-coded domain) to support forks and PR previews.
+- Add a short “Docs” blurb to README linking to the hosted site.
+
+8) Nice-to-have (post-MVP)
+- Enable search fine-tuning (Material search features are on by default).
+- Add dark/light palette tuning if desired.
+- Add redirects if you rename pages (mkdocs-redirects plugin).
+
+Acceptance criteria:
+- Visiting the GitHub Pages URL renders a Material-themed site with at least the following pages:
+  - Home (index)
+  - Borrow TTL & Session Persistence
+  - Node Liveness and Sweeper
+  - Tasks (this checklist)
+- nav in the left sidebar matches the configured order.
+- Extra CSS is applied (code blocks styled, minor typographic tweaks) without breaking Material.
+- The workflow rebuilds and deploys on every push to main that changes docs/** or mkdocs.yml.
+- Build is strict (fails on missing links or config errors).
+
+Operational notes:
+- To run locally:
+  - python -m pip install --upgrade pip
+  - pip install mkdocs-material
+  - mkdocs serve (preview at http://127.0.0.1:8000)
+- Keep CSS minimal; rely on Material for most styling.
+- If a custom domain is used, configure CNAME in gh-pages (actions-gh-pages supports cname: input).
+
+Templates (copy/paste and adjust):
+
+mkdocs.yml (repo root)
+```yml
+site_name: Playwright Grid Docs
+site_url: https://<your-user>.github.io/<repo>/
+repo_url: https://github.com/<your-user>/<repo>
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - content.code.copy
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: light blue
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: light blue
+
+extra_css:
+  - .assets/styles.css  # relative to docs_dir
+
+nav:
+  - Home: index.md
+  - Guides:
+      - Borrow TTL & Session Persistence: Borrow-TTL-and-Session-Persistence.md
+      - Node Liveness and Sweeper: Node-Liveness-and-Sweeper.md
+  - Project:
+      - Tasks: tasks.md
+```
+
+docs/index.md
+```md
+# Playwright Grid Documentation
+
+Explore the grid architecture, hub/worker behavior, and testing strategy.
+
+- [Borrow TTL & Session Persistence](Borrow-TTL-and-Session-Persistence.md)
+- [Node Liveness and Sweeper](Node-Liveness-and-Sweeper.md)
+- [Tasks](tasks.md)
+```
+
+docs/.assets/styles.css (minimal overrides)
+```css
+:root {
+  --pg-accent: #5b9cff;
+}
+
+.md-typeset a { text-decoration: none; }
+.md-typeset a:hover { text-decoration: underline; }
+
+/* Refine code block background and rounding */
+.md-typeset pre > code {
+  border-radius: 8px;
+}
+
+/* Optional: accent color for blockquotes */
+.md-typeset blockquote {
+  border-left: 0.25rem solid var(--pg-accent);
+}
+```
+
+.github/workflows/docs.yml
+```yml
+name: Deploy Docs (MkDocs)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install MkDocs + Material
+        run: |
+          python -m pip install --upgrade pip
+          pip install mkdocs-material
+
+      - name: Build site
+        run: mkdocs build --strict
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+```
+
+Checklist (for this section):
+- [ ] mkdocs.yml added and committed
+- [ ] docs/index.md created/updated
+- [ ] docs/.assets/styles.css added (or verified)
+- [ ] docs site builds locally (mkdocs build / serve)
+- [ ] GH Actions workflow merged to main
+- [ ] GitHub Pages configured to gh-pages
+- [ ] First deployment successful; site visually verified

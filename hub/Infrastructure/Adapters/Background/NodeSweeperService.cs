@@ -1,29 +1,45 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Globalization;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 using StackExchange.Redis;
 
 namespace PlaywrightHub.Infrastructure.Adapters.Background;
 
 // Background service that sweeps stale nodes and prunes stale available entries
 /// <summary>
-/// A background service responsible for sweeping stale nodes and pruning stale available entries
-/// in the Playwright Hub infrastructure.
+///     A background service responsible for sweeping stale nodes and pruning stale available entries
+///     in the Playwright Hub infrastructure.
 /// </summary>
 /// <remarks>
-/// This service periodically scans and validates node entries stored in Redis. Any stale or
-/// invalid nodes are removed as part of its operation. It uses configuration values
-/// to determine the node timeout and sweeper execution interval. Optionally, it can also
-/// remove expired nodes based on configuration settings. The service runs until explicitly
-/// cancelled.
+///     This service periodically scans and validates node entries stored in Redis. Any stale or
+///     invalid nodes are removed as part of its operation. It uses configuration values
+///     to determine the node timeout and sweeper execution interval. Optionally, it can also
+///     remove expired nodes based on configuration settings. The service runs until explicitly
+///     cancelled.
 /// </remarks>
 public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux, IConfiguration config)
     : BackgroundService
 {
     /// <summary>
-    /// Executes the main logic of the NodeSweeperService, which periodically scans and prunes
-    /// stale or expired node entries from the Redis database.
+    ///     Executes the main logic of the NodeSweeperService, which periodically scans and prunes
+    ///     stale or expired node entries from the Redis database.
     /// </summary>
     /// <param name="stoppingToken">A token that signals the task to stop execution.</param>
     /// <returns>A task that represents the asynchronous execution operation of the service.</returns>
@@ -153,7 +169,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
     }
 
     /// <summary>
-    /// Removes stale available entries associated with the specified node from the database.
+    ///     Removes stale available entries associated with the specified node from the database.
     /// </summary>
     /// <param name="nodeId">The unique identifier of the node whose stale available entries are to be pruned.</param>
     /// <returns>A task that represents the asynchronous pruning operation.</returns>
@@ -177,11 +193,13 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
     }
 
     /// <summary>
-    /// Checks if the specified node has available entries in the system.
+    ///     Checks if the specified node has available entries in the system.
     /// </summary>
     /// <param name="nodeId">The unique identifier of the node to check for available entries.</param>
-    /// <returns>A task that represents the asynchronous operation.
-    /// The task result contains a boolean indicating whether the node has available entries.</returns>
+    /// <returns>
+    ///     A task that represents the asynchronous operation.
+    ///     The task result contains a boolean indicating whether the node has available entries.
+    /// </returns>
     private async Task<bool> HasAvailableEntriesForNodeAsync(string nodeId)
     {
         var server = mux.GetServer(mux.GetEndPoints()[0]);
@@ -200,9 +218,9 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
     }
 
     /// <summary>
-    /// Removes orphaned in-use entries associated with the specified node from Redis and
-    /// clears lightweight browser mappings (browser_run:/browser_test:) when encountered.
-    /// This prevents capacity from being stuck when a worker disappears.
+    ///     Removes orphaned in-use entries associated with the specified node from Redis and
+    ///     clears lightweight browser mappings (browser_run:/browser_test:) when encountered.
+    ///     This prevents capacity from being stuck when a worker disappears.
     /// </summary>
     private async Task PruneInuseEntriesForNodeAsync(string nodeId)
     {
@@ -229,8 +247,11 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                             var browserId = bidEl.GetString();
                             if (!string.IsNullOrWhiteSpace(browserId))
                             {
-                                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); } catch { }
-                                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); } catch { }
+                                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); }
+                                catch { }
+
+                                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
+                                catch { }
                             }
                         }
                     }

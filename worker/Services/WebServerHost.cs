@@ -1,4 +1,27 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -11,10 +34,10 @@ namespace WorkerService.Services;
 
 public sealed class WebServerHost
 {
-    private readonly WorkerOptions _options;
-    private readonly IMetricsPort _metrics;
-    private readonly PoolManager _pool;
     private readonly IDatabase _db;
+    private readonly IMetricsPort _metrics;
+    private readonly WorkerOptions _options;
+    private readonly PoolManager _pool;
 
     public WebServerHost(WorkerOptions options, IMetricsPort metrics, PoolManager pool, IDatabase db)
     {
@@ -35,16 +58,18 @@ public sealed class WebServerHost
         var workerServiceName = "playwright-worker";
         var workerServiceVersion = typeof(WebServerHost).Assembly.GetName().Version?.ToString() ?? "0.0.0";
         var enableOtlp = string.Equals(builder.Configuration["ENABLE_OTLP"], "1", StringComparison.OrdinalIgnoreCase);
-        var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1", StringComparison.OrdinalIgnoreCase);
+        var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1",
+            StringComparison.OrdinalIgnoreCase);
         var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4317";
         var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc";
 
-        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
-            .AddService(serviceName: workerServiceName, serviceVersion: workerServiceVersion, serviceInstanceId: _options.NodeId);
+        var resourceBuilder = ResourceBuilder.CreateDefault()
+            .AddService(workerServiceName, serviceVersion: workerServiceVersion, serviceInstanceId: _options.NodeId);
 
 
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(rb => rb.AddService(serviceName: workerServiceName, serviceVersion: workerServiceVersion, serviceInstanceId: _options.NodeId))
+            .ConfigureResource(rb => rb.AddService(workerServiceName, serviceVersion: workerServiceVersion,
+                serviceInstanceId: _options.NodeId))
             .WithTracing(t =>
             {
                 t.SetResourceBuilder(resourceBuilder);
@@ -56,8 +81,8 @@ public sealed class WebServerHost
                     {
                         o.Endpoint = new Uri(otlpEndpoint);
                         o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
-                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
-                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                            ? OtlpExportProtocol.HttpProtobuf
+                            : OtlpExportProtocol.Grpc;
                     });
                 }
             })
@@ -72,8 +97,8 @@ public sealed class WebServerHost
                     {
                         o.Endpoint = new Uri(otlpEndpoint);
                         o.Protocol = otlpProtocol.Equals("http/protobuf", StringComparison.OrdinalIgnoreCase)
-                            ? OpenTelemetry.Exporter.OtlpExportProtocol.HttpProtobuf
-                            : OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+                            ? OtlpExportProtocol.HttpProtobuf
+                            : OtlpExportProtocol.Grpc;
                     });
                 }
             });
@@ -144,8 +169,8 @@ public sealed class WebServerHost
             }
 
             var body =
-                await req.ReadFromJsonAsync<System.Collections.Concurrent.ConcurrentDictionary<string, string>>() ??
-                new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+                await req.ReadFromJsonAsync<ConcurrentDictionary<string, string>>() ??
+                new ConcurrentDictionary<string, string>();
             if (!body.TryGetValue("browserId", out _))
             {
                 return Results.BadRequest();
@@ -177,7 +202,7 @@ public sealed class WebServerHost
             }
 
             var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (System.Collections.DictionaryEntry de in Environment.GetEnvironmentVariables())
+            foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
             {
                 var k = de.Key?.ToString();
                 if (string.IsNullOrWhiteSpace(k))
@@ -243,7 +268,10 @@ public sealed class WebServerHost
             try
             {
                 var v = await _db.StringGetAsync($"browser_run:{browserId}");
-                if (!v.IsNullOrEmpty) runId = v.ToString();
+                if (!v.IsNullOrEmpty)
+                {
+                    runId = v.ToString();
+                }
             }
             catch { }
 
@@ -275,15 +303,11 @@ public sealed class WebServerHost
                                     client.DefaultRequestHeaders.Remove("Correlation-Id");
                                     client.DefaultRequestHeaders.TryAddWithoutValidation("Correlation-Id", runId);
                                 }
-                                var payload = new
-                                {
-                                    text = message,
-                                    direction = direction,
-                                    ts = DateTime.UtcNow.ToString("O")
-                                };
-                                var json = System.Text.Json.JsonSerializer.Serialize(payload);
+
+                                var payload = new { text = message, direction, ts = DateTime.UtcNow.ToString("O") };
+                                var json = JsonSerializer.Serialize(payload);
                                 using var content =
-                                    new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                                    new StringContent(json, Encoding.UTF8, "application/json");
                                 await client.PostAsync(url, content, ctx.RequestAborted);
                             }
                             catch { }
@@ -309,7 +333,7 @@ public sealed class WebServerHost
             static async Task Pump(WebSocket src, WebSocket dst, CancellationToken ct, Action<string>? onTextMessage)
             {
                 var buffer = new byte[32 * 1024];
-                var sb = new System.Text.StringBuilder();
+                var sb = new StringBuilder();
                 while (true)
                 {
                     var result = await src.ReceiveAsync(buffer, ct);
@@ -334,7 +358,7 @@ public sealed class WebServerHost
                     {
                         try
                         {
-                            var chunk = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
+                            var chunk = Encoding.UTF8.GetString(buffer, 0, result.Count);
                             sb.Append(chunk);
                             if (result.EndOfMessage)
                             {

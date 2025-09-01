@@ -1,16 +1,32 @@
-using System.Collections.Generic;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
 
 namespace Agenix.PlaywrightGrid.Domain;
 
 /// <summary>
-/// Central label matching strategy service.
-/// Implements ordered resolution: exact → trailing fallback → prefix expansion → optional wildcards.
+///     Central label matching strategy service.
+///     Implements ordered resolution: exact → trailing fallback → prefix expansion → optional wildcards.
 /// </summary>
 public interface ILabelMatcher
 {
     /// <summary>
-    /// Attempts to find the best matching available label for the requested <see cref="LabelKey"/>.
-    /// Returns null when no match is found according to the configured <see cref="LabelMatchingOptions"/>.
+    ///     Attempts to find the best matching available label for the requested <see cref="LabelKey" />.
+    ///     Returns null when no match is found according to the configured <see cref="LabelMatchingOptions" />.
     /// </summary>
     LabelKey? TryMatch(LabelKey requested, IEnumerable<LabelKey> available);
 }

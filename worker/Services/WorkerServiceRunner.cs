@@ -1,3 +1,21 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Text.Json;
 using StackExchange.Redis;
 using WorkerService.Application.Ports;
@@ -24,9 +42,9 @@ public sealed class WorkerServiceRunner
 
             var diag = new
             {
-                HubUrl = options.HubUrl,
-                RedisUrl = options.RedisUrl,
-                NodeId = options.NodeId,
+                options.HubUrl,
+                options.RedisUrl,
+                options.NodeId,
                 NodeSecret = redact(Environment.GetEnvironmentVariable("NODE_SECRET")),
                 PublicWs =
                     new
@@ -36,11 +54,7 @@ public sealed class WorkerServiceRunner
                         Scheme = options.PublicWsScheme
                     },
                 Sidecar =
-                    new
-                    {
-                        Script = options.SidecarScript,
-                        ReadyTimeoutSeconds = options.SidecarReadyTimeoutSeconds
-                    },
+                    new { Script = options.SidecarScript, ReadyTimeoutSeconds = options.SidecarReadyTimeoutSeconds },
                 Labels = options.Labels.ToDictionary(k => k.Key, v => v.Value),
                 PoolConfig = options.PoolConfig.ToDictionary(k => k.Key, v => v.Value)
             };

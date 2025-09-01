@@ -1,0 +1,67 @@
+site_name: Playwright Grid
+site_url: https://agenixframework.github.io/agenix-playwright-grid/
+repo_url: https://github.com/agenixframework/agenix-playwright-grid
+
+# Source docs
+docs_dir: docs
+
+theme:
+  name: material
+  # Using docs-local assets for branding
+  logo: assets/logos/agenix-logo.svg
+  favicon: assets/logos/agenix-favicon.svg
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.tracking
+    - toc.integrate
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.tabs.link
+
+extra_css:
+  - assets/styles.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+  - exclude:
+      glob:
+        - README.md
+
+nav:
+  - Home: index.md
+  - Overview & Quick Start: docs-guide.md
+  - Test Client Usage: TestClient-Usage.md
+  - UI User Guide: ui-user-guide.md
+  - Label Matching: Label-Matching.md
+  - Capacity Queue: Capacity-Queue.md
+  - Borrow TTL & Session Persistence: Borrow-TTL-and-Session-Persistence.md
+  - Node Liveness and Sweeper: Node-Liveness-and-Sweeper.md
+  - "Playwright .NET pw:api": PlaywrightDotNet-pw-api.md
+  - Presentation: presentation-why-playwright-grid.md
+  - Metrics and Grafana: Metrics-and-Grafana.md
+  - Session Distribution: distribution.md
+  - Results Store Backends: results_store_backends.md
+  - Run Cleanup Service Configuration: run_cleanup_service_configuration.md
+  - Improvement Tasks: tasks.md

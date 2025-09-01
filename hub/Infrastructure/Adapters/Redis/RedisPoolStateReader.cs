@@ -1,3 +1,21 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Globalization;
 using System.Text.Json;
 using PlaywrightHub.Application.DTOs;
@@ -7,12 +25,12 @@ using StackExchange.Redis;
 namespace PlaywrightHub.Infrastructure.Adapters.Redis;
 
 /// <summary>
-/// Represents a service for reading aggregated pool state data from Redis.
+///     Represents a service for reading aggregated pool state data from Redis.
 /// </summary>
 /// <remarks>
-/// This class provides functionality to extract and aggregate pool-related state information
-/// such as available/in-use resources and worker nodes by interfacing with a Redis database.
-/// The information is collated from specific Redis key patterns representing pool and worker state.
+///     This class provides functionality to extract and aggregate pool-related state information
+///     such as available/in-use resources and worker nodes by interfacing with a Redis database.
+///     The information is collated from specific Redis key patterns representing pool and worker state.
 /// </remarks>
 public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mux) : IPoolStateReader
 {
@@ -20,7 +38,7 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
     /// The state is aggregated from Redis data and includes details such as available and in-use
     /// resources, node information, and per-worker counts.
     /// <returns>
-    /// A task that resolves to a PoolStateDto representing the aggregated pool state.
+    ///     A task that resolves to a PoolStateDto representing the aggregated pool state.
     /// </returns>
     public async Task<PoolStateDto> GetStateAsync()
     {

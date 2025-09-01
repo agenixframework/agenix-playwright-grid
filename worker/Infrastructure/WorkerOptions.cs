@@ -1,3 +1,21 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Agenix.PlaywrightGrid.Domain;
@@ -5,83 +23,83 @@ using Agenix.PlaywrightGrid.Domain;
 namespace WorkerService.Infrastructure;
 
 /// <summary>
-/// Strongly-typed options for the Worker service. Values are typically sourced from environment variables
-/// in containerized deployments; see <see cref="FromEnvironment"/> for parsing rules and defaults.
+///     Strongly-typed options for the Worker service. Values are typically sourced from environment variables
+///     in containerized deployments; see <see cref="FromEnvironment" /> for parsing rules and defaults.
 /// </summary>
 public sealed class WorkerOptions
 {
     /// <summary>
-    /// Hub base URL (e.g., http://hub:5000).
+    ///     Hub base URL (e.g., http://hub:5000).
     /// </summary>
     public string HubUrl { get; init; } = "http://hub:5000";
 
     /// <summary>
-    /// Redis connection endpoint (e.g., redis:6379).
+    ///     Redis connection endpoint (e.g., redis:6379).
     /// </summary>
     public string RedisUrl { get; init; } = "redis:6379";
 
     /// <summary>
-    /// Unique identifier of this worker node.
+    ///     Unique identifier of this worker node.
     /// </summary>
     public string NodeId { get; init; } = $"node-{Guid.NewGuid():N}";
 
     /// <summary>
-    /// Secret used by the worker to authenticate with the hub.
+    ///     Secret used by the worker to authenticate with the hub.
     /// </summary>
     public string NodeSecret { get; init; } = "node-secret";
 
     /// <summary>
-    /// Secondary secret used for node-to-node scenarios (if applicable).
+    ///     Secondary secret used for node-to-node scenarios (if applicable).
     /// </summary>
     public string NodeNodeSecret { get; init; } = "node-node-secret";
 
     /// <summary>
-    /// Raw POOL_CONFIG value (e.g., "AppA:Chromium:Staging=3,AppB:Firefox:UAT=2").
+    ///     Raw POOL_CONFIG value (e.g., "AppA:Chromium:Staging=3,AppB:Firefox:UAT=2").
     /// </summary>
     public string PoolConfigEnv { get; init; } = "AppA:Chromium:Staging=3";
 
     /// <summary>
-    /// Node.js executable path used by the Playwright sidecar.
+    ///     Node.js executable path used by the Playwright sidecar.
     /// </summary>
     public string NodeExe { get; init; } = "node";
 
     /// <summary>
-    /// Script file that launches the Playwright server sidecar.
+    ///     Script file that launches the Playwright server sidecar.
     /// </summary>
     public string SidecarScript { get; init; } = "launch_playwright_server.js";
 
     /// <summary>
-    /// Timeout in seconds to wait for the sidecar to become ready.
+    ///     Timeout in seconds to wait for the sidecar to become ready.
     /// </summary>
     public int SidecarReadyTimeoutSeconds { get; init; } = 60;
 
     /// <summary>
-    /// Public host name advertised for client WebSocket connections (optional).
+    ///     Public host name advertised for client WebSocket connections (optional).
     /// </summary>
     public string? PublicWsHost { get; init; }
 
     /// <summary>
-    /// Public port advertised for client WebSocket connections (optional).
+    ///     Public port advertised for client WebSocket connections (optional).
     /// </summary>
     public string? PublicWsPort { get; init; }
 
     /// <summary>
-    /// Public WebSocket scheme (ws or wss). Defaults to ws.
+    ///     Public WebSocket scheme (ws or wss). Defaults to ws.
     /// </summary>
     public string PublicWsScheme { get; init; } = "ws";
 
     /// <summary>
-    /// Arbitrary labels describing this node (e.g., region, os). Case-insensitive keys.
+    ///     Arbitrary labels describing this node (e.g., region, os). Case-insensitive keys.
     /// </summary>
     public ConcurrentDictionary<string, string> Labels { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Parsed pool configuration mapping label keys to desired capacity counts.
+    ///     Parsed pool configuration mapping label keys to desired capacity counts.
     /// </summary>
     public ConcurrentDictionary<string, int> PoolConfig { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Constructs WorkerOptions by parsing environment variables and applying defaults and clamping rules.
+    ///     Constructs WorkerOptions by parsing environment variables and applying defaults and clamping rules.
     /// </summary>
     public static WorkerOptions FromEnvironment()
     {
@@ -150,7 +168,7 @@ public sealed class WorkerOptions
     }
 
     /// <summary>
-    /// Attempts to detect the OS description inside containerized environments, falling back to runtime info.
+    ///     Attempts to detect the OS description inside containerized environments, falling back to runtime info.
     /// </summary>
     private static string DetectContainerOs()
     {

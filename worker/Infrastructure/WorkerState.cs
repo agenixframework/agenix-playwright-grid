@@ -1,19 +1,38 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 namespace WorkerService.Infrastructure;
 
 /// <summary>
-/// Represents the state of a worker in the system.
+///     Represents the state of a worker in the system.
 /// </summary>
 /// <remarks>
-/// The <see cref="WorkerState"/> class encapsulates configuration and state information
-/// for a worker, primarily obtained from an instance of <see cref="WorkerOptions"/>.
+///     The <see cref="WorkerState" /> class encapsulates configuration and state information
+///     for a worker, primarily obtained from an instance of <see cref="WorkerOptions" />.
 /// </remarks>
 public sealed class WorkerState(WorkerOptions options)
 {
     /// <summary>
-    /// Gets the worker options associated with the current worker state.
+    ///     Gets the worker options associated with the current worker state.
     /// </summary>
     /// <remarks>
-    /// The property encapsulates the configuration parameters and settings used by a worker, represented by an instance of <see cref="WorkerOptions"/>.
+    ///     The property encapsulates the configuration parameters and settings used by a worker, represented by an instance of
+    ///     <see cref="WorkerOptions" />.
     /// </remarks>
     public WorkerOptions Options { get; } = options;
 }

@@ -1,24 +1,45 @@
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Polly;
+using Polly.Retry;
 
 namespace Agenix.PlaywrightGrid.HubClient;
 
 /// <summary>
-/// Minimal HTTP client for connecting test runners to the Playwright Grid hub.
-/// Reads HUB_URL and HUB_RUNNER_SECRET from the environment by default, with constructor overrides.
+///     Minimal HTTP client for connecting test runners to the Playwright Grid hub.
+///     Reads HUB_URL and HUB_RUNNER_SECRET from the environment by default, with constructor overrides.
 /// </summary>
 public sealed class HubClient : IDisposable
 {
     private readonly HttpClient _http;
     private readonly bool _ownsClient;
-    private readonly Polly.Retry.AsyncRetryPolicy<HttpResponseMessage> _retry;
+    private readonly AsyncRetryPolicy<HttpResponseMessage> _retry;
 
     /// <summary>
-    /// Typed client constructor for DI: prefer registering via IServiceCollection.AddHttpClient<HubClient>().
-    /// Resilience (retries) is provided via per-call Polly policy to ensure safe re-sends for POST bodies.
+    ///     Typed client constructor for DI: prefer registering via IServiceCollection.AddHttpClient
+    ///     <HubClient>
+    ///         ().
+    ///         Resilience (retries) is provided via per-call Polly policy to ensure safe re-sends for POST bodies.
     /// </summary>
     public HubClient(HttpClient httpClient)
     {
@@ -34,7 +55,7 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Create a HubClient configured for the Grid hub.
+    ///     Create a HubClient configured for the Grid hub.
     /// </summary>
     /// <param name="hubUrl">Optional hub base URL. If null, uses env HUB_URL or http://localhost:5100.</param>
     /// <param name="runnerSecret">Optional secret header value. If null, uses env HUB_RUNNER_SECRET or runner-secret.</param>
@@ -94,8 +115,8 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Create a HubClient using IConfiguration via HubUrlProvider (env HUB_URL has precedence over config Hub:Url).
-    /// Throws if neither is configured.
+    ///     Create a HubClient using IConfiguration via HubUrlProvider (env HUB_URL has precedence over config Hub:Url).
+    ///     Throws if neither is configured.
     /// </summary>
     public HubClient(IConfiguration configuration, string? runnerSecret = null, HttpMessageHandler? handler = null,
         TimeSpan? timeout = null)
@@ -104,7 +125,7 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Releases all resources used by the HubClient instance.
+    ///     Releases all resources used by the HubClient instance.
     /// </summary>
     public void Dispose()
     {
@@ -115,9 +136,12 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Checks the health status of the Hub by sending a request to the /health endpoint.
+    ///     Checks the health status of the Hub by sending a request to the /health endpoint.
     /// </summary>
-    /// <returns>A boolean indicating whether the Hub is healthy (true if the /health endpoint returns a success status code, false otherwise).</returns>
+    /// <returns>
+    ///     A boolean indicating whether the Hub is healthy (true if the /health endpoint returns a success status code,
+    ///     false otherwise).
+    /// </returns>
     public async Task<bool> HealthAsync()
     {
         try
@@ -132,9 +156,9 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Sends a single Playwright API/protocol log line from the test runner to the hub for the given browserId.
-    /// Requires HUB_RUNNER_SECRET and that the browserId is already attributed to a run (BorrowAsync with runId).
-    /// Use the convenience overloads to omit the direction; they default to "runner".
+    ///     Sends a single Playwright API/protocol log line from the test runner to the hub for the given browserId.
+    ///     Requires HUB_RUNNER_SECRET and that the browserId is already attributed to a run (BorrowAsync with runId).
+    ///     Use the convenience overloads to omit the direction; they default to "runner".
     /// </summary>
     /// <param name="browserId">The hub-issued browser/session identifier.</param>
     /// <param name="text">The log line to send; empty/whitespace is ignored.</param>
@@ -169,7 +193,7 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Convenience overload: defaults direction to "runner".
+    ///     Convenience overload: defaults direction to "runner".
     /// </summary>
     public Task SendApiLogAsync(string browserId, string text)
     {
@@ -177,7 +201,7 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Convenience overload: defaults direction to "runner".
+    ///     Convenience overload: defaults direction to "runner".
     /// </summary>
     public Task SendApiLogAsync(string browserId, string text, DateTime? timestampUtc)
     {
@@ -185,8 +209,8 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Sends multiple Playwright API/protocol logs from the test runner in one batch.
-    /// This overload accepts IEnumerableand wraps each as an object with direction="runner".
+    ///     Sends multiple Playwright API/protocol logs from the test runner in one batch.
+    ///     This overload accepts IEnumerableand wraps each as an object with direction="runner".
     /// </summary>
     public async Task SendApiLogsAsync(string browserId, IEnumerable<string> texts)
     {
@@ -214,8 +238,8 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Requests a browser session from the hub for the provided label key.
-    /// Returns a tuple of browserId, wsEndpoint, labelKey, and browserType.
+    ///     Requests a browser session from the hub for the provided label key.
+    ///     Returns a tuple of browserId, wsEndpoint, labelKey, and browserType.
     /// </summary>
     /// <param name="labelKey">Label key describing the desired session capacity (e.g., App:Browser:Env).</param>
     /// <param name="runId">Optional run identifier to be attributed by the hub (sent as query runId).</param>
@@ -231,14 +255,12 @@ public sealed class HubClient : IDisposable
 
         var resp = await _retry.ExecuteAsync(() =>
         {
-            var req = new HttpRequestMessage(HttpMethod.Post, url)
-            {
-                Content = JsonContent.Create(body)
-            };
+            var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body) };
             if (!string.IsNullOrWhiteSpace(runId))
             {
                 req.Headers.TryAddWithoutValidation("Correlation-Id", runId);
             }
+
             return _http.SendAsync(req);
         });
 
@@ -270,7 +292,7 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    /// Returns a borrowed browser session to the hub.
+    ///     Returns a borrowed browser session to the hub.
     /// </summary>
     /// <param name="labelKey">The key associated with the browser's label.</param>
     /// <param name="browserId">The unique identifier of the borrowed browser session.</param>
@@ -285,14 +307,12 @@ public sealed class HubClient : IDisposable
             : $"/session/return?runId={WebUtility.UrlEncode(runId)}";
         var resp = await _retry.ExecuteAsync(() =>
         {
-            var req = new HttpRequestMessage(HttpMethod.Post, url)
-            {
-                Content = JsonContent.Create(body)
-            };
+            var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body) };
             if (!string.IsNullOrWhiteSpace(runId))
             {
                 req.Headers.TryAddWithoutValidation("Correlation-Id", runId);
             }
+
             return _http.SendAsync(req);
         });
         resp.EnsureSuccessStatusCode();

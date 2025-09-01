@@ -1,45 +1,29 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
 
 namespace Agenix.PlaywrightGrid.Domain;
 
 /// <summary>
-/// Value object representing a label key like "App:Chromium:UAT[:Region[:OS…]]".
-/// Provides parsing, validation and normalization to ensure consistent rules across components.
+///     Value object representing a label key like "App:Chromium:UAT[:Region[:OS…]]".
+///     Provides parsing, validation and normalization to ensure consistent rules across components.
 /// </summary>
 public sealed class LabelKey : IEquatable<LabelKey>
 {
-    /// <summary>
-    /// The original label key as provided by the caller (trimmed of surrounding whitespace).
-    /// </summary>
-    public string Original { get; }
-
-    /// <summary>
-    /// The normalized representation according to the supplied <see cref="LabelKeyParsingOptions"/>.
-    /// </summary>
-    public string Normalized { get; }
-
-    /// <summary>
-    /// The read-only list of label segments in order.
-    /// </summary>
-    public IReadOnlyList<string> Segments { get; }
-
-    /// <summary>
-    /// Convenience accessor for the first segment (App). Empty string if missing.
-    /// </summary>
-    public string App => Segments.Count > 0 ? Segments[0] : string.Empty;
-
-    /// <summary>
-    /// Convenience accessor for the second segment (Browser). Empty string if missing.
-    /// </summary>
-    public string Browser => Segments.Count > 1 ? Segments[1] : string.Empty;
-
-    /// <summary>
-    /// Convenience accessor for the third segment (Environment). Empty string if missing.
-    /// </summary>
-    public string Env => Segments.Count > 2 ? Segments[2] : string.Empty;
-
     private LabelKey(string original, string normalized, IReadOnlyList<string> segments)
     {
         Original = original;
@@ -48,25 +32,66 @@ public sealed class LabelKey : IEquatable<LabelKey>
     }
 
     /// <summary>
-    /// Returns the normalized label key string.
+    ///     The original label key as provided by the caller (trimmed of surrounding whitespace).
     /// </summary>
-    public override string ToString() => Normalized;
+    public string Original { get; }
 
     /// <summary>
-    /// Value-based equality comparing the normalized representation.
+    ///     The normalized representation according to the supplied <see cref="LabelKeyParsingOptions" />.
+    /// </summary>
+    public string Normalized { get; }
+
+    /// <summary>
+    ///     The read-only list of label segments in order.
+    /// </summary>
+    public IReadOnlyList<string> Segments { get; }
+
+    /// <summary>
+    ///     Convenience accessor for the first segment (App). Empty string if missing.
+    /// </summary>
+    public string App => Segments.Count > 0 ? Segments[0] : string.Empty;
+
+    /// <summary>
+    ///     Convenience accessor for the second segment (Browser). Empty string if missing.
+    /// </summary>
+    public string Browser => Segments.Count > 1 ? Segments[1] : string.Empty;
+
+    /// <summary>
+    ///     Convenience accessor for the third segment (Environment). Empty string if missing.
+    /// </summary>
+    public string Env => Segments.Count > 2 ? Segments[2] : string.Empty;
+
+    /// <summary>
+    ///     Value-based equality comparing the normalized representation.
     /// </summary>
     public bool Equals(LabelKey? other)
-        => other is not null && string.Equals(Normalized, other.Normalized, StringComparison.Ordinal);
-
-    /// <inheritdoc />
-    public override bool Equals(object? obj) => obj is LabelKey lk && Equals(lk);
-
-    /// <inheritdoc />
-    public override int GetHashCode() => Normalized.GetHashCode(StringComparison.Ordinal);
+    {
+        return other is not null && string.Equals(Normalized, other.Normalized, StringComparison.Ordinal);
+    }
 
     /// <summary>
-    /// Attempts to parse an input string into a <see cref="LabelKey"/> using the provided options.
-    /// Returns true when parsing and validation succeed; otherwise false.
+    ///     Returns the normalized label key string.
+    /// </summary>
+    public override string ToString()
+    {
+        return Normalized;
+    }
+
+    /// <inheritdoc />
+    public override bool Equals(object? obj)
+    {
+        return obj is LabelKey lk && Equals(lk);
+    }
+
+    /// <inheritdoc />
+    public override int GetHashCode()
+    {
+        return Normalized.GetHashCode(StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Attempts to parse an input string into a <see cref="LabelKey" /> using the provided options.
+    ///     Returns true when parsing and validation succeed; otherwise false.
     /// </summary>
     public static bool TryParse(string? input, out LabelKey? value, LabelKeyParsingOptions? options = null)
     {
@@ -74,10 +99,11 @@ public sealed class LabelKey : IEquatable<LabelKey>
     }
 
     /// <summary>
-    /// Attempts to parse an input string into a <see cref="LabelKey"/> using the provided options.
-    /// Provides a human-friendly error message describing the first validation failure.
+    ///     Attempts to parse an input string into a <see cref="LabelKey" /> using the provided options.
+    ///     Provides a human-friendly error message describing the first validation failure.
     /// </summary>
-    public static bool TryParseDetailed(string? input, out LabelKey? value, out string? error, LabelKeyParsingOptions? options = null)
+    public static bool TryParseDetailed(string? input, out LabelKey? value, out string? error,
+        LabelKeyParsingOptions? options = null)
     {
         value = null;
         error = null;
@@ -86,6 +112,7 @@ public sealed class LabelKey : IEquatable<LabelKey>
             error = "labelKey is null";
             return false;
         }
+
         options ??= LabelKeyParsingOptions.Default;
 
         var trimmed = input.Trim();
@@ -94,16 +121,19 @@ public sealed class LabelKey : IEquatable<LabelKey>
             error = "labelKey is empty";
             return false;
         }
+
         if (trimmed.StartsWith(':'))
         {
             error = "labelKey cannot start with ':'";
             return false;
         }
+
         if (trimmed.EndsWith(':'))
         {
             error = "labelKey cannot end with ':'";
             return false;
         }
+
         if (trimmed.Contains("::"))
         {
             error = "labelKey cannot contain empty segments ('::')";
@@ -117,6 +147,7 @@ public sealed class LabelKey : IEquatable<LabelKey>
             error = $"labelKey must have at least {options.MinSegments} segments";
             return false;
         }
+
         if (rawSegments.Length > options.MaxSegments)
         {
             error = $"labelKey must have at most {options.MaxSegments} segments";
@@ -133,6 +164,7 @@ public sealed class LabelKey : IEquatable<LabelKey>
                     error = "labelKey contains an empty segment";
                     return false;
                 }
+
                 if (s.IndexOfAny(fc) >= 0)
                 {
                     error = "labelKey contains forbidden characters (whitespace not allowed within segments)";
@@ -162,7 +194,9 @@ public sealed class LabelKey : IEquatable<LabelKey>
     }
 
     private static bool IsKnownBrowser(string s)
-        => string.Equals(s, "Chromium", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(s, "Firefox", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(s, "WebKit", StringComparison.OrdinalIgnoreCase);
+    {
+        return string.Equals(s, "Chromium", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(s, "Firefox", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(s, "WebKit", StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -1,15 +1,31 @@
-using System.Text.Json;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using StackExchange.Redis;
 
 namespace PlaywrightHub.Infrastructure.Adapters.Background;
 
 /// <summary>
-/// Background sweeper that auto-returns borrowed sessions whose TTL/lease has expired.
-/// Persists and consults session:* hashes to recover context after Hub restarts.
+///     Background sweeper that auto-returns borrowed sessions whose TTL/lease has expired.
+///     Persists and consults session:* hashes to recover context after Hub restarts.
 /// </summary>
-public sealed class BorrowTtlSweeperService(IDatabase db, IConnectionMultiplexer mux, IConfiguration config) : BackgroundService
+public sealed class BorrowTtlSweeperService(IDatabase db, IConnectionMultiplexer mux, IConfiguration config)
+    : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -42,7 +58,10 @@ return nil
             {
                 foreach (var key in server.Keys(pattern: "session:*"))
                 {
-                    if (stoppingToken.IsCancellationRequested) break;
+                    if (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
 
                     var sessionKey = key.ToString();
                     var browserId = sessionKey.Substring("session:".Length);
@@ -60,39 +79,57 @@ return nil
                         if (entries is null || entries.Length == 0)
                         {
                             // Nothing to do; clean stray session key
-                            try { await db.KeyDeleteAsync(sessionKey); } catch { }
+                            try { await db.KeyDeleteAsync(sessionKey); }
+                            catch { }
+
                             processed++;
                             continue;
                         }
+
                         string labelKey = entries.FirstOrDefault(e => e.Name == "labelKey").Value;
                         if (!string.IsNullOrWhiteSpace(labelKey))
                         {
                             var inuseKey = $"inuse:{labelKey}";
                             var availKey = $"available:{labelKey}";
-                            var res = await db.ScriptEvaluateAsync(luaReturn, new RedisKey[] { inuseKey, availKey }, new RedisValue[] { browserId });
+                            var res = await db.ScriptEvaluateAsync(luaReturn, new RedisKey[] { inuseKey, availKey },
+                                new RedisValue[] { browserId });
                             if (!res.IsNull)
                             {
                                 returned++;
                                 // cleanup mappings
-                                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); } catch { }
-                                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); } catch { }
-                                try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); } catch { }
-                                try { await db.KeyDeleteAsync(sessionKey); } catch { }
+                                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); }
+                                catch { }
+
+                                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
+                                catch { }
+
+                                try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); }
+                                catch { }
+
+                                try { await db.KeyDeleteAsync(sessionKey); }
+                                catch { }
+
                                 // request recycle on worker
-                                try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); } catch { }
+                                try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
+                                catch { }
                             }
                             else
                             {
                                 // Could not find in inuse list; just clean session keys
-                                try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); } catch { }
-                                try { await db.KeyDeleteAsync(sessionKey); } catch { }
+                                try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); }
+                                catch { }
+
+                                try { await db.KeyDeleteAsync(sessionKey); }
+                                catch { }
                             }
                         }
                         else
                         {
                             // malformed session; delete
-                            try { await db.KeyDeleteAsync(sessionKey); } catch { }
+                            try { await db.KeyDeleteAsync(sessionKey); }
+                            catch { }
                         }
+
                         processed++;
                     }
                     catch (Exception ex)
@@ -109,7 +146,8 @@ return nil
             }
 
             var took = (int)(DateTime.UtcNow - started).TotalMilliseconds;
-            Console.WriteLine($"[BorrowTTL] Tick done processed={processed} returned={returned} errors={errors} took={took}ms");
+            Console.WriteLine(
+                $"[BorrowTTL] Tick done processed={processed} returned={returned} errors={errors} took={took}ms");
 
             try { await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken); }
             catch (OperationCanceledException) { break; }

@@ -1,6 +1,21 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using NUnit.Framework;
 using PlaywrightHub.Infrastructure.Web;
 
@@ -17,7 +32,7 @@ public class CapacityQueueTests
     [Test]
     public void PerLabelCap_IsEnforced()
     {
-        EndpointCapacityQueue.Configure(perLabelCap: 2, perRunCap: 10);
+        EndpointCapacityQueue.Configure(2, 10);
 
         var (t1, r1) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-1");
         var (t2, r2) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-2");
@@ -39,7 +54,7 @@ public class CapacityQueueTests
     [Test]
     public void PerRunCap_IsEnforced_AcrossLabels()
     {
-        EndpointCapacityQueue.Configure(perLabelCap: 10, perRunCap: 1);
+        EndpointCapacityQueue.Configure(10, 1);
 
         var (t1, r1) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-1");
         var (t2, r2) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-1");
@@ -61,7 +76,7 @@ public class CapacityQueueTests
     [Test]
     public async Task Wait_Signal_Grants_Waiter()
     {
-        EndpointCapacityQueue.Configure(perLabelCap: 10, perRunCap: 10);
+        EndpointCapacityQueue.Configure(10, 10);
 
         var (token, reason) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-1");
         Assert.That(token, Is.Not.Null);
@@ -83,7 +98,7 @@ public class CapacityQueueTests
     [Test]
     public async Task Timeout_Removal_ReleasesPerRunSlot()
     {
-        EndpointCapacityQueue.Configure(perLabelCap: 10, perRunCap: 1);
+        EndpointCapacityQueue.Configure(10, 1);
 
         var (t1, r1) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-1");
         Assert.That(t1, Is.Not.Null);
@@ -105,7 +120,7 @@ public class CapacityQueueTests
     [Test]
     public async Task Canceled_Waiters_Are_Skipped_On_Signal()
     {
-        EndpointCapacityQueue.Configure(perLabelCap: 10, perRunCap: 10);
+        EndpointCapacityQueue.Configure(10, 10);
 
         var (t1, r1) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-A");
         var (t2, r2) = EndpointCapacityQueue.TryEnqueue("App:Chromium:UAT", "run-B");

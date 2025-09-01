@@ -1,16 +1,33 @@
-using System;
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Agenix.PlaywrightGrid.HubClient;
 
 /// <summary>
-/// DI registration helpers for HubClient.
+///     DI registration helpers for HubClient.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers HubClient as a typed HttpClient using provided options.
+    ///     Registers HubClient as a typed HttpClient using provided options.
     /// </summary>
     public static IServiceCollection AddHubClient(this IServiceCollection services, Action<HubClientOptions> configure)
     {
@@ -52,7 +69,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers HubClient using IConfiguration (HubUrlProvider.Get) with optional overrides.
+    ///     Registers HubClient using IConfiguration (HubUrlProvider.Get) with optional overrides.
     /// </summary>
     public static IServiceCollection AddHubClient(this IServiceCollection services, IConfiguration configuration,
         string? runnerSecret = null, TimeSpan? timeout = null)

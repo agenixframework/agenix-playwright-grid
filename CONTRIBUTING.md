@@ -270,3 +270,75 @@ Please verify these criteria are met before submitting for review:
 - **Test data** should not contain real customer information
 
 [1]: dashboard/wwwroot/images/logo.svg "Playwright Grid Logo"
+
+
+## License headers
+
+All C# source files must start with the project license header. This is enforced by IDE0073 via the repository .editorconfig.
+
+- New files: Rider/Visual Studio will insert the header automatically.
+- Existing files (auto-fix):
+
+```bash
+dotnet format --severity warn
+```
+
+- Alternative bulk insert (deterministic):
+
+```bash
+bash scripts/add-license-headers.sh
+```
+
+CI enforcement
+- The PR workflow runs:
+
+```bash
+dotnet format --verify-no-changes --severity warn
+```
+
+and will fail if headers or other formatting issues are present.
+
+
+## License headers
+
+We standardize C# file headers via .editorconfig (IDE0073) with this template:
+
+#region License
+// Copyright (c) 2025 Agenix
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+#endregion
+
+Notes:
+- IDEs (Rider/VS) will add this header automatically for new .cs files.
+- dotnet format (IDE0073) may not retroactively update existing files in some setups.
+
+To apply the header to existing files in this repo:
+
+- Unix/macOS:
+  - bash scripts/add-license-headers.sh
+- Windows:
+  - Use Git Bash or WSL: bash scripts/add-license-headers.sh
+
+The script is a thin wrapper around dotnet format and respects .editorconfig. It:
+- Applies the IDE0073 header template to C# files included in the solution.
+- Does not touch files under bin/ or obj/ (they are not part of the solution).
+- Leaves files that already contain the header unchanged.
+
+After running, review changes and commit:
+
+- git status
+- git diff
+- dotnet build PlaywrightGrid.sln -c Debug
