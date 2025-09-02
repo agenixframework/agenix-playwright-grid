@@ -68,4 +68,12 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
+          # MkDocs outputs to ./site — deployed to the root of gh-pages.
+          # Configure GitHub Pages: Settings → Pages → Deploy from a branch → Branch: gh-pages, Folder: /
           publish_dir: ./site
+          # Keep gh-pages as a clean, artifact-only branch with no shared history from main.
+          # Avoids leftover files (e.g., a README) and keeps history small and deterministic.
+          force_orphan: true
+          # Create .nojekyll so GitHub Pages doesn't process the output with Jekyll.
+          # Prevents Jekyll from ignoring directories starting with underscores and from interfering with MkDocs assets.
+          enable_jekyll: false

@@ -60,6 +60,12 @@ public sealed class PoolManager(
         return _activeWs.TryGetValue(browserId, out var v) && v > 0;
     }
 
+    public bool HasAnyActiveConnections()
+    {
+        try { return !_activeWs.IsEmpty; }
+        catch { return _activeWs.Count > 0; }
+    }
+
     private static string NormalizeBrowser(string s)
     {
         return string.IsNullOrWhiteSpace(s) ? "Chromium" : s.Trim();

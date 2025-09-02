@@ -93,7 +93,20 @@ public sealed class WorkerServiceRunner
         }
 
         // Compose dependencies
-        var mux = await ConnectionMultiplexer.ConnectAsync(options.RedisUrl);
+        var redisOptions = ConfigurationOptions.Parse(options.RedisUrl, true);
+        redisOptions.AbortOnConnectFail = false;
+        redisOptions.ConnectRetry = 3;
+        redisOptions.KeepAlive = 15;
+        int GetInt(string key, int def)
+        {
+            return int.TryParse(Environment.GetEnvironmentVariable(key), out var v) ? Math.Max(0, v) : def;
+        }
+        redisOptions.ConnectTimeout = GetInt("REDIS_CONNECT_TIMEOUT_MS", 5000);
+        redisOptions.SyncTimeout = GetInt("REDIS_SYNC_TIMEOUT_MS", 5000);
+        redisOptions.AsyncTimeout = GetInt("REDIS_ASYNC_TIMEOUT_MS", 5000);
+        redisOptions.ReconnectRetryPolicy = new ExponentialRetry(5000);
+
+        var mux = await ConnectionMultiplexer.ConnectAsync(redisOptions);
         var db = mux.GetDatabase();
         IMetricsPort metrics = new PrometheusMetrics();
         IHubClient hub = new HubHttpClient();

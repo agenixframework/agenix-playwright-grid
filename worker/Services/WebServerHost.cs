@@ -38,6 +38,8 @@ public sealed class WebServerHost
     private readonly IMetricsPort _metrics;
     private readonly WorkerOptions _options;
     private readonly PoolManager _pool;
+    private volatile bool _acceptingBorrows = true;
+    private volatile bool _shuttingDown;
 
     public WebServerHost(WorkerOptions options, IMetricsPort metrics, PoolManager pool, IDatabase db)
     {
@@ -111,24 +113,63 @@ public sealed class WebServerHost
 
         app.Lifetime.ApplicationStopping.Register(() =>
         {
+            _shuttingDown = true;
+            _acceptingBorrows = false;
+            try { Console.WriteLine("[worker] ApplicationStopping: initiating graceful drain"); } catch { }
+
+            try { appCts.Cancel(); } catch { }
+
+            // Drain active WebSocket sessions up to a timeout
+            int drainSeconds = 0;
             try
             {
-                appCts.Cancel();
+                drainSeconds = int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s)
+                    ? Math.Max(0, s)
+                    : 30; // default 30s
+            }
+            catch { drainSeconds = 30; }
+
+            var until = DateTime.UtcNow.AddSeconds(drainSeconds);
+            try
+            {
+                while (DateTime.UtcNow < until)
+                {
+                    if (!_poolHasAnyActiveConnections())
+                    {
+                        break;
+                    }
+                    Thread.Sleep(250);
+                }
             }
             catch { }
 
-            try { _pool.CleanupAllAsync().GetAwaiter().GetResult(); }
-            catch { }
+            try { _pool.CleanupAllAsync().GetAwaiter().GetResult(); } catch { }
 
-            try { _pool.KillAll(); }
-            catch { }
+            // If sessions are still active after timeout, force-kill sidecars
+            if (_poolHasAnyActiveConnections())
+            {
+                try { Console.WriteLine("[worker] Drain timeout reached; forcing sidecar shutdown"); } catch { }
+                try { _pool.KillAll(); } catch { }
+            }
         });
+
+        bool _poolHasAnyActiveConnections()
+        {
+            try { return _pool.HasAnyActiveConnections(); }
+            catch { return false; }
+        }
 
         app.MapPost("/borrow/{labelKey}", async (string labelKey, HttpRequest req) =>
         {
             if (!req.Headers.TryGetValue("x-node-secret", out var s) || s.FirstOrDefault() != _options.NodeNodeSecret)
             {
                 return Results.Unauthorized();
+            }
+
+            if (!_acceptingBorrows)
+            {
+                try { req.HttpContext.Response.Headers.Append("Retry-After", "30"); } catch { }
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
 
             // Respect maintenance mode: deny borrow while maintenance is active for this label
@@ -182,6 +223,33 @@ public sealed class WebServerHost
         });
 
         app.MapGet("/health", () => Results.Ok(new { node = _options.NodeId, pools = _pool.Pools.Keys.ToArray() }));
+        app.MapGet("/health/ready", async () =>
+        {
+            if (_shuttingDown)
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+            try
+            {
+                var timeoutMs = int.TryParse(Environment.GetEnvironmentVariable("REDIS_HEALTH_TIMEOUT_MS"), out var ms)
+                    ? Math.Max(100, ms)
+                    : 1000;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var pingTask = _db.PingAsync();
+                var completed = await Task.WhenAny(pingTask, Task.Delay(timeoutMs));
+                if (completed != pingTask)
+                {
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+                await pingTask; // propagate any errors
+                sw.Stop();
+                return Results.Ok(new { status = "ready", redis = new { pingMs = sw.ElapsedMilliseconds } });
+            }
+            catch
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+        });
 
         // Diagnostics: expose filtered environment variables for this worker
         app.MapGet("/diagnostics/env", (HttpRequest req) =>

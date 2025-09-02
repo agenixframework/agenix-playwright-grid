@@ -23,5 +23,5 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://0.0.0.0:5000 \
     DOTNET_RUNNING_IN_CONTAINER=true
 EXPOSE 5000
-HEALTHCHECK --interval=10s --timeout=3s --retries=5 --start-period=20s CMD curl -fsSL http://127.0.0.1:5000/health || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --retries=5 --start-period=20s CMD curl -fsSL http://127.0.0.1:5000/health/ready || exit 1
 ENTRYPOINT ["dotnet","PlaywrightHub.dll"]

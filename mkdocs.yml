@@ -58,6 +58,7 @@ nav:
   - Capacity Queue: Capacity-Queue.md
   - Borrow TTL & Session Persistence: Borrow-TTL-and-Session-Persistence.md
   - Node Liveness and Sweeper: Node-Liveness-and-Sweeper.md
+  - Graceful Shutdown: Graceful-Shutdown.md
   - "Playwright .NET pw:api": PlaywrightDotNet-pw-api.md
   - Presentation: presentation-why-playwright-grid.md
   - Metrics and Grafana: Metrics-and-Grafana.md

@@ -18,6 +18,7 @@ Use the links below to get started and dive into specific topics.
 - Capacity Queue (pending borrows, fairness, timeouts): Capacity-Queue.md
 - Borrow TTL & Session Persistence: Borrow-TTL-and-Session-Persistence.md
 - Node Liveness & Sweeper: Node-Liveness-and-Sweeper.md
+- Graceful Shutdown: Graceful-Shutdown.md
 - Session Distribution across workers: distribution.md
 
 ## Observability
