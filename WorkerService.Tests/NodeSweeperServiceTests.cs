@@ -22,6 +22,7 @@ using Moq;
 using NUnit.Framework;
 using PlaywrightHub.Infrastructure.Adapters.Background;
 using StackExchange.Redis;
+using Microsoft.Extensions.Logging;
 
 namespace WorkerService.Tests;
 
@@ -71,7 +72,8 @@ public class NodeSweeperServiceTests
         db.Setup(d => d.KeyDeleteAsync("browser_run:b2", CommandFlags.None)).ReturnsAsync(true);
         db.Setup(d => d.KeyDeleteAsync("browser_test:b2", CommandFlags.None)).ReturnsAsync(true);
 
-        var svc = new NodeSweeperService(db.Object, mux.Object, cfg);
+        var logger = new Moq.Mock<ILogger<NodeSweeperService>>(MockBehavior.Loose);
+        var svc = new NodeSweeperService(db.Object, mux.Object, cfg, logger.Object);
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
         await svc.StartAsync(cts.Token);
         try { await Task.Delay(100, cts.Token); }

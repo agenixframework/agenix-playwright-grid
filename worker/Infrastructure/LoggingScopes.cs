@@ -16,37 +16,26 @@
 // limitations under the License.
 #endregion
 
-using Dashboard.Application.Ports;
+namespace WorkerService.Infrastructure;
 
-namespace Dashboard;
-
-/// <summary>
-///     Thread-safe proxy that stores the latest pool state for the dashboard.
-///     Implements both read and write ports to act as the application state holder.
-/// </summary>
-internal sealed class PoolStateProxy : IPoolStateReader, IPoolStateWriter
+internal static class LoggingScopes
 {
-    private readonly object _gate = new();
-    private PoolStateDto? _state;
-
-    public event Action? Changed;
-
-    public PoolStateDto? Get()
+    public static IDisposable Begin(ILogger logger, string? runId = null, string? browserId = null)
     {
-        lock (_gate)
+        var dict = new Dictionary<string, object?>(2);
+        if (!string.IsNullOrWhiteSpace(runId)) dict["runId"] = runId;
+        if (!string.IsNullOrWhiteSpace(browserId)) dict["browserId"] = browserId;
+        if (dict.Count == 0)
         {
-            return _state;
+            return NullScope.Instance;
         }
+        var scope = logger.BeginScope(dict);
+        return scope ?? NullScope.Instance;
     }
 
-    public void Update(PoolStateDto state)
+    private sealed class NullScope : IDisposable
     {
-        lock (_gate)
-        {
-            _state = state;
-        }
-
-        var handler = Changed;
-        handler?.Invoke();
+        public static readonly NullScope Instance = new();
+        public void Dispose() { }
     }
 }

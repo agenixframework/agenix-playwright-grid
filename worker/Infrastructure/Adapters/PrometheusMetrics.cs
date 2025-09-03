@@ -32,6 +32,9 @@ public sealed class PrometheusMetrics : IMetricsPort
     private static readonly Counter BorrowCount = Metrics.CreateCounter(
         "worker_borrows_total", "Number of borrows", "node", "label");
 
+    private static readonly Gauge PwVersionMismatch = Metrics.CreateGauge(
+        "worker_playwright_version_mismatch", "1 if Playwright version mismatch on node, else 0", "node", "expected", "actual");
+
     public void SetPoolCapacity(string nodeId, string labelKey, int count)
     {
         PoolCapacity.WithLabels(nodeId, labelKey).Set(count);
@@ -45,5 +48,10 @@ public sealed class PrometheusMetrics : IMetricsPort
     public void IncrementBorrow(string nodeId, string labelKey)
     {
         BorrowCount.WithLabels(nodeId, labelKey).Inc();
+    }
+
+    public void SetPlaywrightVersionMismatch(string nodeId, string expected, string actual, int mismatch)
+    {
+        PwVersionMismatch.WithLabels(nodeId, expected ?? string.Empty, actual ?? string.Empty).Set(mismatch);
     }
 }

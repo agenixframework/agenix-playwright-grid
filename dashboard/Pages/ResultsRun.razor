@@ -6,6 +6,7 @@
 @inject IHttpClientFactory HttpFactory
 @inject IConfiguration Config
 @inject IJSRuntime JS
+@inject ILogger<ResultsRun> Logger
 
 <div class="d-flex align-items-center justify-content-between my-3">
     <h3 class="mb-0">Run @Short(runId)</h3>
@@ -181,12 +182,12 @@ else
 }
 
 @code {
-    [Parameter] public string runId { get; set; }
+    [Parameter] public string runId { get; set; } = string.Empty;
 
-    private ResultRunSummaryDto _run;
+    private ResultRunSummaryDto? _run;
     private bool runNotFound = false;
-    private List<CommandLogEventDto> _commands;
-    private HubConnection _conn;
+    private List<CommandLogEventDto>? _commands;
+    private HubConnection? _conn;
     private bool _disposed = false;
 
     // Client-side detected OS for display when server OS is missing
@@ -410,7 +411,7 @@ else
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"CopyRunId failed: {ex.Message}");
+            Logger.LogError(ex, "CopyRunId failed for run {RunId}", _run?.RunId);
         }
     }
 
@@ -423,7 +424,7 @@ else
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"CopyExternalId failed: {ex.Message}");
+            Logger.LogError(ex, "CopyExternalId failed for run {RunId}", _run?.RunId);
         }
     }
 
@@ -627,7 +628,7 @@ else
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Copy failed: {ex.Message}");
+            Logger.LogError(ex, "Copy command failed for run {RunId}", _run?.RunId);
         }
     }
 
@@ -659,12 +660,12 @@ else
         return new MarkupString(html);
     }
 
-    private static string Short(string id)
+    private static string Short(string? id)
     {
-        return id?.Length > 8 ? id.Substring(0, 8) : id;
+        return id?.Length > 8 ? id.Substring(0, 8) : (id ?? "-");
     }
 
-    private static string StatusBadgeClass(string status)
+    private static string StatusBadgeClass(string? status)
     {
         var s = status?.Trim().ToLowerInvariant() ?? "";
         switch (s)
@@ -693,6 +694,7 @@ else
         if (string.IsNullOrWhiteSpace(id)) return;
         if (_stopping) return;
         _stopping = true;
+        using var __scope = Logger.BeginScope(new Dictionary<string, object> { ["runId"] = id! });
         try
         {
             var http = HttpFactory.CreateClient("hub");
@@ -700,12 +702,12 @@ else
             if (!resp.IsSuccessStatusCode)
             {
                 var txt = await resp.Content.ReadAsStringAsync();
-                Console.WriteLine($"[Dashboard] stop run failed: {(int)resp.StatusCode} {txt}");
+                Logger.LogWarning("Stop run failed for {RunId}: {StatusCode} {Body}", id, (int)resp.StatusCode, txt);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Dashboard] stop run exception: {ex.Message}");
+            Logger.LogError(ex, "Stop run exception for {RunId}", id);
         }
         finally
         {

@@ -51,7 +51,9 @@ public sealed class RedisStateRepository : IStateRepository, IAsyncDisposable
 
     public async Task<IReadOnlyList<string>> ListRangeAsync(string listKey)
     {
-        return (await _db.ListRangeAsync(listKey)).Select(rv => (string)rv).ToArray();
+        var values = await _db.ListRangeAsync(listKey);
+        // Ensure non-null strings; RedisValue.ToString() can return null for Null values
+        return values.Select(rv => rv.ToString() ?? string.Empty).ToList();
     }
 
     public async Task<long> ListRemoveAsync(string listKey, string itemJson, long count = 0)

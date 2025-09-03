@@ -23,6 +23,10 @@ namespace WorkerService.Infrastructure.Adapters;
 
 public sealed class HubHttpClient : IHubClient
 {
+    private static readonly Microsoft.Extensions.Logging.ILogger Logger = Microsoft.Extensions.Logging.LoggerFactory
+        .Create(b => b.AddSimpleConsole())
+        .CreateLogger("worker.register");
+
     public async Task<bool> RegisterAsync(
         string hubUrl,
         string nodeSecret,
@@ -57,16 +61,15 @@ public sealed class HubHttpClient : IHubClient
                 var text = await resp.Content.ReadAsStringAsync(ct);
                 if (resp.IsSuccessStatusCode)
                 {
-                    Console.WriteLine(
-                        $"[Register] {resp.StatusCode} {JsonSerializer.Serialize(body)}-> {url}");
+                    Logger.LogInformation("[Register] {status} {body} -> {url}", resp.StatusCode, JsonSerializer.Serialize(body), url);
                     return true;
                 }
 
-                Console.WriteLine($"[Register] Failed {(int)resp.StatusCode} {resp.StatusCode}: {text}");
+                Logger.LogWarning("[Register] Failed {statusCode} {status}: {text}", (int)resp.StatusCode, resp.StatusCode, text);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Register] Error attempt {attempt}: {ex.Message}");
+                Logger.LogWarning(ex, "[Register] Error attempt {attempt}: {message}", attempt, ex.Message);
             }
 
             try
@@ -76,7 +79,7 @@ public sealed class HubHttpClient : IHubClient
             catch { }
         }
 
-        Console.WriteLine("[Register] Giving up (hub unreachable or rejected).");
+        Logger.LogError("[Register] Giving up (hub unreachable or rejected).");
         return false;
     }
 }

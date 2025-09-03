@@ -5,6 +5,8 @@
 @implements IAsyncDisposable
 @inject IHttpClientFactory HttpFactory
 @inject IConfiguration Config
+@inject ILogger<Results> Logger
+@inject NavigationManager Nav
 
 <div class="d-flex align-items-center my-3">
     <h3 class="mb-0">Test Runs</h3>
@@ -29,6 +31,10 @@
             <div class="col-sm-2">
                 <label class="form-label">Status</label>
                 <input class="form-control form-control-sm" @bind="filterStatus"/>
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label">Region</label>
+                <input class="form-control form-control-sm" @bind="filterRegion"/>
             </div>
             <div class="col-sm-3">
                 <label class="form-label">Search (RunId/ExternalId)</label>
@@ -211,15 +217,20 @@ else
 }
 
 @code {
-    private List<ResultRunSummaryDto> _runs; // current page buffer from server
-    private HubConnection _conn;
-    private string filterApp = string.Empty, filterBrowser = string.Empty, filterEnv = string.Empty, filterStatus = string.Empty, searchText = string.Empty;
+    private List<ResultRunSummaryDto>? _runs; // current page buffer from server
+    private HubConnection? _conn;
+    private string filterApp = string.Empty, filterBrowser = string.Empty, filterEnv = string.Empty, filterStatus = string.Empty, filterRegion = string.Empty, searchText = string.Empty;
 
     // Total count from server for current server-side filters (app/browser/env/status)
     private int _totalRunsCount = 0;
 
     // Apply only local search (RunId/ExternalId) on the page buffer. Other filters go to server.
     private IEnumerable<ResultRunSummaryDto> FilteredRuns => (_runs ?? new List<ResultRunSummaryDto>())
+        .Where(r => string.IsNullOrWhiteSpace(filterApp) || r.App.Contains(filterApp, StringComparison.OrdinalIgnoreCase))
+        .Where(r => string.IsNullOrWhiteSpace(filterBrowser) || r.Browser.Contains(filterBrowser, StringComparison.OrdinalIgnoreCase))
+        .Where(r => string.IsNullOrWhiteSpace(filterEnv) || r.Env.Contains(filterEnv, StringComparison.OrdinalIgnoreCase))
+        .Where(r => string.IsNullOrWhiteSpace(filterStatus) || (r.Status?.Contains(filterStatus, StringComparison.OrdinalIgnoreCase) == true))
+        .Where(r => string.IsNullOrWhiteSpace(filterRegion) || (r.Region?.Contains(filterRegion, StringComparison.OrdinalIgnoreCase) == true))
         .Where(r => string.IsNullOrWhiteSpace(searchText) || r.RunId?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true || r.ExternalId?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true)
         .OrderByDescending(r => r.StartedAtUtc)
         .ToList();
@@ -281,6 +292,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        ParseQuery();
         await LoadRuns();
         await EnsureActivityForVisibleRuns();
 
@@ -330,10 +342,33 @@ else
     private async Task LoadRuns()
     {
         ResetPage();
+        UpdateUrlFromFilters();
         await LoadCountAsync();
         await LoadPageAsync();
         await EnsureActivityForVisibleRuns();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private void ParseQuery()
+    {
+        try
+        {
+            var uri = new Uri(Nav.Uri);
+            var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+            string Get(string key) => q.TryGetValue(key, out var v) ? v.ToString() : string.Empty;
+            filterApp = Get("app");
+            filterBrowser = Get("browser");
+            filterEnv = Get("env");
+            filterStatus = Get("status");
+            filterRegion = Get("region");
+            searchText = Get("runId");
+            if (int.TryParse(Get("take"), out var ps) && ps > 0) PageSize = ps;
+            if (int.TryParse(Get("page"), out var p) && p > 0) Page = p;
+        }
+        catch
+        {
+            // ignore malformed URL
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -363,7 +398,29 @@ else
         if (!string.IsNullOrWhiteSpace(filterApp)) parts.Add($"app={Uri.EscapeDataString(filterApp)}");
         if (!string.IsNullOrWhiteSpace(filterBrowser)) parts.Add($"browser={Uri.EscapeDataString(filterBrowser)}");
         if (!string.IsNullOrWhiteSpace(filterEnv)) parts.Add($"env={Uri.EscapeDataString(filterEnv)}");
+        if (!string.IsNullOrWhiteSpace(filterRegion)) parts.Add($"region={Uri.EscapeDataString(filterRegion)}");
         return parts.Count == 0 ? string.Empty : "&" + string.Join("&", parts);
+    }
+
+    private string BuildUrlQuery()
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(filterStatus)) parts.Add($"status={Uri.EscapeDataString(filterStatus)}");
+        if (!string.IsNullOrWhiteSpace(filterApp)) parts.Add($"app={Uri.EscapeDataString(filterApp)}");
+        if (!string.IsNullOrWhiteSpace(filterBrowser)) parts.Add($"browser={Uri.EscapeDataString(filterBrowser)}");
+        if (!string.IsNullOrWhiteSpace(filterEnv)) parts.Add($"env={Uri.EscapeDataString(filterEnv)}");
+        if (!string.IsNullOrWhiteSpace(filterRegion)) parts.Add($"region={Uri.EscapeDataString(filterRegion)}");
+        if (!string.IsNullOrWhiteSpace(searchText)) parts.Add($"runId={Uri.EscapeDataString(searchText)}");
+        if (PageSize != 25) parts.Add($"take={PageSize}");
+        if (Page > 1) parts.Add($"page={Page}");
+        return parts.Count == 0 ? string.Empty : "?" + string.Join("&", parts);
+    }
+
+    private void UpdateUrlFromFilters()
+    {
+        var query = BuildUrlQuery();
+        var basePath = "/results";
+        Nav.NavigateTo(basePath + query, forceLoad: false, replace: true);
     }
 
     private async Task LoadCountAsync()
@@ -412,7 +469,8 @@ else
 
     private async Task ClearFilters()
     {
-        filterApp = filterBrowser = filterEnv = filterStatus = searchText = string.Empty;
+        filterApp = filterBrowser = filterEnv = filterStatus = filterRegion = searchText = string.Empty;
+        UpdateUrlFromFilters();
         await LoadRuns();
     }
 
@@ -428,6 +486,7 @@ else
         if (string.IsNullOrWhiteSpace(runId)) return;
         if (_stopping.Contains(runId)) return;
         _stopping.Add(runId);
+        using var __scope = Logger.BeginScope(new Dictionary<string, object> { ["runId"] = runId });
         try
         {
             var http = HttpFactory.CreateClient("hub");
@@ -435,7 +494,7 @@ else
             if (!resp.IsSuccessStatusCode)
             {
                 var txt = await resp.Content.ReadAsStringAsync();
-                Console.WriteLine($"[Dashboard] stop run failed: {(int)resp.StatusCode} {txt}");
+                Logger.LogWarning("[Dashboard] stop run failed: {StatusCode} {Body}", (int)resp.StatusCode, txt);
             }
 
             // Refresh list to reflect updates
@@ -443,7 +502,7 @@ else
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Dashboard] stop run exception: {ex.Message}");
+            Logger.LogError(ex, "Stop run exception for {RunId}", runId);
         }
         finally
         {
@@ -451,9 +510,9 @@ else
         }
     }
 
-    private static string Short(string id)
+    private static string Short(string? id)
     {
-        return id?.Length > 8 ? id.Substring(0, 8) : id;
+        return id?.Length > 8 ? id.Substring(0, 8) : (id ?? "-");
     }
 
     private static int Percent(int part, int total)

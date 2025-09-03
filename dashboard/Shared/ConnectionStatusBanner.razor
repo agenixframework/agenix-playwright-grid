@@ -1,0 +1,116 @@
+@using Dashboard.Application.Ports
+@implements IDisposable
+@inject IConnectionStatusReader Status
+@inject NavigationManager Nav
+
+@if (_current.State != ConnectionStateKind.Connected)
+{
+    var isRetrying = _current.State == ConnectionStateKind.Retrying;
+    var isConnecting = _current.State == ConnectionStateKind.Connecting;
+    var isDisconnected = _current.State == ConnectionStateKind.Disconnected;
+    var css = isDisconnected ? "alert-danger" : "alert-warning";
+    <div class="alert @css d-flex align-items-center justify-content-between py-2" role="alert">
+        <div>
+            @if (isConnecting)
+            {
+                <span><strong>Connecting</strong> to hub…</span>
+            }
+            else if (isRetrying)
+            {
+                <span>
+                    <strong>Disconnected</strong> from hub. Retrying in
+                    <span class="badge bg-light text-dark">@_secondsLeft</span>
+                    seconds (attempt @_current.Attempt)…
+                </span>
+            }
+            else
+            {
+                <span><strong>Disconnected</strong> from hub.</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(_current.LastError))
+            {
+                <span class="ms-2 text-muted">(@_current.LastError)</span>
+            }
+        </div>
+        <div class="ms-3">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Reload">Reload</button>
+        </div>
+    </div>
+}
+
+@code {
+    private ConnectionStatus _current = ConnectionStatus.Disconnected("Not connected");
+    private System.Timers.Timer? _timer;
+    private int _secondsLeft;
+
+    protected override void OnInitialized()
+    {
+        _current = Status.Get();
+        Status.Changed += OnChanged;
+        EnsureTimer();
+    }
+
+    private void OnChanged()
+    {
+        _current = Status.Get();
+        EnsureTimer();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void EnsureTimer()
+    {
+        if (_current.State == ConnectionStateKind.Retrying && _current.NextRetryAt is { } next)
+        {
+            _timer ??= new System.Timers.Timer(1000);
+            _timer.Elapsed -= OnTick;
+            _timer.Elapsed += OnTick;
+            _timer.AutoReset = true;
+            _timer.Enabled = true;
+            UpdateSecondsLeft(next);
+        }
+        else
+        {
+            if (_timer != null)
+            {
+                _timer.Elapsed -= OnTick;
+                _timer.Enabled = false;
+            }
+            _secondsLeft = 0;
+        }
+    }
+
+    private void OnTick(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        if (_current.State != ConnectionStateKind.Retrying || _current.NextRetryAt is not { } next)
+        {
+            return;
+        }
+        UpdateSecondsLeft(next);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateSecondsLeft(DateTimeOffset next)
+    {
+        var delta = (int)Math.Ceiling((next - DateTimeOffset.UtcNow).TotalSeconds);
+        _secondsLeft = Math.Max(0, delta);
+    }
+
+    [Inject]
+    private IJSRuntime? JS { get; set; }
+
+    private Task Reload()
+    {
+        // A simple full reload is often enough to nudge reconnecting or surface updated configuration.
+        return JS?.InvokeVoidAsync("eval", "window.location.reload()").AsTask() ?? Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        Status.Changed -= OnChanged;
+        if (_timer != null)
+        {
+            _timer.Elapsed -= OnTick;
+            _timer.Dispose();
+        }
+    }
+}

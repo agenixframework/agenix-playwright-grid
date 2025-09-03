@@ -18,6 +18,8 @@
     <!-- Package Settings -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors/>
+    <!-- Suppress missing XML docs warnings solution-wide (CS1591) -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <!-- Optional NuGet Enhancements -->
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -38,10 +40,12 @@
     <DebugSymbols>true</DebugSymbols>
     <!-- Enable CI build for Release builds or CI environments -->
     <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release' OR '$(GITHUB_ACTIONS)' == 'true' OR '$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- Treat nullable warnings as errors on CI builds only -->
+    <WarningsAsErrors Condition="'$(ContinuousIntegrationBuild)' == 'true'">nullable</WarningsAsErrors>
   </PropertyGroup>
   <!-- Source Projects -->
   <PropertyGroup Condition="!$(MSBuildProjectName.EndsWith('.Tests'))">
-    <GenerateDocumentationFile Condition="'$(IsPackable)'=='true'">true</GenerateDocumentationFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <!-- Test Projects -->

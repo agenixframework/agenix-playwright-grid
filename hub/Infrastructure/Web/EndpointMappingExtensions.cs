@@ -23,6 +23,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Agenix.PlaywrightGrid.Domain;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using PlaywrightHub.Application.DTOs;
@@ -215,12 +216,13 @@ public static class EndpointMappingExtensions
         var mux = services.GetRequiredService<IConnectionMultiplexer>();
         var resultsStore = services.GetRequiredService<IResultsStore>();
         var resultsHubCtx = services.GetRequiredService<IHubContext<ResultsHub, IResultsClient>>();
+        var logger = app.Logger;
 
         // Graceful shutdown: stop accepting new borrow requests when application is stopping
         app.Lifetime.ApplicationStopping.Register(() =>
         {
             _acceptingBorrows = false;
-            try { Console.WriteLine("[hub] ApplicationStopping: stop accepting new borrows"); } catch { }
+            try { logger.LogInformation("[hub] ApplicationStopping: stop accepting new borrows"); } catch { }
         });
 
         var hubRunnerSecret = config["HUB_RUNNER_SECRET"] ?? "runner-secret";
@@ -318,7 +320,7 @@ return nil
             {
                 if (!CheckSecret(req, "x-hub-secret", hubNodeSecret))
                 {
-                    Console.WriteLine($"[Register] 401 Unauthorized from {remoteIp}");
+                    logger.LogWarning("[Register] 401 Unauthorized from {RemoteIp}", remoteIp);
                     return Results.Unauthorized();
                 }
 
@@ -329,13 +331,13 @@ return nil
                 }
                 catch (JsonException jex)
                 {
-                    Console.WriteLine($"[Register] 400 Invalid JSON from {remoteIp}: {jex.Message}");
+                    logger.LogWarning("[Register] 400 Invalid JSON from {RemoteIp}: {Message}", remoteIp, jex.Message);
                     return Results.BadRequest("invalid JSON");
                 }
 
                 if (body is null)
                 {
-                    Console.WriteLine($"[Register] 400 Empty body from {remoteIp}");
+                    logger.LogWarning("[Register] 400 Empty body from {RemoteIp}", remoteIp);
                     return Results.BadRequest("empty body");
                 }
 
@@ -348,7 +350,7 @@ return nil
                 var nodeId = string.IsNullOrWhiteSpace(nodeIdRaw) ? null : nodeIdRaw.Trim();
                 if (string.IsNullOrEmpty(nodeId))
                 {
-                    Console.WriteLine($"[Register] 400 Missing NodeId from {remoteIp}");
+                    logger.LogWarning("[Register] 400 Missing NodeId from {RemoteIp}", remoteIp);
                     return Results.BadRequest("missing NodeId");
                 }
 
@@ -406,15 +408,15 @@ return nil
                 var sampleApps = string.Join(',', apps.Take(3));
                 var appPreview = apps.Length <= 3 ? sampleApps : $"{sampleApps}(+{apps.Length - 3})";
 
-                Console.WriteLine(
-                    $"[Register] {(existed ? "update" : "new")} nodeId={nodeId} apps={apps.Length}:{appPreview} capacity={capacity} labels={labels.Count} ip={remoteIp} in {elapsedMs}ms");
+                logger.LogInformation("[Register] {Kind} nodeId={NodeId} apps={AppsCount}:{AppPreview} capacity={Capacity} labels={LabelsCount} ip={RemoteIp} in {ElapsedMs}ms",
+                    existed ? "update" : "new", nodeId, apps.Length, appPreview, capacity, labels.Count, remoteIp, elapsedMs);
 
                 return Results.Ok(new { registered = nodeId });
             }
             catch (Exception ex)
             {
                 var elapsedMs = (int)(DateTime.UtcNow - startedAt).TotalMilliseconds;
-                Console.WriteLine($"[Register] 500 Error from {remoteIp} after {elapsedMs}ms: {ex}");
+                logger.LogError(ex, "[Register] 500 Error from {RemoteIp} after {ElapsedMs}ms", remoteIp, elapsedMs);
                 return Results.Problem("registration failed");
             }
         });
@@ -528,7 +530,12 @@ return nil
                     poolAvailableGauge.WithLabels(candidate).Set(listLenght);
 
                     // Keep as JsonElement so we can both inspect fields and return it as the response object later.
-                    using var doc = JsonDocument.Parse(res.ToString());
+                    string? json = res.ToString();
+                    if (string.IsNullOrEmpty(json))
+                    {
+                        return null;
+                    }
+                    using var doc = JsonDocument.Parse(json!);
                     return doc.RootElement.Clone();
                 }
 
@@ -541,6 +548,8 @@ return nil
                                 ?? req.Query["runId"].FirstOrDefault()
                                 ?? req.Headers["Correlation-Id"].FirstOrDefault()
                                 ?? $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
+                    using var _scopeBorrow = LoggingScopes.Begin(logger, runId: runId);
+                    logger.LogInformation("Borrow success for label {LabelKey}", labelKey);
 
                     // Borrow TTL: allow override via request body, else use default from config
                     var ttlSeconds = defaultBorrowTtlSeconds;
@@ -671,6 +680,8 @@ return nil
                         if (!string.IsNullOrWhiteSpace(bid))
                         {
                             await db.StringSetAsync($"browser_run:{bid}", runId, TimeSpan.FromHours(6));
+                            using var _scopeBorrowBrowser = LoggingScopes.Begin(logger, browserId: bid);
+                            logger.LogInformation("Borrow assigned browserId {BrowserId}", bid);
                         }
 
                         serverEv = new CommandLogEventDto
@@ -1321,6 +1332,9 @@ return nil
                 {
                     return Results.BadRequest("missing labelKey|browserId");
                 }
+
+                using var _scopeReturn = LoggingScopes.Begin(logger, browserId: browserId);
+                logger.LogInformation("Return requested for {BrowserId} on label {LabelKey}", browserId, labelKey);
 
                 // Validate and normalize labelKey
                 if (!LabelKey.TryParseDetailed(labelKey, out var parsedReturn, out var parseErr,

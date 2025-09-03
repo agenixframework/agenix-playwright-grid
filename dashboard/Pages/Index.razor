@@ -15,7 +15,7 @@
 }
 else
 {
-    var state = Proxy.Get();
+    var state = Proxy.Get()!;
     var totalPools = state!.Pools.Count;
     var totalBrowsers = state.Pools.Sum(p => p.Total);
     var borrowed = state.Pools.Sum(p => p.Borrowed);
@@ -150,7 +150,7 @@ else
     }
 
     <h5 class="mt-4">Workers</h5>
-    @if (state.Workers.Count == 0)
+    @if (state.Workers!.Count == 0)
     {
         <div class="text-muted">No workers registered.</div>
     }

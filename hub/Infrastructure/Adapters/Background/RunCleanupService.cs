@@ -21,6 +21,7 @@ using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
 using PlaywrightHub.Infrastructure.Adapters.SignalR;
 using StackExchange.Redis;
+using Microsoft.Extensions.Logging;
 
 namespace PlaywrightHub.Infrastructure.Adapters.Background;
 
@@ -32,7 +33,8 @@ public sealed class RunCleanupService(
     IResultsStore resultsStore,
     IDatabase db,
     IHubContext<ResultsHub, IResultsClient> resultsHub,
-    IConfiguration config
+    IConfiguration config,
+    Microsoft.Extensions.Logging.ILogger<RunCleanupService> logger
 ) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -69,8 +71,7 @@ public sealed class RunCleanupService(
             ? $"{maxDuration.TotalHours:F1}h"
             : $"{maxDuration.TotalMinutes:F0}m";
 
-        Console.WriteLine(
-            $"[Cleanup] Starting. interval={interval.TotalMinutes:F0}m inactivity>={inactivity.TotalMinutes:F0}m max={maxDisplay} batch={batchSize}");
+        logger.LogInformation("[Cleanup] Starting. interval={interval}m inactivity>={inactivity}m max={max} batch={batch}", interval.TotalMinutes.ToString("F0"), inactivity.TotalMinutes.ToString("F0"), maxDisplay, batchSize);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -137,8 +138,7 @@ public sealed class RunCleanupService(
                                     reasons.Add("duration<max");
                                 }
 
-                                Console.WriteLine(
-                                    $"[Cleanup] Skip run {run.RunId} reason={string.Join(", ", reasons)} lastActivity={lastActivity:o} started={run.StartedAtUtc:o}");
+                                logger.LogInformation("[Cleanup] Skip run {runId} reason={reasons} lastActivity={lastActivity} started={started}", run.RunId, string.Join(", ", reasons), lastActivity.ToString("o"), run.StartedAtUtc.ToString("o"));
                             }
 
                             continue;
@@ -195,7 +195,7 @@ public sealed class RunCleanupService(
                             skipNoOutstanding++;
                             if (debug)
                             {
-                                Console.WriteLine($"[Cleanup] Skip run {run.RunId} reason=no-outstanding-browsers");
+                                logger.LogInformation("[Cleanup] Skip run {runId} reason=no-outstanding-browsers", run.RunId);
                             }
 
                             continue;
@@ -306,26 +306,24 @@ return nil
                     catch (Exception exRun)
                     {
                         errors++;
-                        Console.WriteLine($"[Cleanup] Error processing run {run.RunId}: {exRun.Message}");
+                        logger.LogWarning(exRun, "[Cleanup] Error processing run {runId}: {message}", run.RunId, exRun.Message);
                     }
                 }
             }
             catch (Exception ex)
             {
                 errors++;
-                Console.WriteLine($"[Cleanup] Loop error: {ex}");
+                logger.LogWarning(ex, "[Cleanup] Loop error");
             }
 
             var tookMs = (int)(DateTime.UtcNow - tickStart).TotalMilliseconds;
             if (debug)
             {
-                Console.WriteLine(
-                    $"[Cleanup] Tick: scanned={scanned} processed={processed} released={releasedTotal} errors={errors} skipIdle={skipIdle} skipDuration={skipDuration} skipNoOutstanding={skipNoOutstanding} took={tookMs}ms");
+                logger.LogInformation("[Cleanup] Tick: scanned={scanned} processed={processed} released={released} errors={errors} skipIdle={skipIdle} skipDuration={skipDuration} skipNoOutstanding={skipNoOutstanding} took={ms}ms", scanned, processed, releasedTotal, errors, skipIdle, skipDuration, skipNoOutstanding, tookMs);
             }
             else
             {
-                Console.WriteLine(
-                    $"[Cleanup] Tick: scanned={scanned} processed={processed} released={releasedTotal} errors={errors} took={tookMs}ms");
+                logger.LogInformation("[Cleanup] Tick: scanned={scanned} processed={processed} released={released} errors={errors} took={ms}ms", scanned, processed, releasedTotal, errors, tookMs);
             }
 
             try { await Task.Delay(interval, stoppingToken); }

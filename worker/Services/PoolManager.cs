@@ -34,6 +34,14 @@ public sealed class PoolManager(
     IMetricsPort metrics,
     ISidecarLauncher sidecarLauncher)
 {
+    private static readonly Microsoft.Extensions.Logging.ILogger Logger = Microsoft.Extensions.Logging.LoggerFactory
+        .Create(b => b.AddSimpleConsole())
+        .CreateLogger("worker.pool");
+
+    private sealed record BackoffState(int Failures, DateTime LastFailureUtc, TimeSpan NextDelay);
+
+    // Tracks restart backoff per labelKey
+    private readonly ConcurrentDictionary<string, BackoffState> _restartBackoff = new(StringComparer.OrdinalIgnoreCase);
     // Tracks active client WebSocket connections per browserId to prevent recycling in-use slots
     private readonly ConcurrentDictionary<string, int> _activeWs = new(StringComparer.OrdinalIgnoreCase);
 
@@ -76,10 +84,101 @@ public sealed class PoolManager(
         return await sidecarLauncher.StartAsync(browserType);
     }
 
+    private async Task UpdatePlaywrightVersionTelemetryAsync(string? actual)
+    {
+        try
+        {
+            // Only act when sidecar reported a version; otherwise skip to avoid noisy metrics/tests
+            if (string.IsNullOrWhiteSpace(actual)) return;
+
+            var expected = Environment.GetEnvironmentVariable("PLAYWRIGHT_VERSION");
+            var mismatch = !string.IsNullOrWhiteSpace(expected) && !string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
+
+            // Authoritative: store sidecar-reported version on node metadata
+            await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", actual);
+
+            // Also store expected and mismatch flags for Hub/Dashboard consumption
+            try { await db.HashSetAsync($"node:{options.NodeId}", new HashEntry[]
+            {
+                new("PlaywrightVersionExpected", expected ?? string.Empty),
+                new("PlaywrightVersionMismatch", mismatch ? "1" : "0")
+            }); }
+            catch { }
+
+            // Metrics: gauge 0/1 with labels expected/actual
+            try { metrics.SetPlaywrightVersionMismatch(options.NodeId, expected ?? string.Empty, actual ?? string.Empty, mismatch ? 1 : 0); }
+            catch { }
+        }
+        catch
+        {
+            // swallow any telemetry errors; should not impact pool warmup
+        }
+    }
+
     private static int SafePid(Process proc)
     {
         try { return proc.Id; }
         catch { return 0; }
+    }
+
+    private TimeSpan ComputeNextDelaySeconds(int failures)
+    {
+        if (failures <= 0) return TimeSpan.Zero;
+        var min = Math.Max(0, options.SidecarBackoff.MinSeconds);
+        var max = Math.Max(min, options.SidecarBackoff.MaxSeconds);
+        var mult = options.SidecarBackoff.Multiplier <= 0 ? 2.0 : options.SidecarBackoff.Multiplier;
+        var seconds = (int)Math.Round(min * Math.Pow(mult, Math.Max(0, failures - 1)));
+        seconds = Math.Clamp(seconds, min, max);
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    private async Task<BackoffState> RegisterFailureAsync(string labelKey, TimeSpan uptime)
+    {
+        var resetSeconds = Math.Max(1, options.SidecarBackoff.FailureResetSeconds);
+        var failures = 1;
+        if (_restartBackoff.TryGetValue(labelKey, out var prev))
+        {
+            failures = uptime.TotalSeconds >= resetSeconds ? 1 : prev.Failures + 1;
+        }
+        var next = ComputeNextDelaySeconds(failures);
+        var state = new BackoffState(failures, DateTime.UtcNow, next);
+        _restartBackoff[labelKey] = state;
+        try
+        {
+            await db.HashSetAsync($"node:{options.NodeId}", new HashEntry[]
+            {
+                new($"SidecarFailures:{labelKey}", failures),
+                new($"SidecarNextDelaySeconds:{labelKey}", (int)next.TotalSeconds),
+                new($"SidecarLastFailureUtc:{labelKey}", state.LastFailureUtc.ToString("o")),
+                new($"SidecarHealth:{labelKey}", $"Backoff { (int)next.TotalSeconds }s")
+            });
+        }
+        catch { }
+        return state;
+    }
+
+    private async Task RegisterSuccessAsync(string labelKey)
+    {
+        _restartBackoff.TryRemove(labelKey, out _);
+        try
+        {
+            await db.HashSetAsync($"node:{options.NodeId}", new HashEntry[]
+            {
+                new($"SidecarNextDelaySeconds:{labelKey}", 0),
+                new($"SidecarHealth:{labelKey}", "OK")
+            });
+        }
+        catch { }
+    }
+
+    public IDictionary<string, (int failures, DateTime? lastFailureUtc, TimeSpan nextDelay)> GetBackoffAll()
+    {
+        var copy = new Dictionary<string, (int, DateTime?, TimeSpan)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in _restartBackoff)
+        {
+            copy[kv.Key] = (kv.Value.Failures, kv.Value.LastFailureUtc, kv.Value.NextDelay);
+        }
+        return copy;
     }
 
     public async Task InitializeAsync()
@@ -220,7 +319,7 @@ public sealed class PoolManager(
 
             if (!validated)
             {
-                Console.WriteLine($"[Warm] Failed to validate WS for {labelKey}; skipping slot initialization");
+                Logger.LogWarning("[Warm] Failed to validate WS for {labelKey}; skipping slot initialization", labelKey);
                 continue;
             }
 
@@ -243,11 +342,8 @@ public sealed class PoolManager(
             var slot = new Slot(res.proc, browserType, res.ws, wsPublic, DateTime.UtcNow);
             map[id] = slot;
 
-            // Store PlaywrightVersion on node metadata if available
-            if (!string.IsNullOrWhiteSpace(res.playwrightVersion))
-            {
-                await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", res.playwrightVersion);
-            }
+            // Update Playwright version telemetry (authoritative from sidecar) and mismatch metric
+            await UpdatePlaywrightVersionTelemetryAsync(res.playwrightVersion);
 
             var argsEnv = Environment.GetEnvironmentVariable("CHROMIUM_ARGS");
             var (isContainer, containerId) = GetContainerInfo();
@@ -267,8 +363,7 @@ public sealed class PoolManager(
             });
             await db.ListRightPushAsync(availableKey, item);
 
-            Console.WriteLine(
-                $"+ warm server {id} for {labelKey} (type={browserType}) ws={wsPublic} (container={isContainer} id={containerId ?? "?"})");
+            Logger.LogInformation("+ warm server {browserId} for {labelKey} (type={browserType}) ws={wsPublic} (container={isContainer} id={containerId})", id, labelKey, browserType, wsPublic, isContainer, containerId ?? "?");
         }
 
         metrics.SetPoolCapacity(options.NodeId, labelKey, map.Count);
@@ -283,9 +378,14 @@ public sealed class PoolManager(
             var inuseKey = $"inuse:{labelKey}";
 
             var existedInMap = false;
+            Slot? removedSlot = null;
             if (Pools.TryGetValue(labelKey, out var map))
             {
-                existedInMap = map.TryRemove(browserId, out _);
+                if (map.TryRemove(browserId, out var os))
+                {
+                    existedInMap = true;
+                    removedSlot = os;
+                }
             }
 
             // Prune stale entries for the dead browserId
@@ -308,11 +408,19 @@ public sealed class PoolManager(
             // If reconcile already processed this slot (we didn't find it in map), skip spawning to avoid double replacement
             if (!existedInMap)
             {
-                Console.WriteLine($"[SidecarExit] Skip replacement for {browserId} ({labelKey}) - already reconciled");
+                Logger.LogInformation("[SidecarExit] Skip replacement for {browserId} ({labelKey}) - already reconciled", browserId, labelKey);
                 return;
             }
 
-            // Launch replacement immediately
+            // Launch replacement with backoff
+            var uptime = removedSlot is not null ? DateTime.UtcNow - removedSlot.StartedAt : TimeSpan.Zero;
+            var boState = await RegisterFailureAsync(labelKey, uptime);
+            if (boState.NextDelay > TimeSpan.Zero)
+            {
+                Logger.LogWarning("[SidecarExit] Backing off {seconds}s before respawn for {labelKey} (failures={failures})", boState.NextDelay.TotalSeconds.ToString("F0"), labelKey, boState.Failures);
+                try { await Task.Delay(boState.NextDelay); } catch { }
+            }
+
             var res = await StartPwServerAsync(browserType);
             var newId = Guid.NewGuid().ToString("N");
 
@@ -367,8 +475,7 @@ public sealed class PoolManager(
 
             if (!validated)
             {
-                Console.WriteLine(
-                    $"[SidecarExit] Replacement failed WS validation for {labelKey}; capacity temporarily reduced");
+                Logger.LogWarning("[SidecarExit] Replacement failed WS validation for {labelKey}; capacity temporarily reduced", labelKey);
                 return;
             }
 
@@ -389,16 +496,14 @@ public sealed class PoolManager(
             var newSlot = new Slot(res.proc, browserType, res.ws, wsPublic, DateTime.UtcNow);
             var map2 = Pools.GetOrAdd(labelKey, _ => new ConcurrentDictionary<string, Slot>());
             map2[newId] = newSlot;
+            await RegisterSuccessAsync(labelKey);
 
             // Hook exit for the new process as well
             res.proc.EnableRaisingEvents = true;
             res.proc.Exited += async (_, __) => await OnSidecarExited(labelKey, newId, browserType);
 
-            // Update node PlaywrightVersion if available
-            if (!string.IsNullOrWhiteSpace(res.playwrightVersion))
-            {
-                await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", res.playwrightVersion);
-            }
+            // Update Playwright version telemetry (authoritative from sidecar) and mismatch metric
+            await UpdatePlaywrightVersionTelemetryAsync(res.playwrightVersion);
 
             // Container provenance
             var isContainer = File.Exists("/.dockerenv") ||
@@ -450,12 +555,11 @@ public sealed class PoolManager(
             metrics.SetPoolCapacity(options.NodeId, labelKey, map2.Count);
             metrics.SetPoolAvailable(options.NodeId, labelKey, await db.ListLengthAsync(availableKey));
 
-            Console.WriteLine(
-                $"  {browserId} with {newId} for {labelKey} (container={isContainer} id={containerId ?? "?"})");
+            Logger.LogInformation("{browserId} replaced with {newId} for {labelKey} (container={isContainer} id={containerId})", browserId, newId, labelKey, isContainer, containerId ?? "?");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SidecarExit] error: {ex.Message}");
+            Logger.LogWarning(ex, "[SidecarExit] error: {message}", ex.Message);
         }
     }
 
@@ -484,15 +588,13 @@ public sealed class PoolManager(
                         var listName = key.Contains(':') ? key.Split(':')[0] : key;
                         var reason = isThisNode ? "belongs to this node (old format)" : "localhost endpoint";
 
-                        Console.WriteLine(
-                            $"[Startup-Cleanup] node={options.NodeId} label={labelKey} list={listName} browserId={browserId} removed stale item (reason={reason})");
+                        Logger.LogInformation("[Startup-Cleanup] node={nodeId} label={labelKey} list={listName} browserId={browserId} removed stale item (reason={reason})", options.NodeId, labelKey, listName, browserId, reason);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine(
-                    $"[Startup-Cleanup] node={options.NodeId} label={labelKey} error cleaning key={key}: {ex.Message}");
+                Logger.LogWarning(ex, "[Startup-Cleanup] node={nodeId} label={labelKey} error cleaning key={key}: {message}", options.NodeId, labelKey, key, ex.Message);
             }
         }
     }
@@ -527,8 +629,7 @@ public sealed class PoolManager(
                         var hasActive = HasActiveConnection(browserId);
                         if (replaceRequested && hasActive)
                         {
-                            Console.WriteLine(
-                                $"[Reconcile] Defer recycle for {browserId} ({labelKey}) - active WS connection");
+                            Logger.LogInformation("[Reconcile] Defer recycle for {browserId} ({labelKey}) - active WS connection", browserId, labelKey);
                             continue;
                         }
 
@@ -538,12 +639,11 @@ public sealed class PoolManager(
                             catch { }
                         }
 
-                        Console.WriteLine($"[Reconcile] Sidecar {browserId} for {labelKey} exited - replacing");
+                        Logger.LogInformation("[Reconcile] Sidecar {browserId} for {labelKey} exited - replacing", browserId, labelKey);
                         var removed = map.TryRemove(browserId, out _);
                         if (!removed)
                         {
-                            Console.WriteLine(
-                                $"[Reconcile] Skip replacement for {browserId} ({labelKey}) - already handled by exit handler");
+                            Logger.LogInformation("[Reconcile] Skip replacement for {browserId} ({labelKey}) - already handled by exit handler", browserId, labelKey);
                             continue;
                         }
 
@@ -573,7 +673,15 @@ public sealed class PoolManager(
                             }
                         }
 
-                        // Launch a replacement
+                        // Launch a replacement with backoff
+                        var uptime = DateTime.UtcNow - slot.StartedAt;
+                        var boState = await RegisterFailureAsync(labelKey, uptime);
+                        if (boState.NextDelay > TimeSpan.Zero)
+                        {
+                            Logger.LogWarning("[Reconcile] Backing off {seconds}s before respawn for {labelKey} (failures={failures})", boState.NextDelay.TotalSeconds.ToString("F0"), labelKey, boState.Failures);
+                            try { await Task.Delay(boState.NextDelay, ct); } catch { }
+                        }
+
                         var res = await StartPwServerAsync(slot.BrowserType);
                         var newId = Guid.NewGuid().ToString("N");
 
@@ -595,16 +703,14 @@ public sealed class PoolManager(
 
                         var newSlot = new Slot(res.proc, slot.BrowserType, res.ws, wsPublic, DateTime.UtcNow);
                         map[newId] = newSlot;
+                        await RegisterSuccessAsync(labelKey);
 
                         // Hook exit for the new process as well
                         res.proc.EnableRaisingEvents = true;
                         res.proc.Exited += async (_, __) => await OnSidecarExited(labelKey, newId, slot.BrowserType);
 
-                        // Update node PlaywrightVersion if available
-                        if (!string.IsNullOrWhiteSpace(res.playwrightVersion))
-                        {
-                            await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", res.playwrightVersion);
-                        }
+                        // Update Playwright version telemetry (authoritative from sidecar) and mismatch metric
+                        await UpdatePlaywrightVersionTelemetryAsync(res.playwrightVersion);
 
                         var item = JsonSerializer.Serialize(new
                         {
@@ -617,7 +723,7 @@ public sealed class PoolManager(
                         });
                         await db.ListRightPushAsync(availableKey, item);
 
-                        Console.WriteLine($"[Reconcile] Replaced {browserId} with {newId} for {labelKey}");
+                        Logger.LogInformation("[Reconcile] Replaced {browserId} with {newId} for {labelKey}", browserId, newId, labelKey);
                     }
 
                     metrics.SetPoolCapacity(options.NodeId, labelKey, map.Count);
@@ -626,7 +732,7 @@ public sealed class PoolManager(
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Reconcile] error: {ex.Message}");
+                Logger.LogWarning(ex, "[Reconcile] error: {message}", ex.Message);
             }
 
             try { await Task.Delay(checkInterval, ct); }
@@ -658,8 +764,9 @@ public sealed class PoolManager(
     {
         foreach (var labelMap in Pools.Values)
         {
-            if (labelMap.TryGetValue(browserId, out slot))
+            if (labelMap.TryGetValue(browserId, out var found))
             {
+                slot = found!;
                 return true;
             }
         }
@@ -681,7 +788,7 @@ public sealed class PoolManager(
             foreach (var label in options.PoolConfig.Keys)
             {
                 try { await CleanupLabelListsAsync(label); }
-                catch (Exception ex) { Console.WriteLine($"[Shutdown] error cleaning label {label}: {ex.Message}"); }
+                catch (Exception ex) { Logger.LogWarning(ex, "[Shutdown] error cleaning label {label}: {message}", label, ex.Message); }
             }
 
             try { await db.SetRemoveAsync("nodes", options.NodeId); }
@@ -695,7 +802,7 @@ public sealed class PoolManager(
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Shutdown] cleanup error: {ex.Message}");
+            Logger.LogWarning(ex, "[Shutdown] cleanup error: {message}", ex.Message);
         }
     }
 
