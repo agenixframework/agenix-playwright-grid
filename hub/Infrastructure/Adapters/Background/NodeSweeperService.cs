@@ -19,6 +19,7 @@
 using System.Globalization;
 using System.Text.Json;
 using StackExchange.Redis;
+using Microsoft.Extensions.Logging;
 
 namespace PlaywrightHub.Infrastructure.Adapters.Background;
 
@@ -34,7 +35,7 @@ namespace PlaywrightHub.Infrastructure.Adapters.Background;
 ///     remove expired nodes based on configuration settings. The service runs until explicitly
 ///     cancelled.
 /// </remarks>
-public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux, IConfiguration config)
+public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux, IConfiguration config, Microsoft.Extensions.Logging.ILogger<NodeSweeperService> logger)
     : BackgroundService
 {
     /// <summary>
@@ -51,8 +52,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
         var nodeTimeout = TimeSpan.FromSeconds(nodeTimeoutSeconds);
         var sweeperInterval = TimeSpan.FromSeconds(20);
 
-        Console.WriteLine(
-            $"[Sweeper] Starting. interval={sweeperInterval.TotalSeconds:F0}s timeout={nodeTimeout.TotalSeconds:F0}s expire={(sweeperExpire ? "on" : "off")}");
+        logger.LogInformation("[Sweeper] Starting. interval={interval}s timeout={timeout}s expire={expire}", sweeperInterval.TotalSeconds.ToString("F0"), nodeTimeout.TotalSeconds.ToString("F0"), sweeperExpire ? "on" : "off");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -114,15 +114,13 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                             if (await HasAvailableEntriesForNodeAsync(nodeId))
                             {
                                 await db.StringSetAsync(aliveKey, "1", TimeSpan.FromSeconds(30));
-                                Console.WriteLine(
-                                    $"[Sweeper] Skipping expiration of node={nodeId} due to active available entries; refreshed TTL=30s");
+                                logger.LogInformation("[Sweeper] Skipping expiration of node={nodeId} due to active available entries; refreshed TTL=30s", nodeId);
                                 continue;
                             }
 
                             if (sweeperExpire)
                             {
-                                Console.WriteLine(
-                                    $"[Sweeper] Expiring node={nodeId} lastSeen={(string.IsNullOrEmpty(lastSeenStr) ? "<missing>" : lastSeenStr)}");
+                                logger.LogInformation("[Sweeper] Expiring node={nodeId} lastSeen={lastSeen}", nodeId, string.IsNullOrEmpty(lastSeenStr) ? "<missing>" : lastSeenStr);
 
                                 await db.SetRemoveAsync("nodes", nodeId);
                                 await db.KeyDeleteAsync(key);
@@ -134,27 +132,25 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                             else
                             {
                                 await db.StringSetAsync(aliveKey, "1", TimeSpan.FromSeconds(30));
-                                Console.WriteLine(
-                                    $"[Sweeper] Would expire node={nodeId} (expiration disabled); refreshed TTL=30s");
+                                logger.LogInformation("[Sweeper] Would expire node={nodeId} (expiration disabled); refreshed TTL=30s", nodeId);
                             }
                         }
                     }
                     catch (Exception exNode)
                     {
                         errors++;
-                        Console.WriteLine($"[Sweeper] Error while processing node {nodeId}: {exNode.Message}");
+                        logger.LogWarning(exNode, "[Sweeper] Error while processing node {nodeId}: {message}", nodeId, exNode.Message);
                     }
                 }
             }
             catch (Exception ex)
             {
                 errors++;
-                Console.WriteLine($"[Sweeper] Loop error: {ex}");
+                logger.LogWarning(ex, "[Sweeper] Loop error");
             }
 
             var elapsedMs = (int)(DateTime.UtcNow - tickStart).TotalMilliseconds;
-            Console.WriteLine(
-                $"[Sweeper] Tick done: scanned={scanned} expired={expired} errors={errors} took={elapsedMs}ms");
+            logger.LogInformation("[Sweeper] Tick done: scanned={scanned} expired={expired} errors={errors} took={ms}ms", scanned, expired, errors, elapsedMs);
 
             try
             {
@@ -186,7 +182,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                 if (item.ToString().Contains(nodePattern, StringComparison.Ordinal))
                 {
                     await db.ListRemoveAsync(key, item);
-                    Console.WriteLine($"[Sweeper] Pruned stale entry from {key} for node {nodeId}");
+                    logger.LogInformation("[Sweeper] Pruned stale entry from {key} for node {nodeId}", key, nodeId);
                 }
             }
         }
@@ -257,7 +253,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                     }
                     catch { }
 
-                    Console.WriteLine($"[Sweeper] Pruned orphaned in-use entry from {key} for node {nodeId}");
+                    logger.LogInformation("[Sweeper] Pruned orphaned in-use entry from {key} for node {nodeId}", key, nodeId);
                 }
             }
         }

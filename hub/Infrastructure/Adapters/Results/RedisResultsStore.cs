@@ -35,7 +35,9 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         WriteIndented = false
     };
 
-    private readonly TimeSpan? _ttl = ParseTtl(config);
+    // Separate TTLs for run/test results vs. verbose command logs
+    private readonly TimeSpan? _runsTtl = ParseResultsTtl(config);
+    private readonly TimeSpan? _logsTtl = ParseLogsTtl(config);
 
     private static string RunsByStartKey => "results:runs:byStart";
 
@@ -45,12 +47,12 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         var json = JsonSerializer.Serialize(run, JsonOpts);
         // Store as JSON string for simplicity
         await db.StringSetAsync(runKey, json);
-        TouchExpire(runKey);
+        TouchExpire(_runsTtl, runKey);
 
         // Update primary index by start time (descending via ZREVRANGE later)
         var score = run.StartedAtUtc.Ticks;
         await db.SortedSetAddAsync(RunsByStartKey, run.RunId, score);
-        TouchExpire(RunsByStartKey); // optional; keeps index during retention window
+        TouchExpire(_runsTtl, RunsByStartKey); // optional; keeps index during retention window
     }
 
     public async Task<ResultRunSummaryDto?> GetRunAsync(string runId)
@@ -242,11 +244,11 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         await db.ListRightPushAsync(key, json);
         // Keep a hard cap to avoid unbounded growth
         await db.ListTrimAsync(key, -5000, -1);
-        TouchExpire(key);
+        TouchExpire(_logsTtl, key);
 
         var cntKey = CmdCountKey(ev.RunId);
         await db.StringIncrementAsync(cntKey);
-        TouchExpire(cntKey);
+        TouchExpire(_logsTtl, cntKey);
     }
 
     public async Task<IReadOnlyList<CommandLogEventDto>> GetCommandsAsync(string runId, int skip = 0, int take = 200)
@@ -289,7 +291,7 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         var key = TestsKey(test.RunId);
         var json = JsonSerializer.Serialize(test, JsonOpts);
         await db.HashSetAsync(key, test.TestId, json);
-        TouchExpire(key);
+        TouchExpire(_runsTtl, key);
     }
 
     public async Task<IReadOnlyList<ResultTestCaseDto>> GetTestsAsync(string runId, int skip = 0, int take = 200,
@@ -313,14 +315,36 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         return list;
     }
 
-    private static TimeSpan? ParseTtl(IConfiguration cfg)
+    private static TimeSpan? ParseResultsTtl(IConfiguration cfg)
     {
-        if (int.TryParse(cfg["HUB_RESULTS_RETENTION_DAYS"], out var days) && days > 0)
+        if (int.TryParse(cfg["HUB_RESULTS_TTL_SECONDS"], out var sec) && sec > 0)
+        {
+            return TimeSpan.FromSeconds(sec);
+        }
+        if (int.TryParse(cfg["HUB_RESULTS_TTL_DAYS"], out var days) && days > 0)
         {
             return TimeSpan.FromDays(days);
         }
-
+        // Legacy fallback for backward compatibility
+        if (int.TryParse(cfg["HUB_RESULTS_RETENTION_DAYS"], out var legacyDays) && legacyDays > 0)
+        {
+            return TimeSpan.FromDays(legacyDays);
+        }
         return null;
+    }
+
+    private static TimeSpan? ParseLogsTtl(IConfiguration cfg)
+    {
+        if (int.TryParse(cfg["HUB_LOGS_TTL_SECONDS"], out var sec) && sec > 0)
+        {
+            return TimeSpan.FromSeconds(sec);
+        }
+        if (int.TryParse(cfg["HUB_LOGS_TTL_DAYS"], out var days) && days > 0)
+        {
+            return TimeSpan.FromDays(days);
+        }
+        // Default to results TTL if logs TTL is unspecified
+        return ParseResultsTtl(cfg);
     }
 
     private static string RunKey(string runId)
@@ -343,16 +367,16 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         return $"results:cmdcount:{runId}";
     }
 
-    private void TouchExpire(params RedisKey[] keys)
+    private void TouchExpire(TimeSpan? ttl, params RedisKey[] keys)
     {
-        if (_ttl is null)
+        if (ttl is null)
         {
             return;
         }
 
         foreach (var k in keys)
         {
-            try { db.KeyExpire(k, _ttl); }
+            try { db.KeyExpire(k, ttl); }
             catch { }
         }
     }

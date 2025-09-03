@@ -42,6 +42,8 @@ public sealed record WorkerStatusDto
     public Dictionary<string, PoolCounts> Pools { get; init; } = new();
     public int TotalBrowsers { get; set; }
     public string? PlaywrightVersion { get; set; }
+    public string? PlaywrightVersionExpected { get; set; }
+    public bool PlaywrightVersionMismatch { get; set; }
 }
 
 public sealed record PoolCounts

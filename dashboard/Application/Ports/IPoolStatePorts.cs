@@ -23,8 +23,8 @@ namespace Dashboard.Application.Ports;
 /// </summary>
 public interface IPoolStateReader
 {
-    PoolStateDto Get();
-    event Action Changed;
+    PoolStateDto? Get();
+    event Action? Changed;
 }
 
 /// <summary>

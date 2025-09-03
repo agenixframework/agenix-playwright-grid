@@ -156,6 +156,8 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
             var labelsJson = db.HashGet(key, "Labels");
             var capacityStr = db.HashGet(key, "Capacity");
             var pwVer = db.HashGet(key, "PlaywrightVersion");
+            var pwExpected = db.HashGet(key, "PlaywrightVersionExpected");
+            var pwMismatch = db.HashGet(key, "PlaywrightVersionMismatch");
 
             // Parse using round-trip ISO 8601 to preserve UTC
             DateTime.TryParse(lastSeenStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,

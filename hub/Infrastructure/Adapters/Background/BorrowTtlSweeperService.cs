@@ -17,6 +17,7 @@
 #endregion
 
 using StackExchange.Redis;
+using Microsoft.Extensions.Logging;
 
 namespace PlaywrightHub.Infrastructure.Adapters.Background;
 
@@ -24,7 +25,7 @@ namespace PlaywrightHub.Infrastructure.Adapters.Background;
 ///     Background sweeper that auto-returns borrowed sessions whose TTL/lease has expired.
 ///     Persists and consults session:* hashes to recover context after Hub restarts.
 /// </summary>
-public sealed class BorrowTtlSweeperService(IDatabase db, IConnectionMultiplexer mux, IConfiguration config)
+public sealed class BorrowTtlSweeperService(IDatabase db, IConnectionMultiplexer mux, IConfiguration config, ILogger<BorrowTtlSweeperService> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -46,7 +47,7 @@ end
 return nil
 ";
 
-        Console.WriteLine($"[BorrowTTL] Starting. sweepInterval={intervalSeconds}s");
+        logger.LogInformation("[BorrowTTL] Starting. sweepInterval={IntervalSeconds}s", intervalSeconds);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -86,7 +87,8 @@ return nil
                             continue;
                         }
 
-                        string labelKey = entries.FirstOrDefault(e => e.Name == "labelKey").Value;
+                        var labelEntry = entries.FirstOrDefault(e => e.Name == "labelKey");
+                        string? labelKey = labelEntry.Value.IsNull ? null : (labelEntry.Value.IsNullOrEmpty ? null : labelEntry.Value.ToString());
                         if (!string.IsNullOrWhiteSpace(labelKey))
                         {
                             var inuseKey = $"inuse:{labelKey}";
@@ -135,19 +137,18 @@ return nil
                     catch (Exception ex)
                     {
                         errors++;
-                        Console.WriteLine($"[BorrowTTL] Error while processing {sessionKey}: {ex.Message}");
+                        logger.LogError(ex, "[BorrowTTL] Error while processing {SessionKey}", sessionKey);
                     }
                 }
             }
             catch (Exception exOuter)
             {
                 errors++;
-                Console.WriteLine($"[BorrowTTL] Sweep error: {exOuter.Message}");
+                logger.LogError(exOuter, "[BorrowTTL] Sweep error");
             }
 
             var took = (int)(DateTime.UtcNow - started).TotalMilliseconds;
-            Console.WriteLine(
-                $"[BorrowTTL] Tick done processed={processed} returned={returned} errors={errors} took={took}ms");
+            logger.LogInformation("[BorrowTTL] Tick done processed={Processed} returned={Returned} errors={Errors} took={TookMs}ms", processed, returned, errors, took);
 
             try { await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken); }
             catch (OperationCanceledException) { break; }

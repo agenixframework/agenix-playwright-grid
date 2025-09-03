@@ -32,6 +32,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Reduce noisy framework info logs in Dashboard (e.g., /health pipeline messages)
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+// Apply environment-driven log levels (global + per-category overrides)
+LoggingConfigurator.ApplyFromEnvironment(builder.Logging, builder.Configuration);
 
 // OpenTelemetry setup (env-driven exporters)
 var dashboardServiceName = "playwright-dashboard";
@@ -146,6 +148,11 @@ builder.Services.AddSingleton<PoolStateProxy>();
 // Expose hexagonal ports to UI and adapters via the same state holder
 builder.Services.AddSingleton<IPoolStateReader>(sp => sp.GetRequiredService<PoolStateProxy>());
 builder.Services.AddSingleton<IPoolStateWriter>(sp => sp.GetRequiredService<PoolStateProxy>());
+
+// Connection status state for SignalR UI feedback
+builder.Services.AddSingleton<ConnectionStatusProxy>();
+builder.Services.AddSingleton<IConnectionStatusReader>(sp => sp.GetRequiredService<ConnectionStatusProxy>());
+builder.Services.AddSingleton<IConnectionStatusWriter>(sp => sp.GetRequiredService<ConnectionStatusProxy>());
 
 builder.Services.AddHostedService<SignalRClientService>();
 

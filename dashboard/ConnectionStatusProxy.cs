@@ -21,29 +21,28 @@ using Dashboard.Application.Ports;
 namespace Dashboard;
 
 /// <summary>
-///     Thread-safe proxy that stores the latest pool state for the dashboard.
-///     Implements both read and write ports to act as the application state holder.
+///     Thread-safe proxy that stores the latest SignalR connection status for the dashboard UI.
 /// </summary>
-internal sealed class PoolStateProxy : IPoolStateReader, IPoolStateWriter
+internal sealed class ConnectionStatusProxy : IConnectionStatusReader, IConnectionStatusWriter
 {
     private readonly object _gate = new();
-    private PoolStateDto? _state;
+    private ConnectionStatus _status = ConnectionStatus.Disconnected("Not connected");
 
     public event Action? Changed;
 
-    public PoolStateDto? Get()
+    public ConnectionStatus Get()
     {
         lock (_gate)
         {
-            return _state;
+            return _status;
         }
     }
 
-    public void Update(PoolStateDto state)
+    public void Update(ConnectionStatus status)
     {
         lock (_gate)
         {
-            _state = state;
+            _status = status;
         }
 
         var handler = Changed;

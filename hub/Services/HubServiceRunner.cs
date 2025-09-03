@@ -56,6 +56,8 @@ public static class HubServiceRunner
         // Suppress verbose framework logs like OkObjectResult JSON writing and EndpointMiddleware exec logs
         builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+        // Apply environment-driven log levels (global + per-category overrides)
+        LoggingConfigurator.ApplyFromEnvironment(builder.Logging, builder.Configuration);
 
         // OpenTelemetry setup (env-driven exporters)
         var hubServiceName = "playwright-hub";
@@ -145,17 +147,28 @@ public static class HubServiceRunner
             };
         });
 
-        // Results store (configurable: memory (default) or redis)
+        // Results store (configurable: memory (default), redis, or sqlite)
         var resultsBackend = builder.Configuration["HUB_RESULTS_BACKEND"] ?? "memory";
+        var selectedResultsBackend = "memory (default)";
         if (string.Equals(resultsBackend, "redis", StringComparison.OrdinalIgnoreCase))
         {
             builder.Services.AddSingleton<IResultsStore, RedisResultsStore>();
-            Console.WriteLine("[hub] ResultsStore backend: redis");
+            selectedResultsBackend = "redis";
+        }
+        else if (string.Equals(resultsBackend, "sqlite", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.Services.AddSingleton<IResultsStore, SqliteResultsStore>();
+            selectedResultsBackend = "sqlite";
+        }
+        else if (string.Equals(resultsBackend, "postgres", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.Services.AddSingleton<IResultsStore, PostgresResultsStore>();
+            selectedResultsBackend = "postgres";
         }
         else
         {
             builder.Services.AddSingleton<IResultsStore, InMemoryResultsStore>();
-            Console.WriteLine("[hub] ResultsStore backend: memory (default)");
+            selectedResultsBackend = "memory (default)";
         }
 
         // OpenAPI/Swagger (minimal surface)
@@ -185,6 +198,9 @@ public static class HubServiceRunner
         });
 
         var app = builder.Build();
+
+        // Log selected results backend after app is built (logger available)
+        app.Logger.LogInformation("[hub] ResultsStore backend: {Backend}", selectedResultsBackend);
 
         // Convert unhandled exceptions into RFC7807 ProblemDetails
         app.UseExceptionHandler(errorApp =>
@@ -311,11 +327,11 @@ public static class HubServiceRunner
             };
 
             var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
-            Console.WriteLine("[hub] Startup diagnostics:\n" + json);
+            app.Logger.LogInformation("[hub] Startup diagnostics:\n{Json}", json);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[hub] Startup diagnostics failed: {ex.Message}");
+            app.Logger.LogError(ex, "[hub] Startup diagnostics failed");
         }
 
         await app.RunAsync();

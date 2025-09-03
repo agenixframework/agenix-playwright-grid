@@ -52,6 +52,8 @@ plugins:
 nav:
   - Home: index.md
   - Overview & Quick Start: docs-guide.md
+  - Configuration Guide: configuration.md
+  - Worker Sidecar Management: worker-sidecar-management.md
   - Test Client Usage: TestClient-Usage.md
   - UI User Guide: ui-user-guide.md
   - Label Matching: Label-Matching.md

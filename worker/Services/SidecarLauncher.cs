@@ -36,6 +36,10 @@ public readonly record struct SidecarStartResult(
 
 public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
 {
+    private static readonly Microsoft.Extensions.Logging.ILogger Logger = Microsoft.Extensions.Logging.LoggerFactory
+        .Create(b => b.AddSimpleConsole())
+        .CreateLogger("worker.sidecar");
+
     public async Task<SidecarStartResult> StartAsync(string browserType, CancellationToken ct = default)
     {
         var psi = new ProcessStartInfo
@@ -82,7 +86,7 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
         {
             if (!string.IsNullOrEmpty(e.Data))
             {
-                Console.WriteLine($"[sidecar:{browserType}] {e.Data}");
+                Logger.LogWarning("[sidecar] {browser}: {line}", browserType, e.Data);
             }
         };
 
@@ -135,11 +139,20 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
 
         try
         {
-            var json = JsonNode.Parse(payload!).AsObject();
-            var wsEndpoint = json["wsEndpoint"].GetValue<string>();
-            var pwVersion = json["playwrightVersion"]?.GetValue<string>();
-            var browserVersion = json["browserVersion"]?.GetValue<string>();
-            var browser = json["browser"]?.GetValue<string>() ?? browserType.ToLowerInvariant();
+            var obj = JsonNode.Parse(payload!) as JsonObject;
+            if (obj is null)
+            {
+                throw new InvalidOperationException("Sidecar output was not a JSON object.");
+            }
+            var wsNode = obj["wsEndpoint"];
+            if (wsNode is null)
+            {
+                throw new InvalidOperationException("Sidecar JSON missing wsEndpoint.");
+            }
+            var wsEndpoint = wsNode.GetValue<string>();
+            var pwVersion = obj["playwrightVersion"]?.GetValue<string>();
+            var browserVersion = obj["browserVersion"]?.GetValue<string>();
+            var browser = obj["browser"]?.GetValue<string>() ?? browserType.ToLowerInvariant();
             return new SidecarStartResult(proc, wsEndpoint, pwVersion, browserVersion, browser);
         }
         catch

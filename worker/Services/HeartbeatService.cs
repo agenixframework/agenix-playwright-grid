@@ -24,6 +24,10 @@ namespace WorkerService.Services;
 
 public sealed class HeartbeatService(WorkerOptions options, IDatabase db)
 {
+    private static readonly Microsoft.Extensions.Logging.ILogger Logger = Microsoft.Extensions.Logging.LoggerFactory
+        .Create(b => b.AddSimpleConsole())
+        .CreateLogger("worker.heartbeat");
+
     public async Task HeartbeatOnceAsync()
     {
         try
@@ -39,7 +43,7 @@ public sealed class HeartbeatService(WorkerOptions options, IDatabase db)
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[HeartbeatOnce] error: {ex.Message}");
+            Logger.LogWarning(ex, "[HeartbeatOnce] error: {message}", ex.Message);
         }
     }
 
@@ -61,7 +65,7 @@ public sealed class HeartbeatService(WorkerOptions options, IDatabase db)
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Heartbeat] error: {ex.Message}");
+                Logger.LogWarning(ex, "[Heartbeat] error: {message}", ex.Message);
             }
 
             try { await Task.Delay(hbInterval, ct); }

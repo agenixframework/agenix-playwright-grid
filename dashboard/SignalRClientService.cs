@@ -24,42 +24,44 @@ namespace Dashboard;
 internal sealed class SignalRClientService(
     HubConnection conn,
     IPoolStateWriter writer,
+    IConnectionStatusWriter status,
     ILogger<SignalRClientService> logger)
     : BackgroundService
 {
     private const string PoolStateMessageName = "PoolState";
 
     // Keep subscription so we can avoid duplicates and dispose on shutdown
-    private IDisposable _poolStateSubscription;
+    private IDisposable? _poolStateSubscription;
+    private bool _connectionEventsWired;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         EnsureHandlersWired(writer);
+        EnsureConnectionEventsWired();
+
+        var attempt = 0;
+        var rng = new Random();
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                status.Update(ConnectionStatus.Connecting());
                 await conn.StartAsync(stoppingToken);
+                attempt = 0;
                 logger.LogInformation("SignalR connection started (ConnectionId={Id})", conn.ConnectionId);
+                status.Update(ConnectionStatus.Connected());
 
                 // Wait until closed or cancellation
                 var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                Task ClosedHandler(Exception ex)
-                {
-                    if (ex != null)
-                    {
-                        logger.LogWarning(ex, "SignalR connection closed.");
-                    }
-                    else
-                    {
-                        logger.LogWarning("SignalR connection closed.");
-                    }
-
-                    closedTcs.TrySetResult(true);
-                    return Task.CompletedTask;
-                }
+                Task ClosedHandler(Exception? ex)
+            {
+                var msg = ex?.Message;
+                logger.LogWarning(ex, "SignalR connection closed.");
+                closedTcs.TrySetResult(true);
+                return Task.CompletedTask;
+            }
 
                 conn.Closed += ClosedHandler;
                 try
@@ -73,6 +75,7 @@ internal sealed class SignalRClientService(
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
+                status.Update(ConnectionStatus.Disconnected("Shutting down"));
                 break; // graceful shutdown
             }
             catch (Exception ex)
@@ -82,10 +85,28 @@ internal sealed class SignalRClientService(
 
             if (stoppingToken.IsCancellationRequested)
             {
+                status.Update(ConnectionStatus.Disconnected("Cancelled"));
                 break;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            // exponential backoff with jitter: 1s * 2^attempt (max 30s)
+            var baseDelayMs = (int)Math.Min(30000, 1000 * Math.Pow(2, Math.Min(6, attempt)));
+            var jitterFactor = 0.8 + (rng.NextDouble() * 0.4); // 0.8 .. 1.2
+            var delay = TimeSpan.FromMilliseconds(Math.Max(500, baseDelayMs * jitterFactor));
+            attempt++;
+
+            var nextRetryAt = DateTimeOffset.UtcNow + delay;
+            status.Update(ConnectionStatus.Retrying(nextRetryAt, attempt, "Disconnected from hub"));
+
+            try
+            {
+                await Task.Delay(delay, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                status.Update(ConnectionStatus.Disconnected("Cancelled"));
+                break;
+            }
         }
     }
 
@@ -97,6 +118,29 @@ internal sealed class SignalRClientService(
         }
 
         _poolStateSubscription = conn.On<PoolStateDto>(PoolStateMessageName, writer.Update);
+    }
+
+    private void EnsureConnectionEventsWired()
+    {
+        if (_connectionEventsWired)
+        {
+            return;
+        }
+
+        conn.Reconnecting += error =>
+        {
+            var msg = error?.Message;
+            status.Update(ConnectionStatus.Disconnected(msg));
+            return Task.CompletedTask;
+        };
+
+        conn.Reconnected += connectionId =>
+        {
+            status.Update(ConnectionStatus.Connected());
+            return Task.CompletedTask;
+        };
+
+        _connectionEventsWired = true;
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

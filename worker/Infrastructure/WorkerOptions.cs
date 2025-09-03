@@ -28,10 +28,61 @@ namespace WorkerService.Infrastructure;
 /// </summary>
 public sealed class WorkerOptions
 {
+    public sealed record BackoffSettings(int MinSeconds, int MaxSeconds, double Multiplier, int FailureResetSeconds);
+    public BackoffSettings SidecarBackoff { get; init; } = new(1, 30, 2.0, 60);
+    public enum WsDropPolicy
+    {
+        DropNewest,
+        DropOldest
+    }
     /// <summary>
     ///     Hub base URL (e.g., http://hub:5000).
     /// </summary>
     public string HubUrl { get; init; } = "http://hub:5000";
+
+    /// <summary>
+    ///     Maximum allowed size in bytes for a single WebSocket message (aggregated across frames).
+    ///     Messages exceeding this limit will cause the connection to be closed.
+    ///     Controlled by WS_MAX_MESSAGE_BYTES; clamped to 8 KiB .. 16 MiB. Default 2 MiB.
+    /// </summary>
+    public int WebSocketMaxMessageBytes { get; init; } = 2_097_152;
+
+    /// <summary>
+    ///     Idle timeout in seconds. If no frames are received in either direction for this duration,
+    ///     the Worker will close the WebSocket connection. Controlled by WS_IDLE_TIMEOUT_SECONDS; clamped
+    ///     to 5 .. 600 seconds. Default 60.
+    /// </summary>
+    public int WebSocketIdleTimeoutSeconds { get; init; } = 60;
+
+    /// <summary>
+    ///     Interval in seconds for keepalive pings on WebSocket connections. Applied to both client and server websockets.
+    ///     Controlled by WS_PING_INTERVAL_SECONDS; clamped to 5 .. 300 seconds. Default 15.
+    /// </summary>
+    public int WebSocketPingIntervalSeconds { get; init; } = 15;
+
+    /// <summary>
+    ///     Capacity of the bounded channel used to buffer Playwright protocol log messages forwarded to the Hub.
+    ///     Controlled by WS_LOG_CHANNEL_CAPACITY; clamped to 16 .. 8192. Default 256.
+    /// </summary>
+    public int WebSocketLogChannelCapacity { get; init; } = 256;
+
+    /// <summary>
+    ///     Drop policy when the log channel is full. Controlled by WS_LOG_DROP_POLICY; allowed values: DropNewest, DropOldest.
+    ///     Default DropNewest (drop the attempted write).
+    /// </summary>
+    public WsDropPolicy WebSocketLogDropPolicy { get; init; } = WsDropPolicy.DropNewest;
+
+    /// <summary>
+    ///     Capacity of the bounded channels used to buffer WebSocket frames between client and sidecar.
+    ///     Controlled by WS_PROXY_CHANNEL_CAPACITY; clamped to 32 .. 65536. Default 1024.
+    /// </summary>
+    public int WebSocketProxyChannelCapacity { get; init; } = 1024;
+
+    /// <summary>
+    ///     Drop policy when the proxy frame channel is full. Controlled by WS_PROXY_DROP_POLICY; allowed values: DropNewest, DropOldest.
+    ///     Default DropNewest.
+    /// </summary>
+    public WsDropPolicy WebSocketProxyDropPolicy { get; init; } = WsDropPolicy.DropNewest;
 
     /// <summary>
     ///     Redis connection endpoint (e.g., redis:6379).
@@ -103,6 +154,8 @@ public sealed class WorkerOptions
     /// </summary>
     public static WorkerOptions FromEnvironment()
     {
+        var errors = new List<string>();
+
         var poolConfigEnv = Environment.GetEnvironmentVariable("POOL_CONFIG") ?? "AppA:Chromium:Staging=3";
         // Labels
         var labels = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -147,9 +200,114 @@ public sealed class WorkerOptions
             timeoutSeconds = Math.Min(600, Math.Max(5, parsed));
         }
 
+        // WS limits and ping intervals
+        var maxMessageEnv = Environment.GetEnvironmentVariable("WS_MAX_MESSAGE_BYTES");
+        var maxMessageBytes = 2_097_152;
+        if (!string.IsNullOrWhiteSpace(maxMessageEnv) && int.TryParse(maxMessageEnv.Trim(), out var mm))
+        {
+            // Clamp to 8 KiB .. 16 MiB
+            maxMessageBytes = Math.Min(16 * 1024 * 1024, Math.Max(8 * 1024, mm));
+        }
+
+        var idleEnv = Environment.GetEnvironmentVariable("WS_IDLE_TIMEOUT_SECONDS");
+        var idleSeconds = 60;
+        if (!string.IsNullOrWhiteSpace(idleEnv) && int.TryParse(idleEnv.Trim(), out var isec))
+        {
+            idleSeconds = Math.Min(600, Math.Max(5, isec));
+        }
+
+        var pingEnv = Environment.GetEnvironmentVariable("WS_PING_INTERVAL_SECONDS");
+        var pingSeconds = 15;
+        if (!string.IsNullOrWhiteSpace(pingEnv) && int.TryParse(pingEnv.Trim(), out var psec))
+        {
+            pingSeconds = Math.Min(300, Math.Max(5, psec));
+        }
+
+        // WS log backpressure
+        var logCapEnv = Environment.GetEnvironmentVariable("WS_LOG_CHANNEL_CAPACITY");
+        var logCap = 256;
+        if (!string.IsNullOrWhiteSpace(logCapEnv) && int.TryParse(logCapEnv.Trim(), out var lcap))
+        {
+            logCap = Math.Min(8192, Math.Max(16, lcap));
+        }
+
+        var logPolicyEnv = Environment.GetEnvironmentVariable("WS_LOG_DROP_POLICY") ?? "DropNewest";
+        var logPolicy = WsDropPolicy.DropNewest;
+        if (!Enum.TryParse<WsDropPolicy>(logPolicyEnv, true, out logPolicy))
+        {
+            // Non-fatal: default to DropNewest
+            logPolicy = WsDropPolicy.DropNewest;
+            errors.Add($"WS_LOG_DROP_POLICY has invalid value '{logPolicyEnv}'. Allowed: DropNewest, DropOldest.");
+        }
+
+        // WS proxy backpressure (data path)
+        var proxyCapEnv = Environment.GetEnvironmentVariable("WS_PROXY_CHANNEL_CAPACITY");
+        var proxyCap = 1024;
+        if (!string.IsNullOrWhiteSpace(proxyCapEnv) && int.TryParse(proxyCapEnv.Trim(), out var pcap))
+        {
+            proxyCap = Math.Min(65536, Math.Max(32, pcap));
+        }
+        var proxyPolicyEnv = Environment.GetEnvironmentVariable("WS_PROXY_DROP_POLICY") ?? "DropNewest";
+        var proxyPolicy = WsDropPolicy.DropNewest;
+        if (!Enum.TryParse<WsDropPolicy>(proxyPolicyEnv, true, out proxyPolicy))
+        {
+            // Non-fatal: default to DropNewest
+            proxyPolicy = WsDropPolicy.DropNewest;
+            errors.Add($"WS_PROXY_DROP_POLICY has invalid value '{proxyPolicyEnv}'. Allowed: DropNewest, DropOldest.");
+        }
+
+        // Sidecar restart backoff parsing
+        int clamp(int v, int min, int max) => Math.Min(max, Math.Max(min, v));
+        double clampd(double v, double min, double max) => Math.Min(max, Math.Max(min, v));
+        var backoffMin = clamp(int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MIN_SECONDS"), out var bmin) ? bmin : 1, 1, 120);
+        var backoffMax = clamp(int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MAX_SECONDS"), out var bmax) ? bmax : 30, 1, 600);
+        if (backoffMax < backoffMin) backoffMax = backoffMin;
+        var backoffMult = clampd(double.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MULTIPLIER"), out var bmul) ? bmul : 2.0, 1.1, 5.0);
+        var backoffReset = clamp(int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_FAILURE_RESET_SECONDS"), out var brst) ? brst : 60, 10, 600);
+
+        // Critical validations
+        var hubUrlEnv = Environment.GetEnvironmentVariable("HUB_URL") ?? "http://hub:5000";
+        if (!Uri.TryCreate(hubUrlEnv, UriKind.Absolute, out var hubUri) ||
+            !(hubUri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || hubUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+        {
+            errors.Add($"HUB_URL must be a valid http/https URL. Value: '{hubUrlEnv}'.");
+        }
+
+        var publicWsHost = Environment.GetEnvironmentVariable("PUBLIC_WS_HOST");
+        var publicWsPortRaw = Environment.GetEnvironmentVariable("PUBLIC_WS_PORT");
+        var publicWsScheme = Environment.GetEnvironmentVariable("PUBLIC_WS_SCHEME") ?? "ws";
+        if (!string.IsNullOrWhiteSpace(publicWsScheme) &&
+            !(publicWsScheme.Equals("ws", StringComparison.OrdinalIgnoreCase) || publicWsScheme.Equals("wss", StringComparison.OrdinalIgnoreCase)))
+        {
+            errors.Add($"PUBLIC_WS_SCHEME must be 'ws' or 'wss'. Value: '{publicWsScheme}'.");
+        }
+        var hostProvided = !string.IsNullOrWhiteSpace(publicWsHost);
+        var portProvided = !string.IsNullOrWhiteSpace(publicWsPortRaw);
+        if (hostProvided ^ portProvided)
+        {
+            errors.Add("PUBLIC_WS_HOST and PUBLIC_WS_PORT must be provided together to enable public WS endpoint.");
+        }
+        int? publicPort = null;
+        if (portProvided)
+        {
+            if (!int.TryParse(publicWsPortRaw!.Trim(), out var p) || p < 1 || p > 65535)
+            {
+                errors.Add($"PUBLIC_WS_PORT must be an integer between 1 and 65535. Value: '{publicWsPortRaw}'.");
+            }
+            else
+            {
+                publicPort = p;
+            }
+        }
+
+        if (errors.Count > 0 && (errors.Any(e => e.StartsWith("HUB_URL")) || errors.Any(e => e.StartsWith("PUBLIC_WS_"))))
+        {
+            throw new ArgumentException("Invalid worker configuration:\n - " + string.Join("\n - ", errors));
+        }
+
         return new WorkerOptions
         {
-            HubUrl = Environment.GetEnvironmentVariable("HUB_URL") ?? "http://hub:5000",
+            HubUrl = hubUrlEnv,
             RedisUrl = Environment.GetEnvironmentVariable("REDIS_URL") ?? "redis:6379",
             NodeId = Environment.GetEnvironmentVariable("NODE_ID") ?? $"node-{Guid.NewGuid():N}",
             NodeSecret = Environment.GetEnvironmentVariable("NODE_SECRET") ?? "node-secret",
@@ -159,11 +317,19 @@ public sealed class WorkerOptions
             SidecarScript =
                 Environment.GetEnvironmentVariable("PLAYWRIGHT_SIDECAR") ?? "launch_playwright_server.js",
             SidecarReadyTimeoutSeconds = timeoutSeconds,
-            PublicWsHost = Environment.GetEnvironmentVariable("PUBLIC_WS_HOST"),
-            PublicWsPort = Environment.GetEnvironmentVariable("PUBLIC_WS_PORT"),
-            PublicWsScheme = Environment.GetEnvironmentVariable("PUBLIC_WS_SCHEME") ?? "ws",
+            PublicWsHost = publicWsHost,
+            PublicWsPort = publicWsPortRaw,
+            PublicWsScheme = publicWsScheme,
             Labels = labels,
-            PoolConfig = pools
+            PoolConfig = pools,
+            WebSocketMaxMessageBytes = maxMessageBytes,
+            WebSocketIdleTimeoutSeconds = idleSeconds,
+            WebSocketPingIntervalSeconds = pingSeconds,
+            WebSocketLogChannelCapacity = logCap,
+            WebSocketLogDropPolicy = logPolicy,
+            WebSocketProxyChannelCapacity = proxyCap,
+            WebSocketProxyDropPolicy = proxyPolicy,
+            SidecarBackoff = new BackoffSettings(backoffMin, backoffMax, backoffMult, backoffReset)
         };
     }
 

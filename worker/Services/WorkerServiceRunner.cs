@@ -26,6 +26,10 @@ namespace WorkerService.Services;
 
 public sealed class WorkerServiceRunner
 {
+    private static readonly Microsoft.Extensions.Logging.ILogger Logger = Microsoft.Extensions.Logging.LoggerFactory
+        .Create(b => b.AddSimpleConsole())
+        .CreateLogger("worker");
+
     public async Task RunAsync(string[] args)
     {
         // Load options
@@ -55,15 +59,16 @@ public sealed class WorkerServiceRunner
                     },
                 Sidecar =
                     new { Script = options.SidecarScript, ReadyTimeoutSeconds = options.SidecarReadyTimeoutSeconds },
+                Backpressure = new { LogChannelCapacity = options.WebSocketLogChannelCapacity, LogDropPolicy = options.WebSocketLogDropPolicy.ToString(), ProxyChannelCapacity = options.WebSocketProxyChannelCapacity, ProxyDropPolicy = options.WebSocketProxyDropPolicy.ToString() },
                 Labels = options.Labels.ToDictionary(k => k.Key, v => v.Value),
                 PoolConfig = options.PoolConfig.ToDictionary(k => k.Key, v => v.Value)
             };
             var json = JsonSerializer.Serialize(diag, new JsonSerializerOptions { WriteIndented = true });
-            Console.WriteLine("[worker] Startup diagnostics (effective config):\n" + json);
+            Logger.LogInformation("[worker] Startup diagnostics (effective config):\n{json}", json);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[worker] Startup diagnostics failed: {ex.Message}");
+            Logger.LogError(ex, "[worker] Startup diagnostics failed: {message}", ex.Message);
         }
 
         // Startup info: log configured Playwright version and installed NPM version
@@ -84,12 +89,11 @@ public sealed class WorkerServiceRunner
                 }
             }
 
-            Console.WriteLine(
-                $"[worker] Playwright startup: package={envPkg}, envVersion={envVer}, installedVersion={installedVer}");
+            Logger.LogInformation("[worker] Playwright startup: package={pkg}, envVersion={envVersion}, installedVersion={installedVersion}", envPkg, envVer, installedVer);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[worker] Playwright startup: failed to detect installed version: {ex.Message}");
+            Logger.LogWarning(ex, "[worker] Playwright startup: failed to detect installed version: {message}", ex.Message);
         }
 
         // Compose dependencies

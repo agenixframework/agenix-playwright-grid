@@ -16,6 +16,10 @@
 // limitations under the License.
 #endregion
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using Microsoft.Playwright;
 
 namespace Agenix.PlaywrightGrid.HubClient;
@@ -90,7 +94,7 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         {
             _onConsole = (_, msg) =>
             {
-                // Example: console[error]: Something bad
+                if (!ShouldSample("console")) return;
                 var text = $"console[{msg.Type}]: {msg.Text}";
                 _ = SafeSend(text);
             };
@@ -101,6 +105,7 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         {
             _onPageError = (_, error) =>
             {
+                if (!ShouldSample("pageerror")) return;
                 var text = $"pageerror: {error}";
                 _ = SafeSend(text);
             };
@@ -111,7 +116,9 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         {
             _onRequest = (_, req) =>
             {
-                var text = $"request: {req.Method} {req.Url}";
+                if (!ShouldSample("request")) return;
+                var url = RedactUrl(req.Url);
+                var text = $"request: {req.Method} {url}{FormatHeaders(req)}";
                 _ = SafeSend(text);
             };
             _page.Request += _onRequest;
@@ -121,7 +128,9 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         {
             _onResponse = (_, rsp) =>
             {
-                var text = $"response: {rsp.Status} {rsp.Request.Method} {rsp.Url}";
+                if (!ShouldSample("response")) return;
+                var url = RedactUrl(rsp.Url);
+                var text = $"response: {rsp.Status} {rsp.Request.Method} {url}{FormatHeaders(rsp.Request)}";
                 _ = SafeSend(text);
             };
             _page.Response += _onResponse;
@@ -131,7 +140,9 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         {
             _onRequestFinished = (_, req) =>
             {
-                var text = $"request finished: {req.Method} {req.Url}";
+                if (!ShouldSample("requestfinished")) return;
+                var url = RedactUrl(req.Url);
+                var text = $"request finished: {req.Method} {url}{FormatHeaders(req)}";
                 _ = SafeSend(text);
             };
             _page.RequestFinished += _onRequestFinished;
@@ -141,7 +152,9 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         {
             _onRequestFailed = (_, req) =>
             {
-                var text = $"request failed: {req.Method} {req.Url} failure={req.Failure}";
+                if (!ShouldSample("requestfailed")) return;
+                var url = RedactUrl(req.Url);
+                var text = $"request failed: {req.Method} {url} failure={req.Failure}{FormatHeaders(req)}";
                 _ = SafeSend(text);
             };
             _page.RequestFailed += _onRequestFailed;
@@ -212,6 +225,128 @@ public sealed class PlaywrightEventForwarder : IDisposable, IAsyncDisposable
         public bool Response { get; init; } = true;
         public bool RequestFinished { get; init; } = false;
         public bool RequestFailed { get; init; } = true;
+
+        // Redaction options
+        public bool EnableRedaction { get; init; } = true;
+        // If true, remove the entire query string; if false, scrub values except whitelisted keys
+        public bool RedactAllQuery { get; init; } = true;
+        public string[] QueryParamWhitelist { get; init; } = Array.Empty<string>();
+
+        // Header forwarding options
+        public bool IncludeHeaders { get; init; } = false;
+        public string[] HeaderWhitelist { get; init; } = Array.Empty<string>();
+
+        // Sampling options
+        public bool EnableSampling { get; init; } = false;
+        public double SampleRate { get; init; } = 1.0; // between 0 and 1
+        public string? DeterministicKey { get; init; } = null; // if provided, use stable hashing
+    }
+
+    private bool ShouldSample(string category)
+    {
+        if (!_opts.EnableSampling) return true;
+        var rate = _opts.SampleRate;
+        if (rate >= 1.0) return true;
+        if (rate <= 0.0) return false;
+
+        // Deterministic hash using browserId + category + optional key
+        var key = _browserId + ":" + category + (_opts.DeterministicKey is null ? string.Empty : ":" + _opts.DeterministicKey);
+        unchecked
+        {
+            int hash = 23;
+            foreach (var ch in key)
+            {
+                hash = hash * 31 + ch;
+            }
+            // Normalize to [0,1)
+            var val = (hash & 0x7fffffff) / (double)int.MaxValue;
+            return val < rate;
+        }
+    }
+
+    private string RedactUrl(string url)
+    {
+        if (!_opts.EnableRedaction) return url;
+        if (string.IsNullOrEmpty(url)) return url;
+
+        // We avoid System.Uri to keep behavior simple for non-absolute URLs
+        var qIndex = url.IndexOf('?');
+        if (qIndex < 0) return url; // no query
+        if (_opts.RedactAllQuery) return url.Substring(0, qIndex);
+
+        var baseUrl = url.Substring(0, qIndex);
+        var query = url.Substring(qIndex + 1);
+        if (string.IsNullOrEmpty(query)) return baseUrl;
+
+        var parts = query.Split('&');
+        var allowed = new List<string>(parts.Length);
+        var wl = _opts.QueryParamWhitelist;
+        foreach (var p in parts)
+        {
+            if (string.IsNullOrEmpty(p)) continue;
+            var eq = p.IndexOf('=');
+            string name = eq >= 0 ? p.Substring(0, eq) : p;
+            string value = eq >= 0 ? p.Substring(eq + 1) : string.Empty;
+            if (wl.Any(w => string.Equals(w, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                // keep as-is
+                allowed.Add(eq >= 0 ? name + "=" + value : name);
+            }
+            else
+            {
+                // scrub value but keep key name for context
+                allowed.Add(string.IsNullOrEmpty(name) ? string.Empty : name + "=<redacted>");
+            }
+        }
+
+        var rebuilt = string.Join("&", allowed.Where(s => !string.IsNullOrEmpty(s)));
+        return rebuilt.Length == 0 ? baseUrl : baseUrl + "?" + rebuilt;
+    }
+
+    private string FormatHeaders(IRequest req)
+    {
+        if (!_opts.IncludeHeaders) return string.Empty;
+        if (_opts.HeaderWhitelist.Length == 0) return string.Empty;
+
+        IReadOnlyDictionary<string, string> headers;
+        try
+        {
+            headers = req.Headers;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+
+        if (headers is null || headers.Count == 0) return string.Empty;
+
+        var wl = _opts.HeaderWhitelist;
+        var filtered = headers
+            .Where(kv => wl.Any(w => string.Equals(w, kv.Key, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        if (filtered.Length == 0) return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.Append(" headers={");
+        bool first = true;
+        foreach (var kv in filtered)
+        {
+            if (!first) sb.Append(", ");
+            first = false;
+            sb.Append(kv.Key);
+            sb.Append(": ");
+            // Always redact set-cookie/cookie just in case
+            if (kv.Key.Equals("cookie", StringComparison.OrdinalIgnoreCase) || kv.Key.Equals("set-cookie", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.Append("<redacted>");
+            }
+            else
+            {
+                sb.Append(kv.Value);
+            }
+        }
+        sb.Append('}');
+        return sb.ToString();
     }
 }
 

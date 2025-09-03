@@ -31,11 +31,12 @@ namespace GridTests;
 [SetUpFixture]
 public sealed class TestEnvironment
 {
-    private TestcontainersContainer _hub;
-    private IDockerNetwork _network;
-    private TestcontainersContainer _redis;
-    private TestcontainersContainer _workerChromium;
-    private TestcontainersContainer _workerFxWk;
+    private TestcontainersContainer? _hub;
+    private IDockerNetwork? _network;
+    private TestcontainersContainer? _redis;
+    private TestcontainersContainer? _postgres;
+    private TestcontainersContainer? _workerChromium;
+    private TestcontainersContainer? _workerFxWk;
 
     [OneTimeSetUp]
     public async Task GlobalSetup()
@@ -138,6 +139,13 @@ public sealed class TestEnvironment
             var hubImageName = "gridtests/hub:dev";
             var workerImageName = "gridtests/worker:dev";
 
+            // Backend selection for results store used by Hub during tests
+            var resultsBackend = (Environment.GetEnvironmentVariable("GRID_TESTS_RESULTS_BACKEND") ?? "redis").Trim();
+            var pgImage = Environment.GetEnvironmentVariable("GRID_TESTS_POSTGRES_IMAGE") ?? "postgres:16-alpine";
+            var pgDb = Environment.GetEnvironmentVariable("GRID_TESTS_POSTGRES_DB") ?? "playwrightgrid";
+            var pgUser = Environment.GetEnvironmentVariable("GRID_TESTS_POSTGRES_USER") ?? "postgres";
+            var pgPassword = Environment.GetEnvironmentVariable("GRID_TESTS_POSTGRES_PASSWORD") ?? "postgres";
+
             var forceBuildEnv = Environment.GetEnvironmentVariable("GRID_TESTS_FORCE_BUILD");
             var forceBuild = string.IsNullOrWhiteSpace(forceBuildEnv) || IsTruthy(forceBuildEnv);
 
@@ -159,8 +167,10 @@ public sealed class TestEnvironment
                 var runningHub = await IsContainerRunningAsync("gridtests-hub");
                 var runningW1 = await IsContainerRunningAsync("gridtests-worker1");
                 var runningW3 = await IsContainerRunningAsync("gridtests-worker3");
+                var needPostgres = string.Equals(resultsBackend, "postgres", StringComparison.OrdinalIgnoreCase);
+                var runningPg = !needPostgres || await IsContainerRunningAsync("gridtests-postgres");
 
-                if (runningRedis && runningHub && runningW1 && runningW3)
+                if (runningRedis && runningHub && runningW1 && runningW3 && runningPg)
                 {
                     await TestContext.Progress.WriteLineAsync(
                         "[GridTests] Reuse mode: Found running containers, skipping setup.");
@@ -206,8 +216,29 @@ public sealed class TestEnvironment
                 .Build();
             await _redis.StartAsync();
 
-            // Start Hub (use Redis via network alias)
-            _hub = new TestcontainersBuilder<TestcontainersContainer>()
+            // Optionally start Postgres if requested as results backend
+            var usePostgres = string.Equals(resultsBackend, "postgres", StringComparison.OrdinalIgnoreCase);
+            if (usePostgres)
+            {
+                _postgres = new TestcontainersBuilder<TestcontainersContainer>()
+                    .WithImage(pgImage)
+                    .WithName($"gridtests-postgres{nameSuffix}")
+                    .WithNetwork(_network)
+                    .WithHostname("postgres")
+                    .WithEnvironment("POSTGRES_PASSWORD", pgPassword)
+                    .WithEnvironment("POSTGRES_USER", pgUser)
+                    .WithEnvironment("POSTGRES_DB", pgDb)
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
+                    .WithOutputConsumer(Consume.RedirectStdoutAndStderrToStream(
+                        new ProgressStream(TestContext.Progress, "[postgres][stdout] "),
+                        new ProgressStream(TestContext.Progress, "[postgres][stderr] ")
+                    ))
+                    .Build();
+                await _postgres.StartAsync();
+            }
+
+            // Start Hub (use Redis via network alias and optional Postgres)
+            var hubBuilder = new TestcontainersBuilder<TestcontainersContainer>()
                 .WithImage(hubImageName)
                 .WithName($"gridtests-hub{nameSuffix}")
                 .WithNetwork(_network)
@@ -220,8 +251,17 @@ public sealed class TestEnvironment
                 .WithOutputConsumer(Consume.RedirectStdoutAndStderrToStream(
                     new ProgressStream(TestContext.Progress, "[hub][stdout] "),
                     new ProgressStream(TestContext.Progress, "[hub][stderr] ")
-                ))
-                .Build();
+                ));
+
+            if (usePostgres)
+            {
+                var pgConn = $"Host=postgres;Port=5432;Username={pgUser};Password={pgPassword};Database={pgDb}";
+                hubBuilder = hubBuilder
+                    .WithEnvironment("HUB_RESULTS_BACKEND", "postgres")
+                    .WithEnvironment("HUB_RESULTS_POSTGRES", pgConn);
+            }
+
+            _hub = hubBuilder.Build();
             await _hub.StartAsync();
 
             // Prepare Workers (start in parallel after Hub is up)
@@ -351,6 +391,7 @@ public sealed class TestEnvironment
         await StopAsync(_workerFxWk);
         await StopAsync(_workerChromium);
         await StopAsync(_hub);
+        await StopAsync(_postgres);
         await StopAsync(_redis);
 
         // Delete network after containers are stopped
@@ -365,7 +406,7 @@ public sealed class TestEnvironment
             _network = null;
         }
 
-        async Task StopAsync(TestcontainersContainer c)
+        async Task StopAsync(TestcontainersContainer? c)
         {
             if (c == null)
             {
@@ -538,7 +579,7 @@ public sealed class TestEnvironment
         using var http = new HttpClient(handler);
         http.Timeout = TimeSpan.FromSeconds(10);
         var start = DateTime.UtcNow;
-        Exception last = null;
+        Exception? last = null;
         while (DateTime.UtcNow - start < timeout)
         {
             try
@@ -564,7 +605,7 @@ public sealed class TestEnvironment
             $"Hub health endpoint did not become ready in {timeout}. Last error: {last?.Message}");
     }
 
-    private static string FindFileUpwards(string fileName)
+    private static string? FindFileUpwards(string fileName)
     {
         var dir = new DirectoryInfo(TestContext.CurrentContext.WorkDirectory);
         while (dir != null)
@@ -685,7 +726,7 @@ public sealed class TestEnvironment
     }
 
     // Helpers
-    private static bool IsTruthy(string value)
+    private static bool IsTruthy(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

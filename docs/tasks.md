@@ -22,25 +22,25 @@ The following is an ordered, actionable checklist covering architectural and cod
 16. [ ] Add rate limiting (per IP and per runner id) on Hub borrow/return to protect from abuse; return 429 with Retry-After.
 17. [ ] Add optional IP allowlist or token-based auth (e.g., PAT via header) for Hub API alongside shared secrets.
 18. [X] Implement graceful shutdown: Hub stops accepting new borrows; Worker drains sessions and returns cleanly on SIGTERM.
-19. [ ] Enforce maximum WebSocket message size and idle timeouts in Worker; send periodic pings and close dead connections.
-20. [ ] Add backpressure controls in Worker WS proxy (bounded channels, drop policy, and metrics for drops).
-21. [ ] Strengthen Worker sidecar management: sidecar health endpoint, restart/backoff strategy, and clear error surfacing to Hub.
-22. [ ] Make PLAYWRIGHT_VERSION reporting authoritative: validate against sidecar; surface mismatch in Dashboard and metrics.
-23. [ ] Improve WorkerOptions.FromEnvironment() with strong typing, defaults, range checks, and detailed validation errors.
+19. [X] Enforce maximum WebSocket message size and idle timeouts in Worker; send periodic pings and close dead connections.
+20. [X] Add backpressure controls in Worker WS proxy (bounded channels, drop policy, and metrics for drops).
+21. [X] Strengthen Worker sidecar management: sidecar health endpoint, restart/backoff strategy, and clear error surfacing to Hub.
+22. [X] Make PLAYWRIGHT_VERSION reporting authoritative: validate against sidecar; surface mismatch in Dashboard and metrics.
+23. [X] Improve WorkerOptions.FromEnvironment() with strong typing, defaults, range checks, and detailed validation errors.
 24. [X] Replace ad-hoc HttpClient usage in HubClient with IHttpClientFactory and resilience (timeouts, retries, transient error policy).
-25. [ ] Add CancellationToken overloads to HubClient methods (BorrowAsync, ReturnAsync, SendApiLogAsync).
-26. [ ] Introduce domain-specific exceptions in HubClient (CapacityUnavailableException, AuthenticationException, ProtocolException).
-27. [ ] Batch and rate-limit HubClient log sending; add async buffering to minimize impact on runner.
-28. [ ] Add optional log redaction in PlaywrightEventForwarder (query param scrub, headers whitelist) and sampling controls.
-29. [ ] Ensure nullability annotations are correct across Hub, Worker, HubClient; enable nullable warnings as errors on CI.
-30. [ ] Audit async paths to avoid sync-over-async; ensure proper ConfigureAwait usage in library code where applicable.
-31. [ ] Standardize structured logging (Serilog or built-in ILogger scopes) with runId/browserId scope enrichment.
-32. [ ] Provide configurable log levels and per-component overrides via environment.
-33. [ ] Add graceful error pages and dashboard error boundaries for SignalR disconnections with auto-retry/backoff.
-34. [ ] Implement virtualization/pagination for Dashboard results and command logs to prevent UI slowdowns on large runs.
-35. [X] Add filtering/search on Dashboard (by App, Browser, Env, Region, Status, runId) and deep links.
+25. [X] Add CancellationToken overloads to HubClient methods (BorrowAsync, ReturnAsync, SendApiLogAsync).
+26. [X] Introduce domain-specific exceptions in HubClient (CapacityUnavailableException, AuthenticationException, ProtocolException).
+27. [X] Batch and rate-limit HubClient log sending; add async buffering to minimize impact on runner.
+28. [X] Add optional log redaction in PlaywrightEventForwarder (query param scrub, headers whitelist) and sampling controls.
+29. [X] Ensure nullability annotations are correct across Hub, Worker, HubClient; enable nullable warnings as errors on CI.
+30. [X] Audit async paths to avoid sync-over-async; ensure proper ConfigureAwait usage in library code where applicable.
+31. [X] Standardize structured logging (Serilog or built-in ILogger scopes) with runId/browserId scope enrichment.
+32. [X] Provide configurable log levels and per-component overrides via environment.
+33. [X] Add graceful error pages and dashboard error boundaries for SignalR disconnections with auto-retry/backoff.
+34. [X] Implement virtualization/pagination for Dashboard results and command logs to prevent UI slowdowns on large runs.
+35. [x] Add filtering/search on Dashboard (by App, Browser, Env, Region, Status, runId) and deep links.
 36. [ ] Introduce authentication for Dashboard (OIDC/OAuth2) with role-based access (viewer/admin); secure SignalR hub accordingly.
-37. [ ] Add retention policies for run results and logs (TTL in Redis; optional durable store adapter e.g., PostgreSQL/SQLite).
+37. [X] Add retention policies for run results and logs (TTL in Redis; optional durable store adapter e.g., PostgreSQL/SQLite).
 38. [ ] Add API to export run details (JSON/NDJSON) for external archiving.
 39. [ ] Provide Helm chart/Kubernetes manifests with sensible defaults, probes, and resource limits.
 40. [ ] Harden Docker images: run as non-root user, drop capabilities, read-only filesystem with writable temp for Playwright.
@@ -54,7 +54,6 @@ The following is an ordered, actionable checklist covering architectural and cod
 48. [ ] Add flaky-test mitigations: deterministic time helpers, extended health timeouts via env, and richer test diagnostics.
 49. [ ] Provide smoke test for Dashboard SignalR stream (connect, receive events, disconnect) without browsers.
 50. [ ] Add load/pressure test harness (NUnit category) with configurable CONCURRENCY/ITERATIONS and asserts on latency percentiles.
-51. [ ] Introduce a structured configuration guide (docs/configuration.md) with examples and common pitfalls.
 52. [ ] Add architecture diagrams (C4 model: Context, Container, Component) and sequence diagram for borrow/return.
 53. [X] Create CONTRIBUTING.md (coding standards, commit messages, branching, PR checklist).
 54. [X] Establish versioning and release notes; tag releases and publish Agenix.PlaywrightGrid.HubClient to NuGet.
@@ -79,198 +78,3 @@ The following is an ordered, actionable checklist covering architectural and cod
 73. [ ] Ensure all public APIs and DTOs have XML docs and nullable annotations; generate API docs from XML.
 74. [ ] Introduce coding analyzers (StyleCop/IDisposable analyzers) and fix high-signal warnings.
 75. [ ] Add guardrails for Redis key naming to avoid collisions; centralize key patterns with tests.
-76. [ ] Provide sample Grafana dashboards for new metrics (latency, queue, utilization, errors) and alerts.
-
-
-
----
-
-#### Documentation — MkDocs (Material) Site Plan
-
-Goal: Publish docs/ as a polished documentation site using MkDocs with the Material theme, deployed to GitHub Pages via gh-pages.
-
-Scope:
-- Source directory: docs/
-- Styling: docs/assets/styles.css (small overrides)
-- Navigation: docs/index.md + existing Markdown pages
-- Deployment: GitHub Actions → gh-pages branch → GitHub Pages
-
-Tasks:
-1) Create MkDocs configuration
-- Add mkdocs.yml at repo root.
-- Set site_name, site_url, repo_url, docs_dir: docs.
-- Enable Material theme, common features, and wire extra_css: .assets/styles.css.
-- Define nav using current files (Borrow-TTL-and-Session-Persistence.md, Node-Liveness-and-Sweeper.md, tasks.md). 
-
-2) Prepare docs/index.md
-- Create a brief landing page with links to the key guides.
-- Keep relative links so the site works under /<repo>.
-
-3) Add custom CSS
-- Place docs/.assets/styles.css with minimal, tasteful overrides (typography, code blocks). Keep it small since Material already provides excellent defaults.
-
-4) Local preview docs
-- Install: pip install mkdocs-material.
-- Run locally: mkdocs serve and validate the site (nav, styling, internal links).
-
-5) GitHub Actions workflow for deploy
-- Add .github/workflows/docs.yml that:
-  - Triggers on changes to docs/** or mkdocs.yml.
-  - Builds with mkdocs build --strict.
-  - Publishes ./site to gh-pages using peaceiris/actions-gh-pages.
-
-6) Enable GitHub Pages
-- Settings → Pages → Deploy from a branch → gh-pages, folder “/”.
-- Verify the site URL and that assets (CSS, images) load correctly.
-
-7) Documentation hygiene
-- Ensure images (if any) live under docs/.assets/img/ and are referenced relatively.
-- Keep links relative (no hard-coded domain) to support forks and PR previews.
-- Add a short “Docs” blurb to README linking to the hosted site.
-
-8) Nice-to-have (post-MVP)
-- Enable search fine-tuning (Material search features are on by default).
-- Add dark/light palette tuning if desired.
-- Add redirects if you rename pages (mkdocs-redirects plugin).
-
-Acceptance criteria:
-- Visiting the GitHub Pages URL renders a Material-themed site with at least the following pages:
-  - Home (index)
-  - Borrow TTL & Session Persistence
-  - Node Liveness and Sweeper
-  - Tasks (this checklist)
-- nav in the left sidebar matches the configured order.
-- Extra CSS is applied (code blocks styled, minor typographic tweaks) without breaking Material.
-- The workflow rebuilds and deploys on every push to main that changes docs/** or mkdocs.yml.
-- Build is strict (fails on missing links or config errors).
-
-Operational notes:
-- To run locally:
-  - python -m pip install --upgrade pip
-  - pip install mkdocs-material
-  - mkdocs serve (preview at http://127.0.0.1:8000)
-- Keep CSS minimal; rely on Material for most styling.
-- If a custom domain is used, configure CNAME in gh-pages (actions-gh-pages supports cname: input).
-
-Templates (copy/paste and adjust):
-
-mkdocs.yml (repo root)
-```yml
-site_name: Playwright Grid Docs
-site_url: https://<your-user>.github.io/<repo>/
-repo_url: https://github.com/<your-user>/<repo>
-docs_dir: docs
-
-theme:
-  name: material
-  features:
-    - navigation.instant
-    - navigation.tracking
-    - navigation.top
-    - content.code.copy
-    - content.tabs.link
-    - search.suggest
-    - search.highlight
-  palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: blue
-      accent: light blue
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: blue
-      accent: light blue
-
-extra_css:
-  - .assets/styles.css  # relative to docs_dir
-
-nav:
-  - Home: index.md
-  - Guides:
-      - Borrow TTL & Session Persistence: Borrow-TTL-and-Session-Persistence.md
-      - Node Liveness and Sweeper: Node-Liveness-and-Sweeper.md
-  - Project:
-      - Tasks: tasks.md
-```
-
-docs/index.md
-```md
-# Playwright Grid Documentation
-
-Explore the grid architecture, hub/worker behavior, and testing strategy.
-
-- [Borrow TTL & Session Persistence](Borrow-TTL-and-Session-Persistence.md)
-- [Node Liveness and Sweeper](Node-Liveness-and-Sweeper.md)
-- [Tasks](tasks.md)
-```
-
-docs/.assets/styles.css (minimal overrides)
-```css
-:root {
-  --pg-accent: #5b9cff;
-}
-
-.md-typeset a { text-decoration: none; }
-.md-typeset a:hover { text-decoration: underline; }
-
-/* Refine code block background and rounding */
-.md-typeset pre > code {
-  border-radius: 8px;
-}
-
-/* Optional: accent color for blockquotes */
-.md-typeset blockquote {
-  border-left: 0.25rem solid var(--pg-accent);
-}
-```
-
-.github/workflows/docs.yml
-```yml
-name: Deploy Docs (MkDocs)
-
-on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-  workflow_dispatch: {}
-
-permissions:
-  contents: write
-
-jobs:
-  build-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install MkDocs + Material
-        run: |
-          python -m pip install --upgrade pip
-          pip install mkdocs-material
-
-      - name: Build site
-        run: mkdocs build --strict
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          publish_branch: gh-pages
-```
-
-Checklist (for this section):
-- [ ] mkdocs.yml added and committed
-- [ ] docs/index.md created/updated
-- [ ] docs/.assets/styles.css added (or verified)
-- [ ] docs site builds locally (mkdocs build / serve)
-- [ ] GH Actions workflow merged to main
-- [ ] GitHub Pages configured to gh-pages
-- [ ] First deployment successful; site visually verified

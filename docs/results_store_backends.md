@@ -2,6 +2,10 @@
 
 This guide explains how the Playwright Hub stores test run results, command logs, and test cases, and how to switch between the default in‑memory storage and the Redis‑backed durable store.
 
+Important: Core Redis vs Results Store
+- Redis is required for core hub/worker coordination, capacity state, borrowing/returning sessions, TTL sweeps, and SignalR updates. You must keep Redis configured and available for the grid to function.
+- HUB_RESULTS_BACKEND controls only where run/test summaries and command logs are persisted for the Dashboard and Hub APIs. It does not affect the mandatory core Redis used by the hub and workers.
+
 ## What is stored
 The Hub aggregates and exposes the following artifacts:
 - Run summaries (per execution/run): status, counts, timestamps, metadata (App, Browser, Env, etc.)
@@ -10,6 +14,7 @@ The Hub aggregates and exposes the following artifacts:
 These are consumed by the Hub HTTP endpoints and the Dashboard’s live/summary views.
 
 ## Backend choices
+These choices apply only to the results store (dashboard/API persistence); they do not remove or change the requirement for core Redis used by the hub and workers.
 - InMemory (default)
   - Volatile, process‑local memory; data is lost on Hub restart or when scaling out.
   - Great for development and local testing.
@@ -17,10 +22,11 @@ These are consumed by the Hub HTTP endpoints and the Dashboard’s live/summary 
   - Persists across Hub restarts and supports TTL‑based retention.
   - Minimal ops overhead if you already run Redis (the grid composes a Redis service by default).
 
-## Enabling Redis persistence
-Set an environment variable on the Hub:
+## Enabling Redis-backed results store
+Redis is always required for the grid’s core coordination (Hub/Worker). The settings below affect only where results and command logs are persisted for the Dashboard/API.
+Set the following environment variable(s) on the Hub:
 - HUB_RESULTS_BACKEND=redis
-- Keep REDIS_URL pointing at your Redis instance (default in compose is `redis:6379`).
+- Ensure REDIS_URL points at your Redis instance (default in compose is `redis:6379`).
 - Optionally set HUB_RESULTS_RETENTION_DAYS to automatically expire old runs.
 
 Example (docker‑compose excerpt):
@@ -74,7 +80,10 @@ Behavioral notes:
 - You can validate quickly by starting the stack, opening the Dashboard, launching a few runs, then restarting only the Hub container: with Redis enabled the runs/commands/tests remain visible after restart.
 
 ## Environment variable summary (Hub)
+Core grid (required; always uses Redis):
 - REDIS_URL=redis:6379 (or your Redis endpoint)
+
+Results store (dashboard/API persistence):
 - HUB_RESULTS_BACKEND=memory | redis (default: memory)
 - HUB_RESULTS_RETENTION_DAYS=<int days> (optional; enables TTL‐based cleanup)
 
@@ -101,6 +110,10 @@ Related Hub routing/matching envs (unchanged by the backend):
 - No changes are required in clients or workers; the backend is purely a Hub concern.
 
 ## FAQ
+- Can I disable Redis entirely?
+  - No. Redis is required for core hub/worker coordination (capacity state, borrowing/returning sessions, TTL sweeps, SignalR updates). HUB_RESULTS_BACKEND only controls results persistence for the Dashboard/API.
+- If I choose InMemory results, do I still need REDIS_URL?
+  - Yes. The grid always needs Redis for its core operations; InMemory only affects results persistence on the Hub.
 - Can I increase the command cap beyond 5000?
   - Not currently; the cap is a fixed safety limit to avoid unbounded growth. If you need a higher limit, open an issue to discuss configuration trade‑offs.
 - Can I add more Redis indexes for server‑side filtering?
