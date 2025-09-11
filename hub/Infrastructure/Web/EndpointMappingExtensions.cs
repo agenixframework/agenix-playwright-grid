@@ -19,15 +19,19 @@
 using System.Collections;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Agenix.PlaywrightGrid.Domain;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
+using PlaywrightHub.Infrastructure;
 using PlaywrightHub.Infrastructure.Adapters.SignalR;
 using Prometheus;
 using StackExchange.Redis;
@@ -40,8 +44,18 @@ internal static class EndpointCapacityQueue
     private static readonly Dictionary<string, Queue<Waiter>> Queues = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, int> PendingPerRun = new(StringComparer.Ordinal);
 
+    // Fair sharing round-robin state over labels that currently have waiters
+    private static readonly List<string> RoundRobinLabels = new();
+    private static int _rrIndex = -1;
+
+    // Limits for queued waiters and per-run
     private static int _perLabelCap = 100;
     private static int _perRunCap = 5;
+
+    // Concurrency caps (active grants) per requested label and current in-flight counters
+    private static int _defaultConcurrencyCap = 0; // 0 = unlimited
+    private static readonly Dictionary<string, int> ConcurrencyCaps = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, int> InflightPerLabel = new(StringComparer.Ordinal);
 
     public static void Configure(int perLabelCap, int perRunCap)
     {
@@ -52,6 +66,27 @@ internal static class EndpointCapacityQueue
         }
     }
 
+    public static void Configure(int perLabelCap, int perRunCap, int defaultConcurrencyCap, Dictionary<string, int>? concurrencyCaps)
+    {
+        lock (Sync)
+        {
+            _perLabelCap = perLabelCap > 0 ? perLabelCap : 100;
+            _perRunCap = perRunCap > 0 ? perRunCap : 5;
+            _defaultConcurrencyCap = defaultConcurrencyCap < 0 ? 0 : defaultConcurrencyCap;
+            ConcurrencyCaps.Clear();
+            if (concurrencyCaps is not null)
+            {
+                foreach (var kv in concurrencyCaps)
+                {
+                    if (kv.Value > 0 && !string.IsNullOrWhiteSpace(kv.Key))
+                    {
+                        ConcurrencyCaps[kv.Key.Trim()] = kv.Value;
+                    }
+                }
+            }
+        }
+    }
+
     // Test helper: reset static state for deterministic tests
     internal static void Reset()
     {
@@ -59,8 +94,13 @@ internal static class EndpointCapacityQueue
         {
             Queues.Clear();
             PendingPerRun.Clear();
+            RoundRobinLabels.Clear();
+            _rrIndex = -1;
+            InflightPerLabel.Clear();
             _perLabelCap = 100;
             _perRunCap = 5;
+            _defaultConcurrencyCap = 0;
+            ConcurrencyCaps.Clear();
         }
     }
 
@@ -72,6 +112,15 @@ internal static class EndpointCapacityQueue
             {
                 q = new Queue<Waiter>();
                 Queues[label] = q;
+            }
+
+            if (!RoundRobinLabels.Contains(label))
+            {
+                RoundRobinLabels.Add(label);
+                if (_rrIndex >= RoundRobinLabels.Count)
+                {
+                    _rrIndex = RoundRobinLabels.Count - 1;
+                }
             }
 
             if (q.Count >= _perLabelCap)
@@ -121,36 +170,50 @@ internal static class EndpointCapacityQueue
     {
         lock (Sync)
         {
-            if (!Queues.TryGetValue(label, out var q) || q.Count == 0)
+            // Fair sharing: round-robin across labels with pending waiters and under their concurrency caps.
+            if (RoundRobinLabels.Count == 0)
             {
                 return;
             }
 
-            while (q.Count > 0)
+            var count = RoundRobinLabels.Count;
+            // Start from next index to avoid bias to the same label
+            var start = (_rrIndex + 1 + count) % count;
+            for (var i = 0; i < count; i++)
             {
-                var w = q.Dequeue();
-                if (w.Canceled)
+                var idx = (start + i) % count;
+                var lbl = RoundRobinLabels[idx];
+                if (ReachedCap(lbl))
                 {
                     continue;
                 }
 
-                // Decrement pending-per-run when granting
-                if (PendingPerRun.TryGetValue(w.RunId, out var pr))
+                if (!Queues.TryGetValue(lbl, out var q) || q.Count == 0)
                 {
-                    pr = Math.Max(0, pr - 1);
-                    if (pr == 0)
-                    {
-                        PendingPerRun.Remove(w.RunId);
-                    }
-                    else
-                    {
-                        PendingPerRun[w.RunId] = pr;
-                    }
+                    continue;
                 }
 
-                // Wake the waiter
-                _ = w.Tcs.TrySetResult(true);
-                break;
+                // Find first non-canceled waiter for this label
+                while (q.Count > 0)
+                {
+                    var w = q.Dequeue();
+                    if (w.Canceled)
+                    {
+                        continue;
+                    }
+
+                    // Decrement pending-per-run when granting
+                    if (PendingPerRun.TryGetValue(w.RunId, out var pr))
+                    {
+                        pr = Math.Max(0, pr - 1);
+                        if (pr == 0) PendingPerRun.Remove(w.RunId);
+                        else PendingPerRun[w.RunId] = pr;
+                    }
+
+                    _rrIndex = idx; // move cursor to the label we just served
+                    _ = w.Tcs.TrySetResult(true);
+                    return;
+                }
             }
         }
     }
@@ -160,6 +223,45 @@ internal static class EndpointCapacityQueue
         lock (Sync)
         {
             return Queues.TryGetValue(label, out var q) ? q.Count : 0;
+        }
+    }
+
+    private static int GetCapFor(string label)
+    {
+        if (ConcurrencyCaps.TryGetValue(label, out var cap)) return cap;
+        return _defaultConcurrencyCap;
+    }
+
+    public static bool ReachedCap(string label)
+    {
+        lock (Sync)
+        {
+            var cap = GetCapFor(label);
+            if (cap <= 0) return false; // unlimited
+            var inflight = InflightPerLabel.TryGetValue(label, out var x) ? x : 0;
+            return inflight >= cap;
+        }
+    }
+
+    public static void OnStarted(string label)
+    {
+        lock (Sync)
+        {
+            var current = InflightPerLabel.TryGetValue(label, out var x) ? x : 0;
+            InflightPerLabel[label] = current + 1;
+        }
+    }
+
+    public static void OnFinished(string label)
+    {
+        lock (Sync)
+        {
+            if (InflightPerLabel.TryGetValue(label, out var x))
+            {
+                x = Math.Max(0, x - 1);
+                if (x == 0) InflightPerLabel.Remove(label);
+                else InflightPerLabel[label] = x;
+            }
         }
     }
 
@@ -178,6 +280,14 @@ internal static class EndpointCapacityQueue
         }
 
         return false;
+    }
+
+    public static int GetInflightCount(string label)
+    {
+        lock (Sync)
+        {
+            return InflightPerLabel.TryGetValue(label, out var x) ? x : 0;
+        }
     }
 
     private sealed class Waiter
@@ -216,6 +326,7 @@ public static class EndpointMappingExtensions
         var mux = services.GetRequiredService<IConnectionMultiplexer>();
         var resultsStore = services.GetRequiredService<IResultsStore>();
         var resultsHubCtx = services.GetRequiredService<IHubContext<ResultsHub, IResultsClient>>();
+        var auditStore = services.GetRequiredService<IAuditStore>();
         var logger = app.Logger;
 
         // Graceful shutdown: stop accepting new borrow requests when application is stopping
@@ -230,15 +341,161 @@ public static class EndpointMappingExtensions
         var nodeTimeoutSeconds = int.TryParse(config["HUB_NODE_TIMEOUT"], out var t) ? t : 60;
         var dashboardUrl = config["DASHBOARD_URL"] ?? "http://localhost:3001";
 
+        // Audit secrets on startup (fingerprint only; never log raw secrets)
+        Task.Run(async () =>
+        {
+            try
+            {
+                static string Fingerprint(string raw)
+                {
+                    using var sha = SHA256.Create();
+                    var bytes = Encoding.UTF8.GetBytes(raw ?? string.Empty);
+                    return Convert.ToHexString(sha.ComputeHash(bytes));
+                }
+
+                static string NormalizeSecrets(string value)
+                {
+                    var parts = (value ?? string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    return string.Join(',', parts);
+                }
+
+                var runnerNorm = NormalizeSecrets(hubRunnerSecret);
+                var nodeNorm = NormalizeSecrets(hubNodeSecret);
+                var runnerFp = Fingerprint(runnerNorm);
+                var nodeFp = Fingerprint(nodeNorm);
+                var runnerCount = string.IsNullOrEmpty(runnerNorm) ? 0 : runnerNorm.Split(',').Length;
+                var nodeCount = string.IsNullOrEmpty(nodeNorm) ? 0 : nodeNorm.Split(',').Length;
+
+                var prevRunner = await db.StringGetAsync(RedisKeys.AuditSecretsRunnerFingerprint());
+                var prevNode = await db.StringGetAsync(RedisKeys.AuditSecretsNodeFingerprint());
+
+                if (prevRunner.IsNullOrEmpty)
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "secrets",
+                        Action = "runner.loaded",
+                        Details = new Dictionary<string, string>
+                        {
+                            ["count"] = runnerCount.ToString(),
+                            ["fingerprint"] = runnerFp.Substring(0, Math.Min(8, runnerFp.Length))
+                        }
+                    });
+                }
+                else if (!string.Equals(prevRunner.ToString(), runnerFp, StringComparison.Ordinal))
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "secrets",
+                        Action = "runner.changed",
+                        Severity = "Warning",
+                        Details = new Dictionary<string, string>
+                        {
+                            ["count"] = runnerCount.ToString(),
+                            ["fingerprint"] = runnerFp.Substring(0, Math.Min(8, runnerFp.Length))
+                        }
+                    });
+                }
+
+                if (prevNode.IsNullOrEmpty)
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "secrets",
+                        Action = "node.loaded",
+                        Details = new Dictionary<string, string>
+                        {
+                            ["count"] = nodeCount.ToString(),
+                            ["fingerprint"] = nodeFp.Substring(0, Math.Min(8, nodeFp.Length))
+                        }
+                    });
+                }
+                else if (!string.Equals(prevNode.ToString(), nodeFp, StringComparison.Ordinal))
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "secrets",
+                        Action = "node.changed",
+                        Severity = "Warning",
+                        Details = new Dictionary<string, string>
+                        {
+                            ["count"] = nodeCount.ToString(),
+                            ["fingerprint"] = nodeFp.Substring(0, Math.Min(8, nodeFp.Length))
+                        }
+                    });
+                }
+
+                try { await db.StringSetAsync(RedisKeys.AuditSecretsRunnerFingerprint(), runnerFp); } catch { }
+                try { await db.StringSetAsync(RedisKeys.AuditSecretsNodeFingerprint(), nodeFp); } catch { }
+
+                if (runnerCount > 1)
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "secrets",
+                        Action = "runner.rotation.enabled",
+                        Details = new Dictionary<string, string> { ["count"] = runnerCount.ToString() }
+                    });
+                }
+                if (nodeCount > 1)
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "secrets",
+                        Action = "node.rotation.enabled",
+                        Details = new Dictionary<string, string> { ["count"] = nodeCount.ToString() }
+                    });
+                }
+            }
+            catch
+            {
+                // ignore audit failures on startup
+            }
+        });
+
         // Borrow matching configuration
-        var enableTrailingFallback =
-            !bool.TryParse(config["HUB_BORROW_TRAILING_FALLBACK"], out var tf) || tf; // default true
-        var enablePrefixExpand = !bool.TryParse(config["HUB_BORROW_PREFIX_EXPAND"], out var pe) || pe; // default true
-        var enableWildcards = bool.TryParse(config["HUB_BORROW_WILDCARDS"], out var wc) && wc; // default false
+        // Support per-environment overrides via suffix: e.g., HUB_BORROW_WILDCARDS_Development
+        static bool GetBoolWithEnvironmentOverride(IConfiguration cfg, string key, string environment, bool defaultValue)
+        {
+            string? value = null;
+            if (!string.IsNullOrWhiteSpace(environment))
+            {
+                var suffixExact = $"_{environment}";
+                var suffixUpper = $"_{environment.ToUpperInvariant()}";
+                var k1 = key + suffixExact;
+                var k2 = key + suffixUpper;
+                var v1 = cfg[k1];
+                var v2 = cfg[k2];
+                if (!string.IsNullOrWhiteSpace(v1)) value = v1;
+                else if (!string.IsNullOrWhiteSpace(v2)) value = v2;
+            }
+            value ??= cfg[key];
+            return bool.TryParse(value, out var parsed) ? parsed : defaultValue;
+        }
+
+        var environmentName = app.Environment.EnvironmentName ?? string.Empty;
+        var enableTrailingFallback = GetBoolWithEnvironmentOverride(config, "HUB_BORROW_TRAILING_FALLBACK", environmentName, true); // default true
+        var enablePrefixExpand = GetBoolWithEnvironmentOverride(config, "HUB_BORROW_PREFIX_EXPAND", environmentName, true); // default true
+        var enableWildcards = GetBoolWithEnvironmentOverride(config, "HUB_BORROW_WILDCARDS", environmentName, false); // default false
 
         // Borrow TTL configuration (seconds)
         var defaultBorrowTtlSeconds =
             int.TryParse(config["HUB_BORROW_TTL_SECONDS"], out var bttl) ? Math.Max(60, bttl) : 900;
+
+        // New: idle timeout (seconds) and max session TTL (seconds)
+        var idleTimeoutSeconds = int.TryParse(config["HUB_IDLE_TIMEOUT_SECONDS"], out var idle)
+            ? Math.Max(10, idle)
+            : 120; // default 2 minutes
+        var maxSessionTtlSeconds = int.TryParse(config["HUB_MAX_SESSION_TTL_SECONDS"], out var maxTtl)
+            ? Math.Max(60, maxTtl)
+            : 24 * 60 * 60; // default 24h
 
         // Capacity queue configuration
         var queueTimeoutSeconds = int.TryParse(config["HUB_BORROW_QUEUE_TIMEOUT_SECONDS"], out var qto)
@@ -248,7 +505,33 @@ public static class EndpointMappingExtensions
             ? Math.Max(1, qpl)
             : 100;
         var queuePerRunCap = int.TryParse(config["HUB_BORROW_QUEUE_MAX_PER_RUN"], out var qpr) ? Math.Max(1, qpr) : 5;
-        EndpointCapacityQueue.Configure(queuePerLabelCap, queuePerRunCap);
+
+        // Concurrency caps configuration (per requested label)
+        var defaultConcurrencyCap = int.TryParse(config["HUB_BORROW_CONCURRENCY_DEFAULT"], out var dcc) ? Math.Max(0, dcc) : 0; // 0 = unlimited
+        var capsDict = new Dictionary<string, int>(StringComparer.Ordinal);
+        var capsRaw = config["HUB_BORROW_CONCURRENCY_CAPS"] ?? string.Empty; // e.g. "AppA:Chromium:UAT=2,AppB:Firefox:UAT=1"
+        if (!string.IsNullOrWhiteSpace(capsRaw))
+        {
+            foreach (var part in capsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var kvp = part.Split('=', 2, StringSplitOptions.TrimEntries);
+                if (kvp.Length == 2 && int.TryParse(kvp[1], out var cap) && cap > 0)
+                {
+                    // Normalize label keys using LabelKey parser if possible
+                    var key = kvp[0];
+                    if (LabelKey.TryParse(key, out var lk))
+                    {
+                        capsDict[lk!.Normalized] = cap;
+                    }
+                    else
+                    {
+                        capsDict[key] = cap;
+                    }
+                }
+            }
+        }
+
+        EndpointCapacityQueue.Configure(queuePerLabelCap, queuePerRunCap, defaultConcurrencyCap, capsDict);
 
         // Metrics used by endpoints
         var borrowRequests = Metrics.CreateCounter(
@@ -321,6 +604,19 @@ return nil
                 if (!CheckSecret(req, "x-hub-secret", hubNodeSecret))
                 {
                     logger.LogWarning("[Register] 401 Unauthorized from {RemoteIp}", remoteIp);
+                    try
+                    {
+                        await auditStore.AppendAsync(new AuditEntryDto
+                        {
+                            TimestampUtc = DateTime.UtcNow,
+                            Category = "node",
+                            Action = "register.denied",
+                            RemoteIp = remoteIp,
+                            Severity = "Warning",
+                            Details = new Dictionary<string, string> { ["reason"] = "unauthorized" }
+                        });
+                    }
+                    catch { }
                     return Results.Unauthorized();
                 }
 
@@ -332,12 +628,38 @@ return nil
                 catch (JsonException jex)
                 {
                     logger.LogWarning("[Register] 400 Invalid JSON from {RemoteIp}: {Message}", remoteIp, jex.Message);
+                    try
+                    {
+                        await auditStore.AppendAsync(new AuditEntryDto
+                        {
+                            TimestampUtc = DateTime.UtcNow,
+                            Category = "node",
+                            Action = "register.denied",
+                            RemoteIp = remoteIp,
+                            Severity = "Warning",
+                            Details = new Dictionary<string, string> { ["reason"] = "invalid-json" }
+                        });
+                    }
+                    catch { }
                     return Results.BadRequest("invalid JSON");
                 }
 
                 if (body is null)
                 {
                     logger.LogWarning("[Register] 400 Empty body from {RemoteIp}", remoteIp);
+                    try
+                    {
+                        await auditStore.AppendAsync(new AuditEntryDto
+                        {
+                            TimestampUtc = DateTime.UtcNow,
+                            Category = "node",
+                            Action = "register.denied",
+                            RemoteIp = remoteIp,
+                            Severity = "Warning",
+                            Details = new Dictionary<string, string> { ["reason"] = "empty-body" }
+                        });
+                    }
+                    catch { }
                     return Results.BadRequest("empty body");
                 }
 
@@ -374,7 +696,7 @@ return nil
                     (body.GetValueOrDefault("Labels") as JsonElement?)?.Deserialize<Dictionary<string, string>>() ??
                     new Dictionary<string, string>();
 
-                var key = $"node:{nodeId}";
+                var key = RedisKeys.Node(nodeId);
                 var existed = await db.KeyExistsAsync(key);
 
                 // Optional base URL where the worker exposes its HTTP endpoints
@@ -402,7 +724,7 @@ return nil
 
                 // Provide an initial alive TTL to prevent immediate Sweeper expiry after registration
                 var ttlSeconds = Math.Max(90, nodeTimeoutSeconds);
-                await db.StringSetAsync($"node_alive:{nodeId}", "1", TimeSpan.FromSeconds(ttlSeconds));
+                await db.StringSetAsync(RedisKeys.NodeAlive(nodeId), "1", TimeSpan.FromSeconds(ttlSeconds));
 
                 var elapsedMs = (int)(DateTime.UtcNow - startedAt).TotalMilliseconds;
                 var sampleApps = string.Join(',', apps.Take(3));
@@ -410,6 +732,25 @@ return nil
 
                 logger.LogInformation("[Register] {Kind} nodeId={NodeId} apps={AppsCount}:{AppPreview} capacity={Capacity} labels={LabelsCount} ip={RemoteIp} in {ElapsedMs}ms",
                     existed ? "update" : "new", nodeId, apps.Length, appPreview, capacity, labels.Count, remoteIp, elapsedMs);
+
+                try
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "node",
+                        Action = existed ? "register.update" : "register.success",
+                        Actor = nodeId,
+                        RemoteIp = remoteIp,
+                        Details = new Dictionary<string, string>
+                        {
+                            ["apps"] = apps.Length.ToString(),
+                            ["capacity"] = capacity.ToString(),
+                            ["labels"] = labels.Count.ToString()
+                        }
+                    });
+                }
+                catch { }
 
                 return Results.Ok(new { registered = nodeId });
             }
@@ -480,6 +821,17 @@ return nil
                 borrowRequests.WithLabels(labelKey).Inc();
                 using var tmr = borrowLatency.WithLabels(labelKey).NewTimer();
 
+                // Optional RunName from request (validated and normalized once)
+                string? runNameNormalized = null;
+                if (body.TryGetValue("runName", out var runNameRaw))
+                {
+                    if (!RunNameRules.TryNormalize(runNameRaw, out var rnNormalized, out var rnError))
+                    {
+                        return Results.Problem(rnError, statusCode: 400);
+                    }
+                    runNameNormalized = rnNormalized; // may be null if empty after trim
+                }
+
                 // Helper that attempts to pop one item from a specific label list
                 async Task<JsonElement?> TryBorrowForAsync(string candidate)
                 {
@@ -487,29 +839,29 @@ return nil
                     // otherwise skip this candidate (treat as unavailable).
                     try
                     {
-                        if (await db.KeyExistsAsync($"maintenance:{candidate}"))
+                        if (await db.KeyExistsAsync(RedisKeys.MaintenanceFlag(candidate)))
                         {
-                            var targetStr = await db.StringGetAsync($"maintenance:target:{candidate}");
+                            var targetStr = await db.StringGetAsync(RedisKeys.MaintenanceTarget(candidate));
                             if (!targetStr.IsNullOrEmpty && long.TryParse(targetStr.ToString(), out var target))
                             {
-                                var availNow = await db.ListLengthAsync($"available:{candidate}");
-                                var inuseNow = await db.ListLengthAsync($"inuse:{candidate}");
+                                var availNow = await db.ListLengthAsync(RedisKeys.Available(candidate));
+                                var inuseNow = await db.ListLengthAsync(RedisKeys.InUse(candidate));
                                 if (inuseNow == 0 && availNow == target)
                                 {
                                     try
                                     {
-                                        await db.KeyDeleteAsync($"maintenance:{candidate}");
-                                        await db.KeyDeleteAsync($"maintenance:target:{candidate}");
-                                        await db.KeyDeleteAsync($"maintenance:snap_avail:{candidate}");
-                                        await db.KeyDeleteAsync($"maintenance:snap_inuse:{candidate}");
-                                        await db.KeyDeleteAsync($"maintenance:since:{candidate}");
+                                        await db.KeyDeleteAsync(RedisKeys.MaintenanceFlag(candidate));
+                                        await db.KeyDeleteAsync(RedisKeys.MaintenanceTarget(candidate));
+                                        await db.KeyDeleteAsync(RedisKeys.MaintenanceSnapAvail(candidate));
+                                        await db.KeyDeleteAsync(RedisKeys.MaintenanceSnapInuse(candidate));
+                                        await db.KeyDeleteAsync(RedisKeys.MaintenanceSince(candidate));
                                     }
                                     catch { }
                                 }
                             }
 
                             // If still under maintenance, skip borrowing from this candidate
-                            if (await db.KeyExistsAsync($"maintenance:{candidate}"))
+                            if (await db.KeyExistsAsync(RedisKeys.MaintenanceFlag(candidate)))
                             {
                                 return null;
                             }
@@ -517,8 +869,8 @@ return nil
                     }
                     catch { }
 
-                    var listKey = $"available:{candidate}";
-                    var inuseKey = $"inuse:{candidate}";
+                    var listKey = RedisKeys.Available(candidate);
+                    var inuseKey = RedisKeys.InUse(candidate);
                     var res = await db.ScriptEvaluateAsync(luaFindPop, new RedisKey[] { listKey, inuseKey }, []);
                     if (res.IsNull)
                     {
@@ -539,8 +891,12 @@ return nil
                     return doc.RootElement.Clone();
                 }
 
-                // 1) Exact match first
-                var item = await TryBorrowForAsync(labelKey);
+                // 1) Exact match first (guarded by per-label concurrency cap)
+                JsonElement? item = null;
+                if (!EndpointCapacityQueue.ReachedCap(labelKey))
+                {
+                    item = await TryBorrowForAsync(labelKey);
+                }
                 if (item is not null)
                 {
                     // Determine correlation id to use as runId
@@ -548,7 +904,7 @@ return nil
                                 ?? req.Query["runId"].FirstOrDefault()
                                 ?? req.Headers["Correlation-Id"].FirstOrDefault()
                                 ?? $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
-                    using var _scopeBorrow = LoggingScopes.Begin(logger, runId: runId);
+                    using var _scopeBorrow = LoggingScopes.Begin(logger, runId: runId, runName: HubPrivacy.RedactRunName(runNameNormalized));
                     logger.LogInformation("Borrow success for label {LabelKey}", labelKey);
 
                     // Borrow TTL: allow override via request body, else use default from config
@@ -579,6 +935,10 @@ return nil
                         Env = parsed!.Env,
                         StartedAtUtc = now
                     };
+                    if (!string.IsNullOrWhiteSpace(runNameNormalized))
+                    {
+                        run = run with { RunName = runNameNormalized };
+                    }
                     run.Status = "Running";
 
                     try
@@ -679,8 +1039,8 @@ return nil
                         // Map browserId to runId so worker-sourced command logs can be attributed
                         if (!string.IsNullOrWhiteSpace(bid))
                         {
-                            await db.StringSetAsync($"browser_run:{bid}", runId, TimeSpan.FromHours(6));
-                            using var _scopeBorrowBrowser = LoggingScopes.Begin(logger, browserId: bid);
+                            await db.StringSetAsync(RedisKeys.BrowserRun(bid), runId, TimeSpan.FromHours(6));
+                            using var _scopeBorrowBrowser = LoggingScopes.Begin(logger, browserId: bid, runName: HubPrivacy.RedactRunName(run.RunName));
                             logger.LogInformation("Borrow assigned browserId {BrowserId}", bid);
                         }
 
@@ -717,7 +1077,10 @@ return nil
                         {
                             if (!string.IsNullOrWhiteSpace(bid))
                             {
-                                await db.StringSetAsync($"borrow_ttl:{bid}", "1", TimeSpan.FromSeconds(ttlSeconds));
+                                // Clamp ttlSeconds to configured maximum
+                                ttlSeconds = Math.Min(ttlSeconds, maxSessionTtlSeconds);
+                                await db.StringSetAsync(RedisKeys.BorrowTtl(bid), "1", TimeSpan.FromSeconds(ttlSeconds));
+                                try { await db.StringSetAsync($"borrow_idle:{bid}", "1", TimeSpan.FromSeconds(idleTimeoutSeconds)); } catch { }
 
                                 string? nodeIdPersist = null;
                                 if (item.Value.TryGetProperty("nodeId", out var nodeIdEl) &&
@@ -768,15 +1131,43 @@ return nil
                         borrowOutcomes.WithLabels(labelKey, "success").Inc();
                         borrowQueueGauge.WithLabels(labelKey).Set(0);
 
-                        var avail = await db.ListLengthAsync($"available:{labelKey}");
-                        var inuse = await db.ListLengthAsync($"inuse:{labelKey}");
+                        var avail = await db.ListLengthAsync(RedisKeys.Available(labelKey));
+                        var inuse = await db.ListLengthAsync(RedisKeys.InUse(labelKey));
                         var total = (double)(avail + inuse);
                         var ratio = total > 0 ? inuse / total : 0.0;
                         poolUtilizationGauge.WithLabels(labelKey).Set(ratio);
                     }
                     catch { }
 
-                    return Results.Ok(item);
+                    // Track in-flight concurrency for requested label (for cap enforcement)
+                    try { EndpointCapacityQueue.OnStarted(labelKey); } catch { }
+
+                    // Build response payload including runName
+                    try
+                    {
+                        string? ws = null, bt = null, bid = null, nodeIdResp = null;
+                        if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl3) && wsEl3.ValueKind == JsonValueKind.String) ws = wsEl3.GetString();
+                        if (item.Value.TryGetProperty("browserType", out var btEl3) && btEl3.ValueKind == JsonValueKind.String) bt = btEl3.GetString();
+                        if (item.Value.TryGetProperty("browserId", out var bidEl3) && bidEl3.ValueKind == JsonValueKind.String) bid = bidEl3.GetString();
+                        if (item.Value.TryGetProperty("nodeId", out var nodeIdEl3) && nodeIdEl3.ValueKind == JsonValueKind.String) nodeIdResp = nodeIdEl3.GetString();
+
+                        var expiresAt = now.AddSeconds(ttlSeconds);
+                        var respObj = new
+                        {
+                            browserId = bid ?? string.Empty,
+                            webSocketEndpoint = ws ?? string.Empty,
+                            labelKey,
+                            browserType = bt,
+                            nodeId = nodeIdResp,
+                            runName = runNameNormalized,
+                            expiresAtUtc = expiresAt
+                        };
+                        return Results.Ok(respObj);
+                    }
+                    catch
+                    {
+                        return Results.Ok(item);
+                    }
                 }
 
                 // Build candidate list according to configuration
@@ -805,7 +1196,7 @@ return nil
                 // 3) Prefix expansion: treat missing trailing segments as ANY by matching more specific pools
                 if (enablePrefixExpand)
                 {
-                    var pattern = $"available:{labelKey}:*";
+                    var pattern = RedisKeys.AvailablePrefix + labelKey + ":*";
                     foreach (var ep in mux.GetEndPoints())
                     {
                         var server = mux.GetServer(ep);
@@ -817,9 +1208,9 @@ return nil
                         foreach (var key in server.Keys(pattern: pattern))
                         {
                             var k = key.ToString();
-                            if (k.StartsWith("available:", StringComparison.Ordinal))
+                            if (k.StartsWith(RedisKeys.AvailablePrefix, StringComparison.Ordinal))
                             {
-                                var label = k["available:".Length..];
+                                var label = k[RedisKeys.AvailablePrefix.Length..];
                                 if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
                                 {
                                     candidates.Add(label);
@@ -832,7 +1223,7 @@ return nil
                 // 4) Wildcards: allow '*' in any segment if enabled
                 if (enableWildcards && labelKey.Contains('*'))
                 {
-                    var pattern = $"available:{labelKey}";
+                    var pattern = RedisKeys.AvailablePrefix + labelKey;
                     foreach (var ep in mux.GetEndPoints())
                     {
                         var server = mux.GetServer(ep);
@@ -844,9 +1235,9 @@ return nil
                         foreach (var key in server.Keys(pattern: pattern))
                         {
                             var k = key.ToString();
-                            if (k.StartsWith("available:", StringComparison.Ordinal))
+                            if (k.StartsWith(RedisKeys.AvailablePrefix, StringComparison.Ordinal))
                             {
-                                var label = k["available:".Length..];
+                                var label = k[RedisKeys.AvailablePrefix.Length..];
                                 if (!candidates.Contains(label, StringComparer.OrdinalIgnoreCase))
                                 {
                                     candidates.Add(label);
@@ -924,6 +1315,7 @@ return nil
                             }
                         };
                         await resultsStore.AppendCommandAsync(ev);
+
                         var run = await resultsStore.GetRunAsync(runId) ?? new ResultRunSummaryDto
                         {
                             RunId = runId!,
@@ -932,6 +1324,10 @@ return nil
                             Env = labelKey.Split(':').Skip(2).FirstOrDefault() ?? "",
                             StartedAtUtc = now
                         };
+                        if (!string.IsNullOrWhiteSpace(runNameNormalized))
+                        {
+                            run = run with { RunName = runNameNormalized };
+                        }
                         run.Status = "Running";
 
                         try
@@ -1032,7 +1428,7 @@ return nil
                             // Map browserId to runId so worker-sourced command logs can be attributed
                             if (!string.IsNullOrWhiteSpace(bid))
                             {
-                                await db.StringSetAsync($"browser_run:{bid}", runId!, TimeSpan.FromHours(6));
+                                await db.StringSetAsync(RedisKeys.BrowserRun(bid), runId!, TimeSpan.FromHours(6));
                             }
 
                             serverEv = new CommandLogEventDto
@@ -1068,7 +1464,10 @@ return nil
                             {
                                 if (!string.IsNullOrWhiteSpace(bid))
                                 {
-                                    await db.StringSetAsync($"borrow_ttl:{bid}", "1", TimeSpan.FromSeconds(ttlSeconds));
+                                    // Clamp ttlSeconds to configured maximum
+                                    ttlSeconds = Math.Min(ttlSeconds, maxSessionTtlSeconds);
+                                    await db.StringSetAsync(RedisKeys.BorrowTtl(bid), "1", TimeSpan.FromSeconds(ttlSeconds));
+                                    try { await db.StringSetAsync($"borrow_idle:{bid}", "1", TimeSpan.FromSeconds(idleTimeoutSeconds)); } catch { }
 
                                     string? nodeIdPersist = null;
                                     if (item.Value.TryGetProperty("nodeId", out var nodeIdEl2) &&
@@ -1120,15 +1519,43 @@ return nil
                             borrowOutcomes.WithLabels(labelKey, "success").Inc();
                             borrowQueueGauge.WithLabels(labelKey).Set(0);
 
-                            var avail = await db.ListLengthAsync($"available:{labelKey}");
-                            var inuse = await db.ListLengthAsync($"inuse:{labelKey}");
+                            var avail = await db.ListLengthAsync(RedisKeys.Available(labelKey));
+                            var inuse = await db.ListLengthAsync(RedisKeys.InUse(labelKey));
                             var total = (double)(avail + inuse);
                             var ratio = total > 0 ? inuse / total : 0.0;
                             poolUtilizationGauge.WithLabels(labelKey).Set(ratio);
                         }
                         catch { }
 
-                        return Results.Ok(item);
+                        // Track in-flight concurrency for requested label (for cap enforcement)
+                        try { EndpointCapacityQueue.OnStarted(labelKey); } catch { }
+
+                        // Build response payload including runName
+                        try
+                        {
+                            string? ws = null, bt = null, bid = null, nodeIdResp = null;
+                            if (item.Value.TryGetProperty("webSocketEndpoint", out var wsEl3) && wsEl3.ValueKind == JsonValueKind.String) ws = wsEl3.GetString();
+                            if (item.Value.TryGetProperty("browserType", out var btEl3) && btEl3.ValueKind == JsonValueKind.String) bt = btEl3.GetString();
+                            if (item.Value.TryGetProperty("browserId", out var bidEl3) && bidEl3.ValueKind == JsonValueKind.String) bid = bidEl3.GetString();
+                            if (item.Value.TryGetProperty("nodeId", out var nodeIdEl3) && nodeIdEl3.ValueKind == JsonValueKind.String) nodeIdResp = nodeIdEl3.GetString();
+
+                            var expiresAt = now.AddSeconds(ttlSeconds);
+                            var respObj = new
+                            {
+                                browserId = bid ?? string.Empty,
+                                webSocketEndpoint = ws ?? string.Empty,
+                                labelKey,
+                                browserType = bt,
+                                nodeId = nodeIdResp,
+                                runName = runNameNormalized,
+                                expiresAtUtc = expiresAt
+                            };
+                            return Results.Ok(respObj);
+                        }
+                        catch
+                        {
+                            return Results.Ok(item);
+                        }
                     }
                 }
 
@@ -1174,12 +1601,13 @@ return nil
                             try
                             {
                                 var srv = mux.GetServer(ep);
-                                foreach (var key in srv.Keys(pattern: "available:*"))
+                                foreach (var key in srv.Keys(pattern: RedisKeys.AvailablePrefix + "*"))
                                 {
-                                    var label = key.ToString().AsSpan("available:".Length).ToString();
+                                    var sKey = key.ToString();
+                                    var label = sKey[RedisKeys.AvailablePrefix.Length..];
                                     if (!string.IsNullOrWhiteSpace(label))
                                     {
-                                        var len = await db.ListLengthAsync($"available:{label}");
+                                        var len = await db.ListLengthAsync(RedisKeys.Available(label));
                                         if (len > 0)
                                         {
                                             if (!candidates2.Contains(label, StringComparer.OrdinalIgnoreCase))
@@ -1234,15 +1662,38 @@ return nil
                         try
                         {
                             borrowOutcomes.WithLabels(labelKey, "success").Inc();
-                            var avail2 = await db.ListLengthAsync($"available:{labelKey}");
-                            var inuse2 = await db.ListLengthAsync($"inuse:{labelKey}");
+                            var avail2 = await db.ListLengthAsync(RedisKeys.Available(labelKey));
+                            var inuse2 = await db.ListLengthAsync(RedisKeys.InUse(labelKey));
                             var total2 = (double)(avail2 + inuse2);
                             var ratio2 = total2 > 0 ? inuse2 / total2 : 0.0;
                             poolUtilizationGauge.WithLabels(labelKey).Set(ratio2);
                         }
                         catch { }
 
-                        return Results.Ok(item2);
+                        // Track in-flight concurrency for requested label (for cap enforcement)
+                        try { EndpointCapacityQueue.OnStarted(labelKey); } catch { }
+                        try
+                        {
+                            string? ws = null, bt = null, bid = null, nodeIdResp = null;
+                            if (item2.Value.TryGetProperty("webSocketEndpoint", out var wsEl4) && wsEl4.ValueKind == JsonValueKind.String) ws = wsEl4.GetString();
+                            if (item2.Value.TryGetProperty("browserType", out var btEl4) && btEl4.ValueKind == JsonValueKind.String) bt = btEl4.GetString();
+                            if (item2.Value.TryGetProperty("browserId", out var bidEl4) && bidEl4.ValueKind == JsonValueKind.String) bid = bidEl4.GetString();
+                            if (item2.Value.TryGetProperty("nodeId", out var nodeIdEl4) && nodeIdEl4.ValueKind == JsonValueKind.String) nodeIdResp = nodeIdEl4.GetString();
+                            var respObj = new
+                            {
+                                browserId = bid ?? string.Empty,
+                                webSocketEndpoint = ws ?? string.Empty,
+                                labelKey,
+                                browserType = bt,
+                                nodeId = nodeIdResp,
+                                runName = runNameNormalized
+                            };
+                            return Results.Ok(respObj);
+                        }
+                        catch
+                        {
+                            return Results.Ok(item2);
+                        }
                     }
                 }
                 else
@@ -1277,7 +1728,8 @@ return nil
                         {
                             Example = new OpenApiObject
                             {
-                                ["labelKey"] = new OpenApiString("AppB:Chromium:UAT")
+                                ["labelKey"] = new OpenApiString("AppB:Chromium:UAT"),
+                                ["runName"] = new OpenApiString("Checkout – Smoke")
                             }
                         }
                     }
@@ -1295,7 +1747,9 @@ return nil
                                 ["webSocketEndpoint"] =
                                     new OpenApiString("ws://127.0.0.1:5200/ws/b-123"),
                                 ["browserType"] = new OpenApiString("chromium"),
-                                ["labelKey"] = new OpenApiString("AppB:Chromium:UAT")
+                                ["labelKey"] = new OpenApiString("AppB:Chromium:UAT"),
+                                ["runName"] = new OpenApiString("Checkout – Smoke"),
+                                ["expiresAtUtc"] = new OpenApiString("2025-01-01T12:00:00Z")
                             }
                         }
                     }
@@ -1320,7 +1774,7 @@ return nil
         // Return { "labelKey": "...", "browserId": "..." }
         app.MapPost("/session/return", async (HttpRequest req) =>
             {
-                if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+                if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret) && !CheckSecret(req, "x-hub-secret", hubNodeSecret))
                 {
                     return Results.Unauthorized();
                 }
@@ -1345,8 +1799,8 @@ return nil
 
                 labelKey = parsedReturn!.Normalized;
 
-                var inuseKey = $"inuse:{labelKey}";
-                var availKey = $"available:{labelKey}";
+                var inuseKey = RedisKeys.InUse(labelKey);
+                var availKey = RedisKeys.Available(labelKey);
 
                 var res = await db.ScriptEvaluateAsync(luaReturn, [inuseKey, availKey], [browserId]);
                 // Update availability gauge regardless of idempotent outcomes
@@ -1355,14 +1809,14 @@ return nil
 
                 // Request sidecar recycle on the worker so the instance is torn down and replenished with a fresh one
                 // This aligns with the policy of not reusing the same browser across multiple borrowers.
-                try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
+                try { await db.StringSetAsync(RedisKeys.Recycle(browserId), "1", TimeSpan.FromMinutes(2)); }
                 catch { }
 
                 if (!res.IsNull)
                 {
-                    // Capacity is now available; wake one waiter for this label
-                    try { EndpointCapacityQueue.Signal(labelKey); }
-                    catch { }
+                    // Capacity is now available: decrement in-flight for this label and wake a waiter fairly
+                    try { EndpointCapacityQueue.OnFinished(labelKey); } catch { }
+                    try { EndpointCapacityQueue.Signal(labelKey); } catch { }
 
                     try { borrowQueueGauge.WithLabels(labelKey).Set(EndpointCapacityQueue.GetQueueLength(labelKey)); }
                     catch { }
@@ -1372,11 +1826,9 @@ return nil
                 {
                     // Treat return as idempotent: if browserId is not in the in-use list, consider it already returned
                     // Clean up any persisted session state/lease
-                    try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); }
-                    catch { }
-
-                    try { await db.KeyDeleteAsync($"session:{browserId}"); }
-                    catch { }
+                    try { await db.KeyDeleteAsync(RedisKeys.BorrowTtl(browserId)); } catch { }
+                    try { await db.KeyDeleteAsync($"borrow_idle:{browserId}"); } catch { }
+                    try { await db.KeyDeleteAsync($"session:{browserId}"); } catch { }
 
                     return Results.Ok(new { returned = browserId, note = "already returned" });
                 }
@@ -1389,7 +1841,7 @@ return nil
                 {
                     try
                     {
-                        var v = await db.StringGetAsync($"browser_run:{browserId}");
+                        var v = await db.StringGetAsync(RedisKeys.BrowserRun(browserId));
                         if (!v.IsNullOrEmpty)
                         {
                             runId2 = v.ToString();
@@ -1430,11 +1882,11 @@ return nil
                     await resultsHubCtx.Clients.Group($"run:{runId2}").CommandLogChunk(new[] { ev });
                     await resultsHubCtx.Clients.Group($"run:{runId2}").RunUpdate(run);
 
-                    // Clear browserId->runId mapping on return
-                    try { await db.KeyDeleteAsync($"browser_run:{browserId}"); }
+                    // Clear browserId->runId/testId mapping on return
+                    try { await db.KeyDeleteAsync(RedisKeys.BrowserRun(browserId)); }
                     catch { }
 
-                    try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
+                    try { await db.KeyDeleteAsync(RedisKeys.BrowserTest(browserId)); }
                     catch { }
 
                     // Propagate correlation id back to caller
@@ -1443,11 +1895,9 @@ return nil
                 }
 
                 // Always cleanup persisted session state/lease keys on return
-                try { await db.KeyDeleteAsync($"borrow_ttl:{browserId}"); }
-                catch { }
-
-                try { await db.KeyDeleteAsync($"session:{browserId}"); }
-                catch { }
+                try { await db.KeyDeleteAsync(RedisKeys.BorrowTtl(browserId)); } catch { }
+                try { await db.KeyDeleteAsync($"borrow_idle:{browserId}"); } catch { }
+                try { await db.KeyDeleteAsync($"session:{browserId}"); } catch { }
 
                 return Results.Ok(new { returned = browserId });
             })
@@ -1523,8 +1973,56 @@ return nil
             var appQ = req.Query["app"].FirstOrDefault();
             var browser = req.Query["browser"].FirstOrDefault();
             var env = req.Query["env"].FirstOrDefault();
-            var runs = await resultsStore.GetRunsAsync(skip, take, status, appQ, browser, env);
-            return Results.Ok(runs);
+
+            // Optional server-driven sorting
+            var sortBy = req.Query["sortBy"].FirstOrDefault(); // supported: runName | startedAt (default)
+            var sortDir = req.Query["sortDir"].FirstOrDefault(); // asc | desc
+            var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(sortDir);
+
+            if (string.Equals(sortBy, "runName", StringComparison.OrdinalIgnoreCase))
+            {
+                // To ensure correct paging when sorting by RunName, we need to sort before paging.
+                // We enumerate runs in storage order (by StartedAtUtc desc) and collect all, then sort by RunName.
+                // This is acceptable for typical dashboard scale and keeps store interface unchanged.
+                var all = new List<PlaywrightHub.Application.DTOs.ResultRunSummaryDto>(take);
+                var offset = 0;
+                const int pageSize = 500;
+                while (true)
+                {
+                    var page = await resultsStore.GetRunsAsync(offset, pageSize, status, appQ, browser, env).ConfigureAwait(false);
+                    if (page.Count == 0) break;
+                    all.AddRange(page);
+                    if (page.Count < pageSize) break;
+                    offset += page.Count;
+                }
+
+                // Sort by normalized RunName (null/empty last), fallback to RunId for ties
+                static string? Key(ResultRunSummaryDto r)
+                    => string.IsNullOrWhiteSpace(r.RunName) ? null : r.RunName;
+
+                IEnumerable<ResultRunSummaryDto> ordered = all
+                    .OrderBy(r => Key(r) is null) // false (has name) first
+                    .ThenBy(r => Key(r), StringComparer.OrdinalIgnoreCase)
+                    .ThenByDescending(r => r.StartedAtUtc); // stable fallback
+
+                if (desc)
+                {
+                    // Reverse direction on the RunName key while keeping nulls last
+                    ordered = all
+                        .OrderBy(r => Key(r) is null)
+                        .ThenByDescending(r => Key(r), StringComparer.OrdinalIgnoreCase)
+                        .ThenByDescending(r => r.StartedAtUtc);
+                }
+
+                var pageOut = ordered.Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 500)).ToList();
+                return Results.Ok(pageOut);
+            }
+            else
+            {
+                // Default behavior: storage-driven order (StartedAtUtc desc)
+                var runs = await resultsStore.GetRunsAsync(skip, take, status, appQ, browser, env);
+                return Results.Ok(runs);
+            }
         });
 
         app.MapGet("/results/count", async (HttpRequest req) =>
@@ -1567,6 +2065,117 @@ return nil
         {
             var count = await resultsStore.GetCommandCountAsync(runId);
             return Results.Ok(new { count });
+        });
+
+        // Export run details for external archiving (JSON/NDJSON)
+        app.MapGet("/results/{runId}/export", async (HttpRequest req, string runId) =>
+        {
+            var format = req.Query["format"].FirstOrDefault()?.ToString().ToLowerInvariant() ?? "json";
+            var run = await resultsStore.GetRunAsync(runId);
+            if (run is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (format == "ndjson")
+            {
+                var opts = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
+                {
+                    WriteIndented = false
+                };
+                var sb = new System.Text.StringBuilder();
+                sb.Append(System.Text.Json.JsonSerializer.Serialize(new { type = "run", run }, opts));
+                sb.Append('\n');
+
+                var skip = 0;
+                const int pageSize = 500;
+                while (true)
+                {
+                    var tests = await resultsStore.GetTestsAsync(runId, skip, pageSize, null).ConfigureAwait(false);
+                    if (tests.Count == 0) break;
+                    foreach (var t in tests)
+                    {
+                        sb.Append(System.Text.Json.JsonSerializer.Serialize(new { type = "test", test = t }, opts));
+                        sb.Append('\n');
+                    }
+                    skip += tests.Count;
+                    if (tests.Count < pageSize) break;
+                }
+
+                var cskip = 0;
+                const int cpage = 1000;
+                while (true)
+                {
+                    var commands = await resultsStore.GetCommandsAsync(runId, cskip, cpage).ConfigureAwait(false);
+                    if (commands.Count == 0) break;
+                    foreach (var c in commands)
+                    {
+                        sb.Append(System.Text.Json.JsonSerializer.Serialize(new { type = "command", command = c }, opts));
+                        sb.Append('\n');
+                    }
+                    cskip += commands.Count;
+                    if (commands.Count < cpage) break;
+                }
+
+                return Results.Text(sb.ToString(), "application/x-ndjson");
+            }
+            else if (format == "json")
+            {
+                var allTests = new System.Collections.Generic.List<PlaywrightHub.Application.DTOs.ResultTestCaseDto>(256);
+                var skip = 0;
+                const int pageSize = 500;
+                while (true)
+                {
+                    var tests = await resultsStore.GetTestsAsync(runId, skip, pageSize, null);
+                    if (tests.Count == 0) break;
+                    allTests.AddRange(tests);
+                    skip += tests.Count;
+                    if (tests.Count < pageSize) break;
+                }
+
+                var allCommands = new System.Collections.Generic.List<PlaywrightHub.Application.DTOs.CommandLogEventDto>(1024);
+                var cskip = 0;
+                const int cpage = 1000;
+                while (true)
+                {
+                    var commands = await resultsStore.GetCommandsAsync(runId, cskip, cpage);
+                    if (commands.Count == 0) break;
+                    allCommands.AddRange(commands);
+                    cskip += commands.Count;
+                    if (commands.Count < cpage) break;
+                }
+
+                return Results.Ok(new { run, tests = allTests, commands = allCommands });
+            }
+            else
+            {
+                return Results.BadRequest(new { error = "Invalid format. Allowed: json, ndjson" });
+            }
+        });
+
+        // Audit retrieval (admin)
+        app.MapGet("/audit", async (HttpRequest req) =>
+        {
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
+
+            int.TryParse(req.Query["skip"], out var skip);
+            int.TryParse(req.Query["take"], out var take);
+            take = take == 0 ? 100 : take;
+            var category = req.Query["category"].FirstOrDefault();
+            var action = req.Query["action"].FirstOrDefault();
+            DateTime? sinceUtc = null;
+            var sinceStr = req.Query["sinceUtc"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(sinceStr) && DateTime.TryParse(sinceStr, null,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+            {
+                sinceUtc = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+            }
+
+            var items = await auditStore.QueryAsync(skip, take, category, action, sinceUtc);
+            return Results.Ok(items);
         });
 
         // Admin: mark run stopped and attempt to release any borrowed browsers for this run
@@ -1618,23 +2227,27 @@ return nil
             {
                 try
                 {
-                    var inuseKey = $"inuse:{labelKey}";
-                    var availKey = $"available:{labelKey}";
+                    var inuseKey = RedisKeys.InUse(labelKey);
+                    var availKey = RedisKeys.Available(labelKey);
                     var res = await db.ScriptEvaluateAsync(luaReturn, new RedisKey[] { inuseKey, availKey },
                         new RedisValue[] { browserId });
                     if (!res.IsNull)
                     {
                         released++;
+                        // Fair queue: decrement in-flight and signal waiters for this label
+                        try { EndpointCapacityQueue.OnFinished(labelKey); } catch { }
+                        try { EndpointCapacityQueue.Signal(labelKey); } catch { }
+
                         // clean mappings
-                        try { await db.KeyDeleteAsync($"browser_run:{browserId}"); }
+                        try { await db.KeyDeleteAsync(RedisKeys.BrowserRun(browserId)); }
                         catch { }
 
-                        try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
+                        try { await db.KeyDeleteAsync(RedisKeys.BrowserTest(browserId)); }
                         catch { }
                     }
 
                     // request sidecar recycle on the worker (idempotent, short TTL)
-                    try { await db.StringSetAsync($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
+                    try { await db.StringSetAsync(RedisKeys.Recycle(browserId), "1", TimeSpan.FromMinutes(2)); }
                     catch { }
                 }
                 catch { }
@@ -1663,7 +2276,155 @@ return nil
             await resultsHubCtx.Clients.Group($"run:{runId}").CommandLogChunk(new[] { ev });
             await resultsHubCtx.Clients.Group($"run:{runId}").RunUpdate(run);
 
+            // Audit admin stop action
+            try
+            {
+                var remoteIp = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                await auditStore.AppendAsync(new AuditEntryDto
+                {
+                    TimestampUtc = DateTime.UtcNow,
+                    Category = "admin",
+                    Action = "run.stop",
+                    RemoteIp = remoteIp,
+                    Details = new Dictionary<string, string>
+                    {
+                        ["runId"] = runId,
+                        ["released"] = released.ToString()
+                    }
+                });
+            }
+            catch { }
+
             return Results.Ok(new { stopped = runId, released });
+        });
+
+        // Admin: delete a run (only if not Running/InProgress)
+        app.MapDelete("/results/{runId}", async (HttpRequest req, string runId) =>
+        {
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
+
+            var run = await resultsStore.GetRunAsync(runId);
+            if (run is null)
+            {
+                return Results.NotFound();
+            }
+
+            var status = run.Status ?? string.Empty;
+            if (string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(status, "InProgress", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Conflict(new { error = "Run is Running/InProgress and cannot be deleted." });
+            }
+
+            var deleted = await resultsStore.DeleteRunAsync(runId);
+            if (!deleted)
+            {
+                return Results.NotFound();
+            }
+
+            // Audit admin delete action
+            try
+            {
+                var remoteIp = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                await auditStore.AppendAsync(new AuditEntryDto
+                {
+                    TimestampUtc = DateTime.UtcNow,
+                    Category = "admin",
+                    Action = "run.delete",
+                    Actor = "dashboard",
+                    RemoteIp = remoteIp,
+                    Details = new Dictionary<string, string>
+                    {
+                        ["runId"] = runId,
+                        ["status"] = status
+                    }
+                });
+            }
+            catch { }
+
+            return Results.NoContent();
+        });
+
+        // Admin: bulk delete non-Running runs matching filters
+        app.MapPost("/results/delete", async (HttpRequest req) =>
+        {
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
+
+            var status = req.Query["status"].FirstOrDefault();
+            var appQ = req.Query["app"].FirstOrDefault();
+            var browser = req.Query["browser"].FirstOrDefault();
+            var env = req.Query["env"].FirstOrDefault();
+            var exclude = req.Query["exclude"].FirstOrDefault();
+            var excludeRunning = string.Equals(exclude, "running", StringComparison.OrdinalIgnoreCase);
+
+            // Collect matching run ids first to avoid paging shifts while deleting
+            var take = 500;
+            var skip = 0;
+            var all = new List<ResultRunSummaryDto>(1024);
+            while (true)
+            {
+                var page = await resultsStore.GetRunsAsync(skip, take, status, appQ, browser, env);
+                if (page.Count == 0) break;
+                all.AddRange(page);
+                if (page.Count < take) break;
+                skip += page.Count;
+            }
+
+            var considered = all.Count;
+            var deleted = 0;
+            var skipped = 0;
+            foreach (var r in all)
+            {
+                var st = r.Status ?? string.Empty;
+                if (string.Equals(st, "Running", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(st, "InProgress", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Always skip running; this also covers exclude=running semantics
+                    skipped++;
+                    continue;
+                }
+
+                try
+                {
+                    var ok = await resultsStore.DeleteRunAsync(r.RunId);
+                    if (ok) deleted++; else skipped++;
+                }
+                catch { skipped++; }
+            }
+
+            // Audit bulk delete
+            try
+            {
+                var remoteIp = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                await auditStore.AppendAsync(new AuditEntryDto
+                {
+                    TimestampUtc = DateTime.UtcNow,
+                    Category = "admin",
+                    Action = "runs.delete.bulk",
+                    Actor = "dashboard",
+                    RemoteIp = remoteIp,
+                    Details = new Dictionary<string, string>
+                    {
+                        ["status"] = status ?? string.Empty,
+                        ["app"] = appQ ?? string.Empty,
+                        ["browser"] = browser ?? string.Empty,
+                        ["env"] = env ?? string.Empty,
+                        ["exclude"] = exclude ?? string.Empty,
+                        ["considered"] = considered.ToString(),
+                        ["deleted"] = deleted.ToString(),
+                        ["skipped"] = skipped.ToString()
+                    }
+                });
+            }
+            catch { }
+
+            return Results.Ok(new { considered, deleted, skipped });
         });
 
         // Admin: restart all pre-warmed browsers for a pool (available and in-use)
@@ -1684,22 +2445,22 @@ return nil
             labelKey = parsedAdmin!.Normalized;
 
             // Enter maintenance and snapshot current counts
-            var availKey = $"available:{labelKey}";
-            var inuseKey = $"inuse:{labelKey}";
+            var availKey = RedisKeys.Available(labelKey);
+            var inuseKey = RedisKeys.InUse(labelKey);
             var availLen = await db.ListLengthAsync(availKey);
             var inuseLen = await db.ListLengthAsync(inuseKey);
             var target = availLen + inuseLen;
             var ttl = TimeSpan.FromMinutes(30);
             try
             {
-                await db.StringSetAsync($"maintenance:{labelKey}", "1", ttl);
-                await db.StringSetAsync($"maintenance:target:{labelKey}", target.ToString(CultureInfo.InvariantCulture),
+                await db.StringSetAsync(RedisKeys.MaintenanceFlag(labelKey), "1", ttl);
+                await db.StringSetAsync(RedisKeys.MaintenanceTarget(labelKey), target.ToString(CultureInfo.InvariantCulture),
                     ttl);
-                await db.StringSetAsync($"maintenance:snap_avail:{labelKey}",
+                await db.StringSetAsync(RedisKeys.MaintenanceSnapAvail(labelKey),
                     availLen.ToString(CultureInfo.InvariantCulture), ttl);
-                await db.StringSetAsync($"maintenance:snap_inuse:{labelKey}",
+                await db.StringSetAsync(RedisKeys.MaintenanceSnapInuse(labelKey),
                     inuseLen.ToString(CultureInfo.InvariantCulture), ttl);
-                await db.StringSetAsync($"maintenance:since:{labelKey}",
+                await db.StringSetAsync(RedisKeys.MaintenanceSince(labelKey),
                     DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), ttl);
             }
             catch { }
@@ -1719,7 +2480,7 @@ return nil
                             var bid = m.Groups["id"].Value;
                             if (scheduled.Add(bid))
                             {
-                                try { await db.StringSetAsync($"recycle:{bid}", "1", TimeSpan.FromMinutes(2)); }
+                                try { await db.StringSetAsync(RedisKeys.Recycle(bid), "1", TimeSpan.FromMinutes(2)); }
                                 catch { }
                             }
                         }
@@ -1727,6 +2488,27 @@ return nil
                 }
                 catch { }
             }
+
+            try
+            {
+                var remoteIp = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                await auditStore.AppendAsync(new AuditEntryDto
+                {
+                    TimestampUtc = DateTime.UtcNow,
+                    Category = "admin",
+                    Action = "pool.restart",
+                    Actor = "dashboard",
+                    RemoteIp = remoteIp,
+                    Details = new Dictionary<string, string>
+                    {
+                        ["labelKey"] = labelKey,
+                        ["scheduled"] = scheduled.Count.ToString(),
+                        ["avail"] = availLen.ToString(),
+                        ["inuse"] = inuseLen.ToString()
+                    }
+                });
+            }
+            catch { }
 
             return Results.Ok(new
             {
@@ -1751,7 +2533,7 @@ return nil
             }
 
             // Ensure browser->run mapping if provided in body and missing in Redis
-            var runMapKey = $"browser_run:{browserId}";
+            var runMapKey = RedisKeys.BrowserRun(browserId);
             var runIdVal = await db.StringGetAsync(runMapKey);
             if (runIdVal.IsNullOrEmpty && body.TryGetValue("runId", out var providedRunId) &&
                 !string.IsNullOrWhiteSpace(providedRunId))
@@ -1761,7 +2543,7 @@ return nil
             }
 
             // Map current testId and TTL. Mapping is per-browser session; it's also cleared on return.
-            await db.StringSetAsync($"browser_test:{browserId}", testId!, TimeSpan.FromHours(6));
+            await db.StringSetAsync(RedisKeys.BrowserTest(browserId), testId!, TimeSpan.FromHours(6));
 
             // If we can attribute to a run, persist and broadcast a TestUpdate for nicer UI
             if (!runIdVal.IsNullOrEmpty)
@@ -1797,7 +2579,7 @@ return nil
                 return Results.Unauthorized();
             }
 
-            var runIdVal = await db.StringGetAsync($"browser_run:{browserId}");
+            var runIdVal = await db.StringGetAsync(RedisKeys.BrowserRun(browserId));
             if (runIdVal.IsNullOrEmpty)
             {
                 return Results.Accepted(); // No run attribution yet
@@ -1807,7 +2589,7 @@ return nil
 
             // Get current test attribution (if any)
             RedisValue currentTestVal;
-            try { currentTestVal = await db.StringGetAsync($"browser_test:{browserId}"); }
+            try { currentTestVal = await db.StringGetAsync(RedisKeys.BrowserTest(browserId)); }
             catch { currentTestVal = RedisValue.Null; }
 
             var currentTestId = currentTestVal.IsNullOrEmpty ? null : currentTestVal.ToString();
@@ -1942,7 +2724,7 @@ return nil
                 return Results.Unauthorized();
             }
 
-            var runIdVal = await db.StringGetAsync($"browser_run:{browserId}");
+            var runIdVal = await db.StringGetAsync(RedisKeys.BrowserRun(browserId));
             if (runIdVal.IsNullOrEmpty)
             {
                 return Results.Accepted();
@@ -1951,7 +2733,7 @@ return nil
             var runId = runIdVal.ToString();
 
             RedisValue currentTestVal;
-            try { currentTestVal = await db.StringGetAsync($"browser_test:{browserId}"); }
+            try { currentTestVal = await db.StringGetAsync(RedisKeys.BrowserTest(browserId)); }
             catch { currentTestVal = RedisValue.Null; }
 
             var currentTestId = currentTestVal.IsNullOrEmpty ? null : currentTestVal.ToString();
@@ -2262,18 +3044,13 @@ return nil
         });
 
         app.MapGet("/nodes", () => Results.Ok(db.SetMembers("nodes").Select(x => x.ToString())));
-        app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
-        app.MapGet("/health/ready", async () =>
+
+        // Liveness + critical dependencies health: ensure Redis is reachable and responsive.
+        app.MapGet("/health", async () =>
         {
-            // During graceful shutdown, report not ready
-            if (!_acceptingBorrows)
-            {
-                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-            }
             try
             {
                 var timeoutMs = int.TryParse(config["REDIS_HEALTH_TIMEOUT_MS"], out var ms) ? Math.Max(100, ms) : 1000;
-                var breakerThreshold = int.TryParse(config["REDIS_BREAKER_THRESHOLD"], out var th) ? Math.Max(1, th) : 3;
                 var breakerCooldownMs = int.TryParse(config["REDIS_BREAKER_COOLDOWN_MS"], out var cd) ? Math.Max(500, cd) : 5000;
 
                 // Circuit breaker: if open, fail fast
@@ -2304,7 +3081,7 @@ return nil
                 // Success: reset failure counters and breaker
                 System.Threading.Interlocked.Exchange(ref _redisConsecutiveFailures, 0);
                 System.Threading.Interlocked.Exchange(ref _redisBreakerUntilTicks, 0);
-                return Results.Ok(new { status = "ready", redis = new { pingMs = sw.ElapsedMilliseconds } });
+                return Results.Ok(new { status = "ok", redis = new { pingMs = sw.ElapsedMilliseconds } });
             }
             catch
             {
@@ -2317,6 +3094,39 @@ return nil
                     System.Threading.Interlocked.Exchange(ref _redisBreakerUntilTicks, until);
                     System.Threading.Interlocked.Exchange(ref _redisConsecutiveFailures, 0);
                 }
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        // Readiness: reflect capacity to serve borrows (workers registered and available slots)
+        app.MapGet("/ready", async () =>
+        {
+            // During graceful shutdown, report not ready
+            if (!_acceptingBorrows)
+            {
+                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+            }
+
+            try
+            {
+                var reader = services.GetRequiredService<IPoolStateReader>();
+                var state = await reader.GetStateAsync();
+                var total = state.Pools.Sum(p => p.Total);
+                var borrowed = state.Pools.Sum(p => p.Borrowed);
+                var available = Math.Max(0, total - borrowed);
+                var activeWorkers = state.Workers.Count;
+
+                var hasCapacity = activeWorkers > 0 && available > 0;
+                if (!hasCapacity)
+                {
+                    return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+                }
+
+                return Results.Ok(new { status = "ready", workers = activeWorkers, total, borrowed, available });
+            }
+            catch
+            {
+                // Conservatively report not ready on unexpected errors
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
         });

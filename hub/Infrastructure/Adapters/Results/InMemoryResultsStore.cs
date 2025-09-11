@@ -165,4 +165,12 @@ public sealed class InMemoryResultsStore : IResultsStore
         var list = q.OrderBy(t => t.Title).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 1000)).ToList();
         return Task.FromResult((IReadOnlyList<ResultTestCaseDto>)list);
     }
+
+    public Task<bool> DeleteRunAsync(string runId)
+    {
+        var existed = _runs.TryRemove(runId, out _);
+        _cmd.TryRemove(runId, out _);
+        _tests.TryRemove(runId, out _);
+        return Task.FromResult(existed);
+    }
 }

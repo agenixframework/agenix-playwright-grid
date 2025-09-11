@@ -74,6 +74,12 @@ public sealed class PoolManager(
         catch { return _activeWs.Count > 0; }
     }
 
+    public IEnumerable<string> GetActiveBrowserIds()
+    {
+        try { return _activeWs.Keys.ToArray(); }
+        catch { return _activeWs.Keys; }
+    }
+
     private static string NormalizeBrowser(string s)
     {
         return string.IsNullOrWhiteSpace(s) ? "Chromium" : s.Trim();
@@ -95,14 +101,17 @@ public sealed class PoolManager(
             var mismatch = !string.IsNullOrWhiteSpace(expected) && !string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
 
             // Authoritative: store sidecar-reported version on node metadata
-            await db.HashSetAsync($"node:{options.NodeId}", "PlaywrightVersion", actual);
+            await db.HashSetAsync(RedisKeys.Node(options.NodeId), "PlaywrightVersion", actual);
 
             // Also store expected and mismatch flags for Hub/Dashboard consumption
-            try { await db.HashSetAsync($"node:{options.NodeId}", new HashEntry[]
+            try
+            {
+                await db.HashSetAsync(RedisKeys.Node(options.NodeId), new HashEntry[]
             {
                 new("PlaywrightVersionExpected", expected ?? string.Empty),
                 new("PlaywrightVersionMismatch", mismatch ? "1" : "0")
-            }); }
+            });
+            }
             catch { }
 
             // Metrics: gauge 0/1 with labels expected/actual
@@ -204,7 +213,7 @@ public sealed class PoolManager(
             browserType = NormalizeBrowser(parts.Length >= 2 ? parts[1] : "Chromium");
         }
 
-        var availableKey = $"available:{labelKey}";
+        var availableKey = RedisKeys.Available(labelKey);
 
         // Local helper: validate that the internal WS endpoint accepts a WebSocket handshake
         static async Task<bool> ValidateWsAsync(string wsUrl, TimeSpan timeout)
@@ -345,7 +354,11 @@ public sealed class PoolManager(
             // Update Playwright version telemetry (authoritative from sidecar) and mismatch metric
             await UpdatePlaywrightVersionTelemetryAsync(res.playwrightVersion);
 
-            var argsEnv = Environment.GetEnvironmentVariable("CHROMIUM_ARGS");
+            var argsEnv = browserType.Equals("chromium", StringComparison.OrdinalIgnoreCase)
+                ? (Environment.GetEnvironmentVariable("CHROMIUM_ARGS") ?? Environment.GetEnvironmentVariable("CHROME_ARGS"))
+                : browserType.Equals("webkit", StringComparison.OrdinalIgnoreCase)
+                    ? Environment.GetEnvironmentVariable("WEBKIT_ARGS")
+                    : Environment.GetEnvironmentVariable("FIREFOX_ARGS");
             var (isContainer, containerId) = GetContainerInfo();
             var item = JsonSerializer.Serialize(new
             {
@@ -374,8 +387,8 @@ public sealed class PoolManager(
     {
         try
         {
-            var availableKey = $"available:{labelKey}";
-            var inuseKey = $"inuse:{labelKey}";
+            var availableKey = RedisKeys.Available(labelKey);
+            var inuseKey = RedisKeys.InUse(labelKey);
 
             var existedInMap = false;
             Slot? removedSlot = null;
@@ -535,7 +548,11 @@ public sealed class PoolManager(
             }
             catch { }
 
-            var argsEnv = Environment.GetEnvironmentVariable("CHROMIUM_ARGS");
+            var argsEnv = browserType.Equals("chromium", StringComparison.OrdinalIgnoreCase)
+                ? (Environment.GetEnvironmentVariable("CHROMIUM_ARGS") ?? Environment.GetEnvironmentVariable("CHROME_ARGS"))
+                : browserType.Equals("webkit", StringComparison.OrdinalIgnoreCase)
+                    ? Environment.GetEnvironmentVariable("WEBKIT_ARGS")
+                    : Environment.GetEnvironmentVariable("FIREFOX_ARGS");
             var item = JsonSerializer.Serialize(new
             {
                 nodeId = options.NodeId,
@@ -565,7 +582,7 @@ public sealed class PoolManager(
 
     public async Task CleanupLabelListsAsync(string labelKey)
     {
-        var keys = new[] { $"available:{labelKey}", $"inuse:{labelKey}" };
+        var keys = new[] { RedisKeys.Available(labelKey), RedisKeys.InUse(labelKey) };
         foreach (var key in keys)
         {
             try
@@ -610,15 +627,15 @@ public sealed class PoolManager(
                 {
                     var labelKey = labelEntry.Key;
                     var map = labelEntry.Value;
-                    var availableKey = $"available:{labelKey}";
-                    var inuseKey = $"inuse:{labelKey}";
+                    var availableKey = RedisKeys.Available(labelKey);
+                    var inuseKey = RedisKeys.InUse(labelKey);
 
                     foreach (var kv in map.ToArray())
                     {
                         var browserId = kv.Key;
                         var slot = kv.Value;
 
-                        var replaceRequested = await db.KeyExistsAsync($"recycle:{browserId}");
+                        var replaceRequested = await db.KeyExistsAsync(RedisKeys.Recycle(browserId));
                         var needsReplace = slot.Proc.HasExited || replaceRequested;
                         if (!needsReplace)
                         {
@@ -635,7 +652,7 @@ public sealed class PoolManager(
 
                         if (replaceRequested)
                         {
-                            try { await db.KeyDeleteAsync($"recycle:{browserId}"); }
+                            try { await db.KeyDeleteAsync(RedisKeys.Recycle(browserId)); }
                             catch { }
                         }
 
@@ -712,6 +729,12 @@ public sealed class PoolManager(
                         // Update Playwright version telemetry (authoritative from sidecar) and mismatch metric
                         await UpdatePlaywrightVersionTelemetryAsync(res.playwrightVersion);
 
+                        var argsEnv = slot.BrowserType.Equals("chromium", StringComparison.OrdinalIgnoreCase)
+                            ? (Environment.GetEnvironmentVariable("CHROMIUM_ARGS") ?? Environment.GetEnvironmentVariable("CHROME_ARGS"))
+                            : slot.BrowserType.Equals("webkit", StringComparison.OrdinalIgnoreCase)
+                                ? Environment.GetEnvironmentVariable("WEBKIT_ARGS")
+                                : Environment.GetEnvironmentVariable("FIREFOX_ARGS");
+
                         var item = JsonSerializer.Serialize(new
                         {
                             nodeId = options.NodeId,
@@ -719,6 +742,7 @@ public sealed class PoolManager(
                             webSocketEndpoint = wsPublic,
                             browserType = slot.BrowserType,
                             res.browserVersion,
+                            args = argsEnv,
                             labels = options.Labels.ToDictionary(k => k.Key, v => v.Value)
                         });
                         await db.ListRightPushAsync(availableKey, item);
@@ -775,9 +799,30 @@ public sealed class PoolManager(
         return false;
     }
 
+    /// <summary>
+    ///     Try to resolve the labelKey for a given browserId currently known by the worker.
+    ///     This scans the in-memory Pools map (labelKey -> { browserId -> Slot }).
+    /// </summary>
+    /// <param name="browserId">The browser instance identifier.</param>
+    /// <param name="labelKey">Resolved label key when found; empty string otherwise.</param>
+    /// <returns>True when a matching labelKey was found; false otherwise.</returns>
+    public bool TryFindLabelByBrowserId(string browserId, out string labelKey)
+    {
+        foreach (var kv in Pools)
+        {
+            if (kv.Value.ContainsKey(browserId))
+            {
+                labelKey = kv.Key;
+                return true;
+            }
+        }
+        labelKey = string.Empty;
+        return false;
+    }
+
     public Task<long> GetAvailableCountAsync(string labelKey)
     {
-        return db.ListLengthAsync($"available:{labelKey}");
+        return db.ListLengthAsync(RedisKeys.Available(labelKey));
     }
 
     public async Task CleanupAllAsync()
@@ -794,10 +839,10 @@ public sealed class PoolManager(
             try { await db.SetRemoveAsync("nodes", options.NodeId); }
             catch { }
 
-            try { await db.KeyDeleteAsync($"node:{options.NodeId}"); }
+            try { await db.KeyDeleteAsync(RedisKeys.Node(options.NodeId)); }
             catch { }
 
-            try { await db.KeyDeleteAsync($"node_alive:{options.NodeId}"); }
+            try { await db.KeyDeleteAsync(RedisKeys.NodeAlive(options.NodeId)); }
             catch { }
         }
         catch (Exception ex)

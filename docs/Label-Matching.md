@@ -33,6 +33,10 @@ Hub environment variables controlling the strategy:
 
 Defaults: trailing fallback and prefix expansion enabled; wildcards disabled.
 
+Per-environment overrides:
+- You can scope each flag per environment by appending _{EnvironmentName}, e.g., HUB_BORROW_WILDCARDS_Production=true.
+- The Hub resolves the effective value as: specific environment-suffixed key (case-insensitive on suffix) → base key → default.
+
 ## Domain API
 The strategy is centralized in the Domain package:
 - LabelKey: value object for parsing/validation/normalization of label keys.

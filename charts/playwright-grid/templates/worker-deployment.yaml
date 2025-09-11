@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pg.worker.name" . }}
+  labels:
+    {{- include "pg.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "pg.worker.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "pg.worker.name" . }}
+        {{- include "pg.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: worker
+          image: "{{ .Values.image.worker.repository }}:{{ .Values.image.worker.tag }}"
+          imagePullPolicy: {{ .Values.image.worker.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.worker.service.port }}
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://0.0.0.0:{{ .Values.worker.service.port }}"
+            - name: HUB_URL
+              value: "http://{{ include "pg.hub.name" . }}:{{ .Values.hub.service.port }}"
+            - name: REDIS_URL
+              value: {{ if .Values.redis.enabled }}"{{ include "pg.redis.name" . }}:{{ .Values.redis.service.port }}"{{ else }}"{{ .Values.hub.redisUrl | default "redis:6379" }}"{{ end }}
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_SECRET
+              value: {{ .Values.worker.nodeSecret | quote }}
+            - name: NODE_NODE_SECRET
+              value: {{ .Values.worker.nodeNodeSecret | quote }}
+            - name: NODE_REGION
+              value: {{ .Values.worker.nodeRegion | quote }}
+            - name: POOL_CONFIG
+              value: {{ .Values.worker.poolConfig | quote }}
+            - name: PUBLIC_WS_HOST
+              value: {{ default (include "pg.worker.name" .) .Values.worker.publicWs.host | quote }}
+            - name: PUBLIC_WS_PORT
+              value: {{ .Values.worker.publicWs.port | quote }}
+            - name: PUBLIC_WS_SCHEME
+              value: {{ .Values.worker.publicWs.scheme | quote }}
+            - name: PLAYWRIGHT_VERSION
+              value: {{ .Values.worker.playwrightVersion | quote }}
+            - name: CHROMIUM_ARGS
+              value: "--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          {{- if .Values.worker.shm.enabled }}
+          volumeMounts:
+            - name: dev-shm
+              mountPath: /dev/shm
+          {{- end }}
+      {{- if .Values.worker.shm.enabled }}
+      volumes:
+        - name: dev-shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.worker.shm.sizeLimit }}
+      {{- end }}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

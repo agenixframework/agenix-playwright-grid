@@ -18,8 +18,9 @@
 
 using System.Globalization;
 using System.Text.Json;
-using StackExchange.Redis;
+using Agenix.PlaywrightGrid.Domain;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace PlaywrightHub.Infrastructure.Adapters.Background;
 
@@ -76,13 +77,13 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                         }
 
                         // If an alive TTL key is present, consider the node healthy.
-                        var aliveKey = $"node_alive:{nodeId}";
+                        var aliveKey = RedisKeys.NodeAlive(nodeId);
                         if (await db.KeyExistsAsync(aliveKey))
                         {
                             continue;
                         }
 
-                        var key = $"node:{nodeId}";
+                        var key = RedisKeys.Node(nodeId);
                         var lastSeenVal = await db.HashGetAsync(key, "LastSeen");
 
                         // Parse using round-trip ISO 8601 to preserve UTC
@@ -173,7 +174,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
     {
         var server = mux.GetServer(mux.GetEndPoints()[0]);
         var nodePattern = $"\"nodeId\":\"{nodeId}\"";
-        foreach (var rk in server.Keys(pattern: "available:*"))
+        foreach (var rk in server.Keys(pattern: RedisKeys.AvailablePrefix + "*"))
         {
             var key = rk.ToString();
             var list = db.ListRange(key);
@@ -200,7 +201,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
     {
         var server = mux.GetServer(mux.GetEndPoints()[0]);
         var nodePattern = $"\"nodeId\":\"{nodeId}\"";
-        foreach (var rk in server.Keys(pattern: "available:*"))
+        foreach (var rk in server.Keys(pattern: RedisKeys.AvailablePrefix + "*"))
         {
             var key = rk.ToString();
             var list = await db.ListRangeAsync(key);
@@ -222,7 +223,7 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
     {
         var server = mux.GetServer(mux.GetEndPoints()[0]);
         var nodePattern = $"\"nodeId\":\"{nodeId}\"";
-        foreach (var rk in server.Keys(pattern: "inuse:*"))
+        foreach (var rk in server.Keys(pattern: RedisKeys.InUsePrefix + "*"))
         {
             var key = rk.ToString();
             var list = await db.ListRangeAsync(key);
@@ -232,6 +233,14 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                 if (s.Contains(nodePattern, StringComparison.Ordinal))
                 {
                     await db.ListRemoveAsync(key, item);
+
+                    // Decrement in-flight concurrency for this label because the in-use entry is gone
+                    try
+                    {
+                        var labelKey = key.StartsWith(RedisKeys.InUsePrefix, StringComparison.Ordinal) ? key[RedisKeys.InUsePrefix.Length..] : key;
+                        PlaywrightHub.Infrastructure.Web.EndpointCapacityQueue.OnFinished(labelKey);
+                    }
+                    catch { }
 
                     // Best-effort: remove browser mappings if browserId is present in the JSON blob
                     try
@@ -243,10 +252,10 @@ public sealed class NodeSweeperService(IDatabase db, IConnectionMultiplexer mux,
                             var browserId = bidEl.GetString();
                             if (!string.IsNullOrWhiteSpace(browserId))
                             {
-                                try { await db.KeyDeleteAsync($"browser_run:{browserId}"); }
+                                try { await db.KeyDeleteAsync(RedisKeys.BrowserRun(browserId)); }
                                 catch { }
 
-                                try { await db.KeyDeleteAsync($"browser_test:{browserId}"); }
+                                try { await db.KeyDeleteAsync(RedisKeys.BrowserTest(browserId)); }
                                 catch { }
                             }
                         }

@@ -145,7 +145,7 @@ ON CONFLICT(RunId) DO UPDATE SET
         cmd.CommandText = $"SELECT RunJson FROM Runs{whereSql} ORDER BY StartedAtUtc DESC LIMIT $take OFFSET $skip";
         cmd.Parameters.AddWithValue("$take", Math.Clamp(take, 1, 500));
         cmd.Parameters.AddWithValue("$skip", Math.Max(0, skip));
-        foreach (var (k,v) in parms) cmd.Parameters.AddWithValue(k, v ?? DBNull.Value);
+        foreach (var (k, v) in parms) cmd.Parameters.AddWithValue(k, v ?? DBNull.Value);
         var list = new List<ResultRunSummaryDto>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -171,7 +171,7 @@ ON CONFLICT(RunId) DO UPDATE SET
         var whereSql = where.Count > 0 ? (" WHERE " + string.Join(" AND ", where)) : string.Empty;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM Runs{whereSql}";
-        foreach (var (k,v) in parms) cmd.Parameters.AddWithValue(k, v ?? DBNull.Value);
+        foreach (var (k, v) in parms) cmd.Parameters.AddWithValue(k, v ?? DBNull.Value);
         var res = await cmd.ExecuteScalarAsync();
         return res is long l ? (int)l : Convert.ToInt32(res ?? 0);
     }
@@ -290,5 +290,49 @@ ON CONFLICT(RunId, TestId) DO UPDATE SET
             catch { }
         }
         return list;
+    }
+
+    public async Task<bool> DeleteRunAsync(string runId)
+    {
+        await EnsureCreatedAsync();
+        await using var conn = new SqliteConnection(_connString);
+        await conn.OpenAsync();
+        var tx = conn.BeginTransaction();
+        try
+        {
+            // Delete children first
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM Tests WHERE RunId=$id";
+                cmd.Parameters.AddWithValue("$id", runId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM Commands WHERE RunId=$id";
+                cmd.Parameters.AddWithValue("$id", runId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            int affected;
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM Runs WHERE RunId=$id";
+                cmd.Parameters.AddWithValue("$id", runId);
+                affected = await cmd.ExecuteNonQueryAsync();
+            }
+
+            tx.Commit();
+            return affected > 0;
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { }
+            return false;
+        }
     }
 }

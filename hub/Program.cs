@@ -37,6 +37,8 @@ public static class Program
     /// <returns>A task that represents the asynchronous operation of initializing and starting the application.</returns>
     public static Task Main(string[] args)
     {
+        // Load local .env variables for developer convenience (no-op if DISABLE_DOTENV=1)
+        PlaywrightHub.Infrastructure.DotEnv.Load();
         return HubServiceRunner.RunAsync(args);
     }
 }

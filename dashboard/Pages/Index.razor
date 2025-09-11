@@ -3,6 +3,7 @@
 @implements IDisposable
 @inject IPoolStateReader Proxy
 @inject IHttpClientFactory HttpFactory
+@inject IJSRuntime JS
 
 <div class="d-flex align-items-center my-3">
     <h3 class="mb-0">Live Browser Pool Dashboard</h3>
@@ -214,8 +215,11 @@ else
     </div>
 }
 
+<ConfirmDialog @ref="Confirm" />
+
 @code {
 
+    private ConfirmDialog? Confirm;
     private readonly HashSet<string> _restarting = new(StringComparer.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
@@ -241,6 +245,9 @@ else
     private async Task RestartPool(string labelKey)
     {
         if (string.IsNullOrWhiteSpace(labelKey)) return;
+        // Confirm intent
+        var ok = Confirm != null ? await Confirm.Show($"Restart all pre-warmed browsers in pool '{labelKey}'? Borrowed sessions are not affected.", "Confirm Restart", "Restart", "Cancel") : await JS.InvokeAsync<bool>("confirm", $"Restart all pre-warmed browsers in pool '{labelKey}'? Borrowed sessions are not affected.");
+        if (!ok) return;
         if (!_restarting.Add(labelKey)) return;
         // trigger immediate UI update so the button disables/spinner shows right away
         await InvokeAsync(StateHasChanged);

@@ -7,48 +7,58 @@
 @inject IConfiguration Config
 @inject ILogger<Results> Logger
 @inject NavigationManager Nav
+@inject DashboardFeatureFlags Flags
+@inject IJSRuntime JS
 
 <div class="d-flex align-items-center my-3">
     <h3 class="mb-0">Test Runs</h3>
     <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Refresh">Refresh</button>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <div class="row g-2 align-items-end">
-            <div class="col-sm-2">
-                <label class="form-label">App</label>
-                <input class="form-control form-control-sm" @bind="filterApp"/>
-            </div>
-            <div class="col-sm-2">
-                <label class="form-label">Browser</label>
-                <input class="form-control form-control-sm" @bind="filterBrowser"/>
-            </div>
-            <div class="col-sm-2">
-                <label class="form-label">Env</label>
-                <input class="form-control form-control-sm" @bind="filterEnv"/>
-            </div>
-            <div class="col-sm-2">
-                <label class="form-label">Status</label>
-                <input class="form-control form-control-sm" @bind="filterStatus"/>
-            </div>
-            <div class="col-sm-2">
-                <label class="form-label">Region</label>
-                <input class="form-control form-control-sm" @bind="filterRegion"/>
-            </div>
-            <div class="col-sm-3">
-                <label class="form-label">Search (RunId/ExternalId)</label>
-                <input class="form-control form-control-sm" @bind="searchText"/>
-            </div>
-            <div class="col-sm-1">
-                <button class="btn btn-sm btn-primary w-100" @onclick="LoadRuns">Apply</button>
-            </div>
-            <div class="col-sm-1">
-                <button class="btn btn-sm btn-outline-secondary w-100" @onclick="ClearFilters">Clear</button>
+@if (Flags.FiltersEnabled)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-2">
+                    <label class="form-label">App</label>
+                    <input class="form-control form-control-sm" @bind="filterApp"/>
+                </div>
+                <div class="col-sm-2">
+                    <label class="form-label">Browser</label>
+                    <input class="form-control form-control-sm" @bind="filterBrowser"/>
+                </div>
+                <div class="col-sm-2">
+                    <label class="form-label">Env</label>
+                    <input class="form-control form-control-sm" @bind="filterEnv"/>
+                </div>
+                <div class="col-sm-2">
+                    <label class="form-label">Status</label>
+                    <input class="form-control form-control-sm" @bind="filterStatus"/>
+                </div>
+                <div class="col-sm-2">
+                    <label class="form-label">Region</label>
+                    <input class="form-control form-control-sm" @bind="filterRegion"/>
+                </div>
+                <div class="col-sm-3">
+                    <label class="form-label">Search (RunName/RunId/ExternalId)</label>
+                    <input class="form-control form-control-sm" @bind="searchText"/>
+                </div>
+                <div class="col-sm-1">
+                    <button class="btn btn-sm btn-primary w-100" @onclick="LoadRuns">Apply</button>
+                </div>
+                <div class="col-sm-1">
+                    <button class="btn btn-sm btn-outline-secondary w-100" @onclick="ClearFilters">Clear</button>
+                </div>
+                <div class="col-sm-2">
+                    <button class="btn btn-sm btn-outline-danger w-100" disabled="@bulkDeleting" @onclick="DeleteAllNonRunningAsync">
+                        @(bulkDeleting ? "Deleting…" : "Delete All (non-Running)")
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
+}
 
 @if (_runs == null)
 {
@@ -67,59 +77,36 @@ else
 {
     @* Summary cards *@
     <div class="row g-3 mb-3">
-        <div class="col-6 col-md-3">
-            <div class="card text-center h-100">
-                <div class="card-body">
-                    <div class="text-muted small">Runs</div>
-                    <div class="display-6">@TotalRuns()</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
+        <div class="col-12">
             <div class="card h-100">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="text-muted small">Pass rate</div>
-                        <div class="fw-semibold">@PassRate()%</div>
+                    <div class="text-muted small mb-2">Per App / Browser / Env</div>
+                    <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+                        <table class="table table-sm table-striped table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                            <tr>
+                                <th>Label</th>
+                                <th class="text-warning">Running</th>
+                                <th class="text-success">Finished</th>
+                                <th class="text-secondary">Stopped</th>
+                                <th class="text-muted">Total</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var g in GroupSummaries())
+                            {
+                                var label = $"{g.App}:{g.Browser}:{g.Env}";
+                                <tr>
+                                    <td class="text-break" style="max-width: 260px;" title="@label">@label</td>
+                                    <td><span class="badge rounded-pill bg-warning text-dark">@g.Running</span></td>
+                                    <td><span class="badge rounded-pill bg-success">@g.Finished</span></td>
+                                    <td><span class="badge rounded-pill bg-secondary">@g.Stopped</span></td>
+                                    <td><span class="badge rounded-pill bg-light text-muted border">@g.Total</span></td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="mt-2">
-                        <svg viewBox="0 0 100 20" width="100%" height="30" preserveAspectRatio="none"
-                             aria-label="Pass rate trend">
-                            <polyline fill="none" stroke="#0d6efd" stroke-width="2"
-                                      points="@PassRatePoints()"></polyline>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between small">
-                        <div class="text-success">Passed: @PassedRunsCount()</div>
-                        <div class="text-danger">Failed: @FailedRunsCount()</div>
-                    </div>
-                    <div class="d-flex justify-content-between small mt-1">
-                        <div class="text-secondary">Stopped: @StoppedRunsCount()</div>
-                        <div class="text-muted">Completed: @TotalCompletedRuns()</div>
-                    </div>
-                    <div class="progress mt-2" role="progressbar" aria-label="Runs breakdown" aria-valuemin="0"
-                         aria-valuemax="100">
-                        <div class="progress-bar bg-success"
-                             style="width:@Percent(PassedRunsCount(), Math.Max(1, TotalCompletedRuns()))%"></div>
-                        <div class="progress-bar bg-danger"
-                             style="width:@Percent(FailedRunsCount(), Math.Max(1, TotalCompletedRuns()))%"></div>
-                        <div class="progress-bar bg-secondary"
-                             style="width:@Percent(StoppedRunsCount(), Math.Max(1, TotalCompletedRuns()))%"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="card text-center h-100">
-                <div class="card-body">
-                    <div class="text-muted small">Running</div>
-                    <div class="display-6">@RunningCount()</div>
                 </div>
             </div>
         </div>
@@ -158,9 +145,6 @@ else
                 <th>Browser</th>
                 <th>Env</th>
                 <th>Region/OS</th>
-                <th>Total</th>
-                <th>Passed</th>
-                <th>Failed</th>
                 <th>Duration</th>
                 <th>Started</th>
                 <th>Node</th>
@@ -173,9 +157,9 @@ else
             {
                 var dur = r.CompletedAtUtc.HasValue ? r.CompletedAtUtc.Value - r.StartedAtUtc : DateTime.UtcNow - r.StartedAtUtc;
                 <tr>
-                    <td><a href="/results/@r.RunId">@Short(r.RunId)</a></td>
+                    <td><a href="/results/@r.RunId">@(!string.IsNullOrWhiteSpace(r.RunName) ? r.RunName : Short(r.RunId))</a></td>
                     <td>
-                        <span class="badge @StatusBadgeClass(r.Status)">@r.Status</span>
+                        <span class="badge @StatusBadgeClass(r.Status)">@DisplayStatus(r.Status)</span>
                         @if (IsHanging(r))
                         {
                             <span class="badge bg-danger ms-1"
@@ -186,9 +170,6 @@ else
                     <td>@r.Browser</td>
                     <td>@r.Env</td>
                     <td>@(string.Join(" / ", new string?[] { r.Region, r.OS }.Where(x => !string.IsNullOrWhiteSpace(x))))</td>
-                    <td>@EffectiveTotalTests(r)</td>
-                    <td class="text-success">@EffectivePassed(r)</td>
-                    <td class="text-danger">@EffectiveFailed(r)</td>
                     <td>@(dur.TotalMinutes < 1 ? $"{dur.TotalSeconds:F0}s" : $"{dur.TotalMinutes:F1}m")</td>
                     <td>
                         <div>@r.StartedAtUtc.ToLocalTime().ToString("g")</div>
@@ -206,7 +187,10 @@ else
                         }
                         else
                         {
-                            <span class="text-muted">-</span>
+                            <button class="btn btn-sm btn-outline-danger" disabled="@_deleting.Contains(r.RunId)"
+                                    @onclick="()=> DeleteRunAsync(r.RunId)">
+                                @(_deleting.Contains(r.RunId) ? "Deleting..." : "Delete")
+                            </button>
                         }
                     </td>
                 </tr>
@@ -216,22 +200,28 @@ else
     </div>
 }
 
+<ConfirmDialog @ref="Confirm" />
+
 @code {
     private List<ResultRunSummaryDto>? _runs; // current page buffer from server
     private HubConnection? _conn;
+    private ConfirmDialog? Confirm;
     private string filterApp = string.Empty, filterBrowser = string.Empty, filterEnv = string.Empty, filterStatus = string.Empty, filterRegion = string.Empty, searchText = string.Empty;
 
     // Total count from server for current server-side filters (app/browser/env/status)
     private int _totalRunsCount = 0;
 
     // Apply only local search (RunId/ExternalId) on the page buffer. Other filters go to server.
-    private IEnumerable<ResultRunSummaryDto> FilteredRuns => (_runs ?? new List<ResultRunSummaryDto>())
+    private IEnumerable<ResultRunSummaryDto> FilteredRuns => (_runs ?? [])
         .Where(r => string.IsNullOrWhiteSpace(filterApp) || r.App.Contains(filterApp, StringComparison.OrdinalIgnoreCase))
         .Where(r => string.IsNullOrWhiteSpace(filterBrowser) || r.Browser.Contains(filterBrowser, StringComparison.OrdinalIgnoreCase))
         .Where(r => string.IsNullOrWhiteSpace(filterEnv) || r.Env.Contains(filterEnv, StringComparison.OrdinalIgnoreCase))
         .Where(r => string.IsNullOrWhiteSpace(filterStatus) || (r.Status?.Contains(filterStatus, StringComparison.OrdinalIgnoreCase) == true))
         .Where(r => string.IsNullOrWhiteSpace(filterRegion) || (r.Region?.Contains(filterRegion, StringComparison.OrdinalIgnoreCase) == true))
-        .Where(r => string.IsNullOrWhiteSpace(searchText) || r.RunId?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true || r.ExternalId?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true)
+        .Where(r => string.IsNullOrWhiteSpace(searchText)
+            || r.RunName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true
+            || r.RunId?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true
+            || r.ExternalId?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true)
         .OrderByDescending(r => r.StartedAtUtc)
         .ToList();
 
@@ -296,46 +286,49 @@ else
         await LoadRuns();
         await EnsureActivityForVisibleRuns();
 
-        // Subscribe to ResultsHub for live RunsIndex and RunUpdate events
-        var hubUrl = Config["HUB_SIGNALR"] ?? "http://hub:5000/ws";
-        try
+        if (Flags.LiveFeedEnabled)
         {
-            var uri = new Uri(hubUrl);
-            var scheme = uri.Scheme switch { "ws" => "http", "wss" => "https", _ => uri.Scheme };
-            var resultsWs = $"{scheme}://{uri.Authority}/results-ws";
-
-            _conn = new HubConnectionBuilder()
-                .WithUrl(resultsWs)
-                .WithAutomaticReconnect()
-                .Build();
-
-            void OnRunsIndex(ResultRunSummaryDto[] __)
+            // Subscribe to ResultsHub for live RunsIndex and RunUpdate events
+            var hubUrl = Config["HUB_SIGNALR"] ?? "http://hub:5000/ws";
+            try
             {
-                _ = InvokeAsync(RefreshCurrentPageAsync);
-            }
+                var uri = new Uri(hubUrl);
+                var scheme = uri.Scheme switch { "ws" => "http", "wss" => "https", _ => uri.Scheme };
+                var resultsWs = $"{scheme}://{uri.Authority}/results-ws";
 
-            _conn.On<ResultRunSummaryDto>("RunUpdate", run =>
-            {
-                // Legacy inline handler replaced below; keep a no-op registration guard
-            });
-            _conn.Remove("RunUpdate");
-            _conn.On<ResultRunSummaryDto[]>("RunsIndex", OnRunsIndex);
+                _conn = new HubConnectionBuilder()
+                    .WithUrl(resultsWs)
+                    .WithAutomaticReconnect()
+                    .Build();
 
-            _conn.On<ResultRunSummaryDto>("RunUpdate", run =>
-            {
-                // On any single run update, refresh current page and hanging info for that run
-                _ = InvokeAsync(async () =>
+                void OnRunsIndex(ResultRunSummaryDto[] __)
                 {
-                    await RefreshCurrentPageAsync();
-                    await FetchRunHangingInfo(run.RunId, run.StartedAtUtc);
-                });
-            });
+                    _ = InvokeAsync(RefreshCurrentPageAsync);
+                }
 
-            await _conn.StartAsync();
-        }
-        catch
-        {
-            // Ignore SignalR issues for MVP
+                _conn.On<ResultRunSummaryDto>("RunUpdate", run =>
+                {
+                    // Legacy inline handler replaced below; keep a no-op registration guard
+                });
+                _conn.Remove("RunUpdate");
+                _conn.On<ResultRunSummaryDto[]>("RunsIndex", OnRunsIndex);
+
+                _conn.On<ResultRunSummaryDto>("RunUpdate", run =>
+                {
+                    // On any single run update, refresh current page and hanging info for that run
+                    _ = InvokeAsync(async () =>
+                    {
+                        await RefreshCurrentPageAsync();
+                        await FetchRunHangingInfo(run.RunId, run.StartedAtUtc);
+                    });
+                });
+
+                await _conn.StartAsync();
+            }
+            catch
+            {
+                // Ignore SignalR issues for MVP
+            }
         }
     }
 
@@ -361,7 +354,11 @@ else
             filterEnv = Get("env");
             filterStatus = Get("status");
             filterRegion = Get("region");
-            searchText = Get("runId");
+            // Prefer explicit runName param, then legacy runId search, then generic q
+            var rn = Get("runName");
+            var rid = Get("runId");
+            var qtext = Get("q");
+            searchText = !string.IsNullOrWhiteSpace(rn) ? rn : (!string.IsNullOrWhiteSpace(rid) ? rid : qtext);
             if (int.TryParse(Get("take"), out var ps) && ps > 0) PageSize = ps;
             if (int.TryParse(Get("page"), out var p) && p > 0) Page = p;
         }
@@ -387,7 +384,7 @@ else
 
     private sealed class CountResponse
     {
-        public int count { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("count")]
         public int Count { get; set; }
     }
 
@@ -410,7 +407,13 @@ else
         if (!string.IsNullOrWhiteSpace(filterBrowser)) parts.Add($"browser={Uri.EscapeDataString(filterBrowser)}");
         if (!string.IsNullOrWhiteSpace(filterEnv)) parts.Add($"env={Uri.EscapeDataString(filterEnv)}");
         if (!string.IsNullOrWhiteSpace(filterRegion)) parts.Add($"region={Uri.EscapeDataString(filterRegion)}");
-        if (!string.IsNullOrWhiteSpace(searchText)) parts.Add($"runId={Uri.EscapeDataString(searchText)}");
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            // Include both runName (new) and runId (legacy) for shareable deep links
+            var enc = Uri.EscapeDataString(searchText);
+            parts.Add($"runName={enc}");
+            parts.Add($"runId={enc}");
+        }
         if (PageSize != 25) parts.Add($"take={PageSize}");
         if (Page > 1) parts.Add($"page={Page}");
         return parts.Count == 0 ? string.Empty : "?" + string.Join("&", parts);
@@ -430,7 +433,7 @@ else
             var http = HttpFactory.CreateClient("hub");
             var url = $"/results/count?dummy=1{BuildFilterQuery()}";
             var payload = await http.GetFromJsonAsync<CountResponse>(url);
-            _totalRunsCount = Math.Max(0, payload?.count > 0 ? payload.count : payload?.Count ?? 0);
+            _totalRunsCount = Math.Max(0, payload?.Count ?? 0);
         }
         catch
         {
@@ -475,6 +478,8 @@ else
     }
 
     private readonly HashSet<string> _stopping = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _deleting = new(StringComparer.OrdinalIgnoreCase);
+    private bool bulkDeleting = false;
 
     private static bool IsRunningStatus(string? status)
     {
@@ -484,6 +489,9 @@ else
     private async Task StopRunAsync(string runId)
     {
         if (string.IsNullOrWhiteSpace(runId)) return;
+        // Confirm intent
+        var ok = Confirm != null ? await Confirm.Show($"Mark run {Short(runId)} as Stopped and release any borrowed sessions?", "Confirm Action", "Yes", "No") : await JS.InvokeAsync<bool>("confirm", $"Mark run {Short(runId)} as Stopped and release any borrowed sessions?");
+        if (!ok) return;
         if (_stopping.Contains(runId)) return;
         _stopping.Add(runId);
         using var __scope = Logger.BeginScope(new Dictionary<string, object> { ["runId"] = runId });
@@ -507,6 +515,67 @@ else
         finally
         {
             _stopping.Remove(runId);
+        }
+    }
+
+    private async Task DeleteRunAsync(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId)) return;
+        // Confirm intent
+        var ok = Confirm != null ? await Confirm.Show($"Permanently delete run {Short(runId)}? This cannot be undone.", "Confirm Delete", "Delete", "Cancel") : await JS.InvokeAsync<bool>("confirm", $"Permanently delete run {Short(runId)}? This cannot be undone.");
+        if (!ok) return;
+        if (_deleting.Contains(runId)) return;
+        _deleting.Add(runId);
+        using var __scope = Logger.BeginScope(new Dictionary<string, object> { ["runId"] = runId });
+        try
+        {
+            var http = HttpFactory.CreateClient("hub");
+            var resp = await http.DeleteAsync($"/results/{runId}");
+            if (!resp.IsSuccessStatusCode)
+            {
+                var txt = await resp.Content.ReadAsStringAsync();
+                Logger.LogWarning("[Dashboard] delete run failed: {StatusCode} {Body}", (int)resp.StatusCode, txt);
+            }
+
+            await RefreshCurrentPageAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Delete run exception for {RunId}", runId);
+        }
+        finally
+        {
+            _deleting.Remove(runId);
+        }
+    }
+
+    private async Task DeleteAllNonRunningAsync()
+    {
+        if (bulkDeleting) return;
+        // Confirm intent
+        var ok = Confirm != null ? await Confirm.Show("Delete all non-running runs for the current server-side filters? This cannot be undone.", "Confirm Bulk Delete", "Delete All", "Cancel") : await JS.InvokeAsync<bool>("confirm", "Delete all non-running runs for the current server-side filters? This cannot be undone.");
+        if (!ok) return;
+        bulkDeleting = true;
+        try
+        {
+            var http = HttpFactory.CreateClient("hub");
+            var url = $"/results/delete?exclude=running{BuildFilterQuery()}";
+            var resp = await http.PostAsync(url, null);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var txt = await resp.Content.ReadAsStringAsync();
+                Logger.LogWarning("[Dashboard] bulk delete failed: {StatusCode} {Body}", (int)resp.StatusCode, txt);
+            }
+
+            await RefreshCurrentPageAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Bulk delete non-running runs failed");
+        }
+        finally
+        {
+            bulkDeleting = false;
         }
     }
 
@@ -595,23 +664,24 @@ else
         return FilteredRuns.Count(r => string.Equals(r.Status, "Running", StringComparison.OrdinalIgnoreCase) || string.Equals(r.Status, "InProgress", StringComparison.OrdinalIgnoreCase));
     }
 
-    // Pass rate should include stopped runs in denominator and be based on run-level outcome
-    private int PassRate()
-    {
-        var t = TotalCompletedRuns();
-        return Percent(PassedRunsCount(), Math.Max(1, t));
-    }
+    private sealed record GroupSummary(string App, string Browser, string Env, int Running, int Finished, int Stopped, int Total);
 
-    private string PassRatePoints()
+    private IEnumerable<GroupSummary> GroupSummaries()
     {
-        // Sparkline reflects run-level pass/fail over last 20 runs (Stopped treated as fail)
-        var rates = FilteredRuns
-            .OrderByDescending(r => r.StartedAtUtc)
-            .Take(20)
-            .Select(r => string.Equals(r.Status, "Passed", StringComparison.OrdinalIgnoreCase) ? 100 : 0)
-            .Reverse()
-            .ToList();
-        return BuildSparklinePoints(rates);
+        return FilteredRuns
+            .GroupBy(r => new { r.App, r.Browser, r.Env })
+            .OrderBy(g => g.Key.App)
+            .ThenBy(g => g.Key.Browser)
+            .ThenBy(g => g.Key.Env)
+            .Select(g => new GroupSummary(
+                g.Key.App,
+                g.Key.Browser,
+                g.Key.Env,
+                g.Count(r => string.Equals(r.Status, "Running", StringComparison.OrdinalIgnoreCase) || string.Equals(r.Status, "InProgress", StringComparison.OrdinalIgnoreCase)),
+                g.Count(r => string.Equals(r.Status, "Passed", StringComparison.OrdinalIgnoreCase) || string.Equals(r.Status, "Finished", StringComparison.OrdinalIgnoreCase)),
+                g.Count(r => string.Equals(r.Status, "Stopped", StringComparison.OrdinalIgnoreCase) || string.Equals(r.Status, "AutoStopped", StringComparison.OrdinalIgnoreCase)),
+                g.Count()
+            ));
     }
 
     private static string StatusBadgeClass(string status)
@@ -619,7 +689,9 @@ else
         var s = status?.Trim().ToLowerInvariant() ?? "";
         switch (s)
         {
-            case "passed": return "bg-success";
+            case "passed":
+            case "finished":
+                return "bg-success";
             case "failed": return "bg-danger";
             case "running":
             case "inprogress": return "bg-warning text-dark";
@@ -628,6 +700,12 @@ else
             case "autostopped": return "bg-dark";
             default: return "bg-light text-dark";
         }
+    }
+
+    private static string DisplayStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return "-";
+        return string.Equals(status, "Passed", StringComparison.OrdinalIgnoreCase) ? "Finished" : status!;
     }
 
     private static string FormatAgo(DateTime dt)
@@ -639,23 +717,6 @@ else
         if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
         if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
         return $"{(int)span.TotalDays}d ago";
-    }
-
-    private static string BuildSparklinePoints(List<int> values)
-    {
-        if (values == null || values.Count == 0) return "0,10 100,10";
-        var n = values.Count;
-        var step = n > 1 ? 100.0 / (n - 1) : 100.0;
-        var pts = new List<string>(n);
-        for (var i = 0; i < n; i++)
-        {
-            var v = Math.Clamp(values[i], 0, 100);
-            var x = step * i;
-            var y = 20 - v / 100.0 * 20; // invert y
-            pts.Add($"{x:0.###},{y:0.###}");
-        }
-
-        return string.Join(" ", pts);
     }
 
     // Hanging detection configuration and state

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: playwright-grid
+description: Helm chart for deploying Playwright Grid (Hub, Worker(s), Dashboard) with Redis
+
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+icon: https://raw.githubusercontent.com/agenixframework/agenix-playwright-grid/main/.assets/logos/agenix-logo.png
+keywords:
+  - playwright
+  - grid
+  - browsers
+  - websocket
+  - automation
+home: https://github.com/agenixframework/agenix-playwright-grid
+sources:
+  - https://github.com/agenixframework/agenix-playwright-grid
+maintainers:
+  - name: Agenix
+    url: https://github.com/agenixframework/

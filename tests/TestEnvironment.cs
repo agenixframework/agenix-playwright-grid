@@ -18,6 +18,7 @@
 
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using DotNet.Testcontainers.Builders;
@@ -41,6 +42,8 @@ public sealed class TestEnvironment
     [OneTimeSetUp]
     public async Task GlobalSetup()
     {
+        await LogEnvSummary(TestContext.Progress);
+
         var skip = Environment.GetEnvironmentVariable("GRID_TESTS_SKIP_CONTAINERS");
         if (string.Equals(skip, "1", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(skip, "true", StringComparison.OrdinalIgnoreCase))
@@ -71,13 +74,7 @@ public sealed class TestEnvironment
 
             Environment.SetEnvironmentVariable("HUB_RUNNER_SECRET", runnerSecret);
 
-            var healthTimeoutSecondsStrLocal = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-            var healthTimeoutSecondsLocal = 120;
-            if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStrLocal) &&
-                int.TryParse(healthTimeoutSecondsStrLocal, out var parsedLocal) && parsedLocal > 0)
-            {
-                healthTimeoutSecondsLocal = parsedLocal;
-            }
+            var healthTimeoutSecondsLocal = GetHealthTimeoutSeconds();
 
             await TestContext.Progress.WriteLineAsync(
                 $"[GridTests] Using local grid at {hubUrl} per GRID_TESTS_USE_LOCAL (env or test parameter).");
@@ -177,14 +174,7 @@ public sealed class TestEnvironment
                     Environment.SetEnvironmentVariable("HUB_URL", "http://127.0.0.1:5100");
                     Environment.SetEnvironmentVariable("HUB_RUNNER_SECRET", "runner-secret");
 
-                    var healthTimeoutSecondsStr2 =
-                        Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-                    var healthTimeoutSeconds2 = 60;
-                    if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStr2) &&
-                        int.TryParse(healthTimeoutSecondsStr2, out var parsed2) && parsed2 > 0)
-                    {
-                        healthTimeoutSeconds2 = parsed2;
-                    }
+                    var healthTimeoutSeconds2 = GetHealthTimeoutSeconds();
 
                     await WaitForHubHealth("http://127.0.0.1:5100/health", TimeSpan.FromSeconds(healthTimeoutSeconds2),
                         TestContext.Progress);
@@ -314,16 +304,11 @@ public sealed class TestEnvironment
             Environment.SetEnvironmentVariable("HUB_RUNNER_SECRET", "runner-secret");
 
             // Ensure hub is healthy from host (configurable timeout)
-            var healthTimeoutSecondsStr = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-            var healthTimeoutSeconds = 120;
-            if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStr) &&
-                int.TryParse(healthTimeoutSecondsStr, out var parsed) && parsed > 0)
-            {
-                healthTimeoutSeconds = parsed;
-            }
+            var healthTimeoutSeconds = GetHealthTimeoutSeconds();
+            var poll = GetHealthPollInterval();
 
             await WaitForHubHealth("http://127.0.0.1:5100/health", TimeSpan.FromSeconds(healthTimeoutSeconds),
-                TestContext.Progress);
+                poll, TestContext.Progress);
 
             await TestContext.Progress.WriteLineAsync("[GridTests] Testcontainers environment is ready.");
         }
@@ -350,19 +335,13 @@ public sealed class TestEnvironment
 
                 Environment.SetEnvironmentVariable("HUB_RUNNER_SECRET", runnerSecret);
 
-                var healthTimeoutSecondsStrLocal =
-                    Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
-                var healthTimeoutSecondsLocal = 60;
-                if (!string.IsNullOrWhiteSpace(healthTimeoutSecondsStrLocal) &&
-                    int.TryParse(healthTimeoutSecondsStrLocal, out var parsedLocal) && parsedLocal > 0)
-                {
-                    healthTimeoutSecondsLocal = parsedLocal;
-                }
+                var healthTimeoutSecondsLocal = GetHealthTimeoutSeconds();
+                var poll = GetHealthPollInterval();
 
                 await TestContext.Progress.WriteLineAsync(
                     $"[GridTests] Falling back to local hub at {hubUrl} after container setup failure...");
                 await WaitForHubHealth(hubUrl.TrimEnd('/') + "/health", TimeSpan.FromSeconds(healthTimeoutSecondsLocal),
-                    TestContext.Progress);
+                    poll, TestContext.Progress);
                 await TestContext.Progress.WriteLineAsync(
                     "[GridTests] Local hub is healthy. Proceeding with tests in local mode.");
                 return;
@@ -575,18 +554,27 @@ public sealed class TestEnvironment
 
     private static async Task WaitForHubHealth(string url, TimeSpan timeout, TextWriter log)
     {
+        await WaitForHubHealth(url, timeout, GetHealthPollInterval(), log);
+    }
+
+    private static async Task WaitForHubHealth(string url, TimeSpan timeout, TimeSpan pollInterval, TextWriter log)
+    {
         var handler = new HttpClientHandler { UseProxy = false };
         using var http = new HttpClient(handler);
         http.Timeout = TimeSpan.FromSeconds(10);
-        var start = DateTime.UtcNow;
+        var sw = Stopwatch.StartNew();
         Exception? last = null;
-        while (DateTime.UtcNow - start < timeout)
+        var attempt = 0;
+        await log.WriteLineAsync($"[GridTests] Waiting for hub health: url={url} timeout={timeout.TotalSeconds:F0}s poll={pollInterval.TotalSeconds:F1}s");
+        while (sw.Elapsed < timeout)
         {
+            attempt++;
             try
             {
                 var resp = await http.GetAsync(url);
                 if (resp.IsSuccessStatusCode)
                 {
+                    await log.WriteLineAsync($"[GridTests] Hub health OK after {sw.Elapsed.TotalSeconds:F1}s (attempt {attempt}).");
                     return;
                 }
 
@@ -597,12 +585,51 @@ public sealed class TestEnvironment
                 last = ex;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            await log.WriteLineAsync("[GridTests] Waiting for hub /health...");
+            await Task.Delay(pollInterval);
+            await log.WriteLineAsync($"[GridTests] Waiting for hub /health... elapsed={sw.Elapsed.TotalSeconds:F1}s attempts={attempt} lastError={last?.Message}");
         }
 
         throw new TimeoutException(
             $"Hub health endpoint did not become ready in {timeout}. Last error: {last?.Message}");
+    }
+
+    private static int GetHealthTimeoutSeconds()
+    {
+        var env = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_TIMEOUT_SECONDS");
+        if (int.TryParse(env, out var s) && s > 0)
+        {
+            return s;
+        }
+        return 120;
+    }
+
+    private static TimeSpan GetHealthPollInterval()
+    {
+        var env = Environment.GetEnvironmentVariable("GRID_TESTS_HEALTH_POLL_INTERVAL_SECONDS");
+        if (double.TryParse(env, out var d) && d > 0)
+        {
+            // clamp to sane range 0.2s..5s
+            d = Math.Min(Math.Max(d, 0.2), 5);
+            return TimeSpan.FromSeconds(d);
+        }
+        return TimeSpan.FromSeconds(1);
+    }
+
+    private static async Task LogEnvSummary(TextWriter log)
+    {
+        var kv = new Dictionary<string, string?>
+        {
+            ["USE_LOCAL"] = Environment.GetEnvironmentVariable("GRID_TESTS_USE_LOCAL"),
+            ["SKIP_CONTAINERS"] = Environment.GetEnvironmentVariable("GRID_TESTS_SKIP_CONTAINERS"),
+            ["REUSE"] = Environment.GetEnvironmentVariable("GRID_TESTS_REUSE"),
+            ["FORCE_BUILD"] = Environment.GetEnvironmentVariable("GRID_TESTS_FORCE_BUILD"),
+            ["SKIP_CLEANUP"] = Environment.GetEnvironmentVariable("GRID_TESTS_SKIP_CLEANUP"),
+            ["RESULTS_BACKEND"] = Environment.GetEnvironmentVariable("GRID_TESTS_RESULTS_BACKEND") ?? "redis",
+            ["HEALTH_TIMEOUT_SECONDS"] = GetHealthTimeoutSeconds().ToString(),
+            ["HEALTH_POLL_SECONDS"] = GetHealthPollInterval().TotalSeconds.ToString("F1")
+        };
+        var summary = string.Join(", ", kv.Select(p => $"{p.Key}={p.Value}").ToArray());
+        await log.WriteLineAsync($"[GridTests] Env summary: {summary}");
     }
 
     private static string? FindFileUpwards(string fileName)

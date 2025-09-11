@@ -1,0 +1,79 @@
+@* Reusable confirmation dialog component using pure Razor/Bootstrap markup (no browser-native confirm). *@
+@if (_visible)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog modal-dialog-centered" role="document" @onkeydown="OnKeyDown">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmDialogTitle">@_title</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="Cancel"></button>
+                </div>
+                <div class="modal-body">
+                    @_message
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Cancel">@_cancelText</button>
+                    <button class="btn btn-danger" @onclick="Confirm">@_confirmText</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _visible;
+    private string _title = "Confirm";
+    private string _message = string.Empty;
+    private string _confirmText = "Yes";
+    private string _cancelText = "No";
+    private TaskCompletionSource<bool>? _tcs;
+
+    // Show the dialog and await user's choice
+    public Task<bool> Show(string message, string? title = null, string? confirmText = null, string? cancelText = null)
+    {
+        _message = message ?? string.Empty;
+        _title = string.IsNullOrWhiteSpace(title) ? "Confirm" : title!;
+        _confirmText = string.IsNullOrWhiteSpace(confirmText) ? "Yes" : confirmText!;
+        _cancelText = string.IsNullOrWhiteSpace(cancelText) ? "No" : cancelText!;
+
+        _visible = true;
+        StateHasChanged();
+
+        _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        return _tcs.Task;
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e?.Key == "Escape")
+        {
+            Cancel();
+        }
+        else if (e?.Key == "Enter")
+        {
+            Confirm();
+        }
+    }
+
+    private void Hide()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    private void Confirm()
+    {
+        var tcs = _tcs;
+        Hide();
+        _tcs = null;
+        tcs?.TrySetResult(true);
+    }
+
+    private void Cancel()
+    {
+        var tcs = _tcs;
+        Hide();
+        _tcs = null;
+        tcs?.TrySetResult(false);
+    }
+}

@@ -6,7 +6,7 @@ Components
 - Hub: capacity broker backed by Redis; exposes HTTP API and SignalR feed
 - Worker: manages Playwright sidecar servers and proxies WS connections for borrowed browsers
 - Dashboard: Blazor UI for runs/results and live logs via SignalR
-- HubClient: thin .NET client used by test runners to borrow/return and forward logs
+- HubClient: thin .NET client used by test runners to borrow and forward logs
 
 Prerequisites
 - Docker Desktop or compatible engine and Docker Compose
@@ -49,7 +49,7 @@ try
 }
 finally
 {
-    await client.ReturnAsync(borrow.BrowserId);
+    // No explicit return needed; the Hub auto-finishes/auto-returns this session.
 }
 ```
 

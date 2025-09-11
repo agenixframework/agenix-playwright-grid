@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pg.dashboard.name" . }}
+  labels:
+    {{- include "pg.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.Dashboard.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "pg.dashboard.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "pg.dashboard.name" . }}
+        {{- include "pg.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: dashboard
+          image: "{{ .Values.image.dashboard.repository }}:{{ .Values.image.dashboard.tag }}"
+          imagePullPolicy: {{ .Values.image.dashboard.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.Dashboard.service.port }}
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://0.0.0.0:{{ .Values.Dashboard.service.port }}"
+            - name: HUB_SIGNALR
+              value: "http://{{ include "pg.hub.name" . }}:{{ .Values.hub.service.port }}/ws"
+            - name: HUB_RUNNER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "pg.hub.name" . }}-secrets
+                  key: hub_runner_secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.Dashboard.resources | nindent 12 }}
+      {{- with .Values.Dashboard.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.Dashboard.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.Dashboard.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,32 @@
+{{- if .Values.ingress.hub.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "pg.hub.name" . }}
+  labels:
+    {{- include "pg.labels" . | nindent 4 }}
+  {{- if .Values.ingress.hub.className }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.hub.className | quote }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.hub.tls }}
+  tls:
+    {{- toYaml .Values.ingress.hub.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hub.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "pg.hub.name" $ }}
+                port:
+                  number: {{ $.Values.hub.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

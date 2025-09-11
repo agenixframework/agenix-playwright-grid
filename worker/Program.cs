@@ -17,6 +17,7 @@
 #endregion
 
 using WorkerService.Services;
+using WorkerService.Tools;
 
 namespace WorkerService;
 
@@ -28,6 +29,17 @@ public static class Program
 {
     public static Task Main(string[] args)
     {
+        // Load local .env variables for developer convenience (no-op if DISABLE_DOTENV=1)
+        WorkerService.Infrastructure.DotEnv.Load();
+
+        // CLI subcommand: validate-pool-config [--pool "..."] [--json]
+        if (args.Length > 0 && string.Equals(args[0], "validate-pool-config", StringComparison.OrdinalIgnoreCase))
+        {
+            var code = PoolConfigValidator.Run(args);
+            Environment.ExitCode = code;
+            return Task.CompletedTask;
+        }
+
         return new WorkerServiceRunner().RunAsync(args);
     }
 }

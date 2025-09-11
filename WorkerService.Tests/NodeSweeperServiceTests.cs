@@ -18,11 +18,11 @@
 
 using System.Net;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using PlaywrightHub.Infrastructure.Adapters.Background;
 using StackExchange.Redis;
-using Microsoft.Extensions.Logging;
 
 namespace WorkerService.Tests;
 

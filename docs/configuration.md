@@ -13,12 +13,22 @@ Environment variables:
 - HUB_BORROW_TRAILING_FALLBACK: Enable trailing fallback label matching (true/false; default true)
 - HUB_BORROW_PREFIX_EXPAND: Enable prefix expansion (true/false; default true)
 - HUB_BORROW_WILDCARDS: Enable explicit wildcards in label matching (true/false; default false)
+  - Per‑environment overrides supported: append _{EnvironmentName}, e.g., HUB_BORROW_WILDCARDS_Production=true. Overrides apply to each flag independently.
 - HUB_RESULTS_BACKEND: memory (default), redis, sqlite, or postgres. Selects the results store adapter used by the Hub.
 - HUB_RESULTS_TTL_SECONDS / HUB_RESULTS_TTL_DAYS: Retention TTL for run summaries and tests (Redis and Postgres adapters support TTL).
 - HUB_LOGS_TTL_SECONDS / HUB_LOGS_TTL_DAYS: Retention TTL for command logs (Redis and Postgres adapters support TTL).
   - Legacy: HUB_RESULTS_RETENTION_DAYS is still accepted for backward compatibility (applies to runs/tests/logs if specific TTLs are not set).
 - HUB_RESULTS_SQLITE: Connection string/path for sqlite backend (default "Data Source=results.db").
 - HUB_RESULTS_POSTGRES: Connection string for Postgres backend (default in compose: Host=postgres;Port=5432;Username=postgres;Password=postgres;Database=playwrightgrid).
+- HUB_MAX_CONTROL_BODY_BYTES: Max body size for control endpoints (borrow/return/register/test), default 65536 (64 KiB), clamp 8 KiB..1 MiB.
+- HUB_MAX_LOG_BODY_BYTES: Max body size for log endpoints (/results/browser/.../commands and /api-logs), default 1048576 (1 MiB), clamp 8 KiB..16 MiB.
+- HUB_REQUEST_HEADERS_TIMEOUT_SECONDS: Request headers timeout for Kestrel, default 15s, clamp 5..120.
+- HUB_KEEP_ALIVE_TIMEOUT_SECONDS: Keep-alive timeout for Kestrel, default 30s, clamp 5..300.
+- HUB_REQUEST_TIMEOUT_SECONDS: Default per-request timeout enforced via middleware, default 60s, clamp 5..600.
+
+Notes on limits:
+- Requests exceeding the configured per-path body limits are rejected with HTTP 413 (application/problem+json).
+- Reasonable defaults are chosen to protect the Hub; increase cautiously if your clients send larger batches of logs.
 
 Ports:
 - HTTP: container 5000 (default host 5100 in docker-compose.yml)
@@ -44,6 +54,23 @@ Playwright sidecar:
 - PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS: Wait for wsEndpoint on stdout (default 60; clamp 5..600)
 - PLAYWRIGHT_SERVER_DEBUG: Set to 1 or pw:server,pw:protocol for Node sidecar DEBUG logs
 - WORKER_VALIDATE_WS: If "true", validate internal wsEndpoint on warmup/replacement (one restart allowed)
+- CHROMIUM_ARGS: Space-, comma-separated, or JSON array of Chromium flags. Applied only for Chromium.
+- CHROME_ARGS: Alias for CHROMIUM_ARGS when CHROMIUM_ARGS is not set (backward-compat convenience).
+- WEBKIT_ARGS: Space-, comma-separated, or JSON array of flags passed when launching WebKit.
+- FIREFOX_ARGS: Optional extra arguments for Firefox launch (limited effect; most tuning is via prefs).
+- FIREFOX_PREFS: Firefox user prefs as JSON object or as key=value pairs separated by comma/semicolon/newlines.
+  - Validation: malformed entries are ignored; keys must be non-empty (dot-separated recommended), values are coerced
+    to boolean/number when obvious (true/false, numeric), otherwise treated as strings.
+
+Examples:
+```yaml
+services:
+  worker3:
+    environment:
+      - WEBKIT_ARGS=--no-sandbox --disable-http2
+      - FIREFOX_ARGS=--headless
+      - FIREFOX_PREFS={"network.dns.disablePrefetch":true,"browser.cache.disk.enable":false}
+```
 
 Public WebSocket address:
 - PUBLIC_WS_HOST / PUBLIC_WS_PORT / PUBLIC_WS_SCHEME: Advertised host, port, scheme (default ws). If unset, the node id may be used inside the cluster network.
@@ -166,3 +193,102 @@ export HUB_RUNNER_SECRET=runner-secret
 - Worker Sidecar Management: worker-sidecar-management.md
 - Metrics and Grafana: Metrics-and-Grafana.md
 - Label Matching: Label-Matching.md
+
+
+## Pool config validator
+
+Before starting a Worker, you can validate POOL_CONFIG and see the effective capacity computed from your labels.
+
+See the full CLI documentation: CLI Reference (cli.md).
+
+- Bash (macOS/Linux):
+  - scripts/validate-pool-config.sh --pool "AppA:Chromium:Staging=3,AppB:Firefox:UAT=1"
+- PowerShell (Windows):
+  - scripts/validate-pool-config.ps1 --pool "AppA:Chromium:Staging=3,AppB:Firefox:UAT=1"
+- Or directly via dotnet:
+  - dotnet run --project worker/WorkerService.csproj -- validate-pool-config --pool "AppA:Chromium:Staging=3,AppB:Firefox:UAT=1"
+
+Notes
+- If --pool is omitted, the validator reads POOL_CONFIG from the environment.
+- Use --json for machine-readable output.
+- Label keys are validated using the shared Domain rules (App:Browser:Env[:...], Browser as second segment); duplicates are normalized and summed.
+
+
+## Local development: .env support and Compose overrides
+
+For local developer convenience, both Hub and Worker now load environment variables from a .env file if present. This is optional and disabled in containers by default.
+
+How it works
+- On process start, a lightweight loader looks for a .env file starting from the current working directory and walking up. If found, non-empty key=value lines are applied to process environment variables.
+- Existing environment variables are not overridden by default.
+- You can disable this behavior by setting DISABLE_DOTENV=1 (useful in production or when variables must come exclusively from the host/container).
+
+Precedence
+1) Explicit environment variables (export, container env) take precedence.
+2) Values from .env are applied only for keys not already set.
+
+Example .env (repo root)
+```
+# Hub
+REDIS_URL=redis:6379
+HUB_RUNNER_SECRET=runner-secret
+HUB_NODE_SECRET=node-secret
+HUB_BORROW_TRAILING_FALLBACK=true
+HUB_BORROW_PREFIX_EXPAND=true
+HUB_BORROW_WILDCARDS=false
+
+# Worker
+HUB_URL=http://127.0.0.1:5100
+REDIS_URL=localhost:6379
+NODE_ID=worker-local
+NODE_SECRET=node-secret
+POOL_CONFIG=AppB:Chromium:UAT=2,AppB:Firefox:UAT=1
+NODE_REGION=local
+PUBLIC_WS_HOST=127.0.0.1
+PUBLIC_WS_PORT=5200
+
+# Logging
+LOG_LEVEL=Information
+LOG_LEVEL_OVERRIDES=Microsoft.AspNetCore=Warning
+```
+
+Disable .env loading
+- Set DISABLE_DOTENV=1 to opt-out. This guard is checked on startup by both Hub and Worker.
+
+Compose overrides and .env
+- Docker Compose supports a docker-compose.override.yml file that is automatically applied alongside docker-compose.yml. Use it to tweak environment and ports for local work without editing the base file.
+- Compose also supports a .env file for variable substitution within compose files. This is separate from the application-level .env loading described above.
+
+Example docker-compose.override.yml (local ports and env)
+```yaml
+services:
+  hub:
+    ports:
+      - "5100:5000"
+    environment:
+      LOG_LEVEL: Debug
+  worker1:
+    ports:
+      - "5200:5200"
+    environment:
+      PUBLIC_WS_HOST: 127.0.0.1
+      PUBLIC_WS_PORT: "5200"
+      NODE_REGION: local
+  dashboard:
+    ports:
+      - "3001:3001"
+```
+
+Using Compose with an env file for substitutions
+- Put key=value pairs in a file and pass it via --env-file or rely on default .env next to your compose file:
+```bash
+# Uses default .env in the same directory
+docker compose up -d
+
+# Or specify a custom env file
+docker compose --env-file .env.local up -d
+```
+
+Notes
+- Application-level .env loading is a convenience for running Hub/Worker directly via dotnet run; inside containers you typically pass environment via compose or orchestrator.
+- If both Compose substitution and application .env are used, be mindful of which layer sets variables first. Compose env becomes container environment, which takes precedence over app-level .env.

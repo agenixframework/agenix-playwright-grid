@@ -17,11 +17,11 @@
 #endregion
 
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
 using PlaywrightHub.Infrastructure.Adapters.SignalR;
 using StackExchange.Redis;
-using Microsoft.Extensions.Logging;
 
 namespace PlaywrightHub.Infrastructure.Adapters.Background;
 
@@ -34,6 +34,7 @@ public sealed class RunCleanupService(
     IDatabase db,
     IHubContext<ResultsHub, IResultsClient> resultsHub,
     IConfiguration config,
+    IAuditStore auditStore,
     Microsoft.Extensions.Logging.ILogger<RunCleanupService> logger
 ) : BackgroundService
 {
@@ -213,8 +214,8 @@ public sealed class RunCleanupService(
 
                             try
                             {
-                                var inuseKey = $"inuse:{labelKey}";
-                                var availKey = $"available:{labelKey}";
+                                var inuseKey = Agenix.PlaywrightGrid.Domain.RedisKeys.InUse(labelKey!);
+                                var availKey = Agenix.PlaywrightGrid.Domain.RedisKeys.Available(labelKey!);
                                 var luaReturn = @"
 local inuse = KEYS[1]
 local avail = KEYS[2]
@@ -236,8 +237,12 @@ return nil
                                     released++;
                                     releasedTotal++;
 
+                                    // Fair queue: decrement in-flight and signal waiters for this label
+                                    try { PlaywrightHub.Infrastructure.Web.EndpointCapacityQueue.OnFinished(labelKey); } catch { }
+                                    try { PlaywrightHub.Infrastructure.Web.EndpointCapacityQueue.Signal(labelKey); } catch { }
+
                                     // request sidecar recycle on the worker (short TTL)
-                                    try { db.StringSet($"recycle:{browserId}", "1", TimeSpan.FromMinutes(2)); }
+                                    try { db.StringSet(Agenix.PlaywrightGrid.Domain.RedisKeys.Recycle(browserId), "1", TimeSpan.FromMinutes(2)); }
                                     catch { }
 
                                     // record AutoReturn
@@ -257,10 +262,10 @@ return nil
                                     await resultsHub.Clients.Group($"run:{run.RunId}").CommandLogChunk([evReturn]);
 
                                     // clear mappings
-                                    try { db.KeyDelete($"browser_run:{browserId}"); }
+                                    try { db.KeyDelete(Agenix.PlaywrightGrid.Domain.RedisKeys.BrowserRun(browserId)); }
                                     catch { }
 
-                                    try { db.KeyDelete($"browser_test:{browserId}"); }
+                                    try { db.KeyDelete(Agenix.PlaywrightGrid.Domain.RedisKeys.BrowserTest(browserId)); }
                                     catch { }
                                 }
                             }
@@ -299,6 +304,28 @@ return nil
 
                             await resultsHub.Clients.Group($"run:{run.RunId}").CommandLogChunk([evStop]);
                             await resultsHub.Clients.Group($"run:{run.RunId}").RunUpdate(updated);
+
+                            try
+                            {
+                                var reason = (inactiveLongEnough && overMaxDuration)
+                                    ? "inactivity|max-duration"
+                                    : (inactiveLongEnough ? "inactivity" : "max-duration");
+                                await auditStore.AppendAsync(new AuditEntryDto
+                                {
+                                    TimestampUtc = now2,
+                                    Category = "admin",
+                                    Action = "run.autoStop",
+                                    Severity = "Warning",
+                                    Details = new Dictionary<string, string>
+                                    {
+                                        ["runId"] = run.RunId,
+                                        ["outstanding"] = outstanding.Count.ToString(),
+                                        ["released"] = released.ToString(),
+                                        ["reason"] = reason
+                                    }
+                                });
+                            }
+                            catch { }
 
                             processed++;
                         }

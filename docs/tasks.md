@@ -1,6 +1,6 @@
 # Playwright Grid – Improvement Tasks Checklist
 
-Generated: 2025-08-21 18:55 local time
+Generated: 2025-09-11 11:30 local time
 
 The following is an ordered, actionable checklist covering architectural and code-level improvements across Hub, Worker, Dashboard, HubClient, tests, and containerization. Check items as they are completed.
 
@@ -41,40 +41,115 @@ The following is an ordered, actionable checklist covering architectural and cod
 35. [x] Add filtering/search on Dashboard (by App, Browser, Env, Region, Status, runId) and deep links.
 36. [ ] Introduce authentication for Dashboard (OIDC/OAuth2) with role-based access (viewer/admin); secure SignalR hub accordingly.
 37. [X] Add retention policies for run results and logs (TTL in Redis; optional durable store adapter e.g., PostgreSQL/SQLite).
-38. [ ] Add API to export run details (JSON/NDJSON) for external archiving.
-39. [ ] Provide Helm chart/Kubernetes manifests with sensible defaults, probes, and resource limits.
+38. [X] Add API to export run details (JSON/NDJSON) for external archiving.
+39. [x] Provide Helm chart/Kubernetes manifests with sensible defaults, probes, and resource limits.
 40. [ ] Harden Docker images: run as non-root user, drop capabilities, read-only filesystem with writable temp for Playwright.
 41. [ ] Slim Docker images further: prune caches (npm, dotnet), multi-stage for Node assets, consolidate OS packages, consider distroless base.
 42. [X] Add multi-arch builds (linux/amd64, linux/arm64) for Hub/Worker via buildx.
 43. [X] Add image vulnerability scanning (Trivy/GHCR) and SBOM generation during CI.
 44. [X] Introduce GitHub Actions CI: build, unit tests, integration tests (with Testcontainers), publish artifacts, and optional Docker image publish.
 45. [X] Add workflow caching for dotnet restore, npm playwright installs, and docker layers to speed up CI.
-46. [ ] Expand unit tests for label matching, options parsing (POOL_CONFIG), and secret handling edge cases.
-47. [ ] Add integration tests for: secret mismatch (401), capacity exhaustion (503), borrow queue timeout, and node eviction scenarios.
-48. [ ] Add flaky-test mitigations: deterministic time helpers, extended health timeouts via env, and richer test diagnostics.
-49. [ ] Provide smoke test for Dashboard SignalR stream (connect, receive events, disconnect) without browsers.
+46. [X] Expand unit tests for label matching, options parsing (POOL_CONFIG), and secret handling edge cases.
+47. [x] Add integration tests for: secret mismatch (401), capacity exhaustion (503), borrow queue timeout, and node eviction scenarios.
+48. [x] Add flaky-test mitigations: deterministic time helpers, extended health timeouts via env, and richer test diagnostics.
+49. [x] Provide smoke test for Dashboard SignalR stream (connect, receive events, disconnect) without browsers.
 50. [ ] Add load/pressure test harness (NUnit category) with configurable CONCURRENCY/ITERATIONS and asserts on latency percentiles.
 52. [ ] Add architecture diagrams (C4 model: Context, Container, Component) and sequence diagram for borrow/return.
 53. [X] Create CONTRIBUTING.md (coding standards, commit messages, branching, PR checklist).
 54. [X] Establish versioning and release notes; tag releases and publish Agenix.PlaywrightGrid.HubClient to NuGet.
-55. [ ] Add compatibility matrix documenting supported Playwright versions and Docker base image tags.
-56. [ ] Implement feature flags for borrow strategies and dashboard features to allow safe rollout.
-57. [ ] Add configuration to toggle wildcards separately from trailing fallback/prefix expansion per-environment.
-58. [ ] Add per-label concurrency caps and fair sharing to prevent one label from starving others.
-59. [ ] Provide metrics-driven autoscaling hints (HPA annotations) based on borrow queue length and CPU for Workers.
+55. [X] Add compatibility matrix documenting supported Playwright versions and Docker base image tags.
+57. [x] Add configuration to toggle wildcards separately from trailing fallback/prefix expansion per-environment.
+58. [x] Add per-label concurrency caps and fair sharing to prevent one label from starving others.
+59. [x] Provide metrics-driven autoscaling hints (HPA annotations) based on borrow queue length and CPU for Workers.
 60. [ ] Ensure graceful recovery scenarios: Hub restart does not break in-flight WebSocket sessions; document impact and mitigation.
-61. [ ] Add health and readiness endpoints separation; ensure /health checks critical dependencies and /ready reflects capacity.
+61. [x] Add health and readiness endpoints separation; ensure /health checks critical dependencies and /ready reflects capacity.
 62. [X] Add startup diagnostics dump (effective config, labels registered per node) visible in logs and Dashboard.
-63. [ ] Implement audit logging for node registration, secret changes, and admin actions.
-64. [ ] Add command-line tooling or scripts to validate POOL_CONFIG and compute effective capacity before boot.
-65. [ ] Provide local dev convenience: make .env support across Hub/Worker and docs on docker compose overrides.
-66. [ ] Improve error messages in Dashboard UI to point to remediation steps (e.g., capacity missing, secret mismatch, WS unreachable).
-67. [ ] Add browser-specific tuning options (Chromium args, Firefox prefs, WebKit flags) with validation and documentation.
-68. [ ] Enforce API request size limits and reasonable timeouts in Hub; document limits.
-69. [ ] Add per-run storage quotas for logs to prevent Redis bloat; evict with LRU and surface warnings.
-70. [ ] Provide end-to-end example repo or script showing borrowing via HubClient and capturing a screenshot.
-71. [ ] Add support for custom labels (e.g., Channel, Headless) with controlled cardinality to avoid metrics explosion.
+63. [x] Implement audit logging for node registration, secret changes, and admin actions.
+64. [x] Add command-line tooling or scripts to validate POOL_CONFIG and compute effective capacity before boot.
+65. [x] Provide local dev convenience: make .env support across Hub/Worker and docs on docker compose overrides.
+66. [x] Improve error messages in Dashboard UI to point to remediation steps (e.g., capacity missing, secret mismatch, WS unreachable).
+67. [x] Add browser-specific tuning options (Chromium args, Firefox prefs, WebKit flags) with validation and documentation.
+68. [x] Enforce API request size limits and reasonable timeouts in Hub; document limits.
+71. [x] Add support for custom labels (e.g., Channel, Headless) with controlled cardinality to avoid metrics explosion.
 72. [X] Refactor Dashboard Results pages to use server-driven paging and streaming for command logs.
-73. [ ] Ensure all public APIs and DTOs have XML docs and nullable annotations; generate API docs from XML.
+73. [x] Ensure all public APIs and DTOs have XML docs and nullable annotations; generate API docs from XML.
 74. [ ] Introduce coding analyzers (StyleCop/IDisposable analyzers) and fix high-signal warnings.
-75. [ ] Add guardrails for Redis key naming to avoid collisions; centralize key patterns with tests.
+75. [x] Add guardrails for Redis key naming to avoid collisions; centralize key patterns with tests.
+
+76. [ ] Integrate X11 virtual display (Xvfb) in Worker Docker image: install xvfb, xauth, fonts, and required deps; verify image size impact.
+77. [ ] Add WORKER_XVFB_ENABLED env flag (default: false in containers) and DISPLAY management (e.g., :99) in Worker startup.
+78. [ ] Implement Worker sidecar/process supervisor to launch Xvfb on boot when enabled; ensure restarts/backoff and logs are captured.
+79. [ ] Provide option to use xvfb-run wrapper vs. dedicated Xvfb process; document pros/cons and choose default.
+80. [ ] Wire Playwright headful mode support via DISPLAY with environment propagation to browser processes; document headless/headful matrix.
+81. [ ] Add health/readiness checks for Xvfb (e.g., xdpyinfo sanity) and expose a metric (worker_xvfb_up) and logs for diagnostics.
+82. [ ] Ensure graceful shutdown: stop accepting new sessions, close browsers, then terminate Xvfb cleanly.
+83. [ ] Harden security: run Xvfb as non-root, restrict access control (xauth cookie), avoid TCP listeners.
+84. [ ] Extend WorkerOptions.FromEnvironment() to parse XVFB-related envs (enabled, display number, screen size, dpi); add unit tests.
+85. [ ] Add integration test path that borrows a session with headful=true and validates navigation succeeds under Xvfb.
+86. [ ] Update worker/Dockerfile and docker-compose.yml with XVFB packages and env examples; include minimal fonts set and note locales.
+87. [ ] Update docs: README.md (usage), docs/Compatibility-Matrix.md (headful notes), and dashboard guidance for troubleshooting Xvfb.
+88. [ ] Add troubleshooting playbook: common errors (cannot open display, fonts missing), with steps and env toggles to disable/enable Xvfb.
+
+89. [ ] Enforce HTTPS by default in docker-compose via reverse proxy (Traefik/Nginx), enable HSTS, secure cookies, and strong TLS settings; document local dev exceptions.
+90. [ ] Tighten CORS and add CSRF protection where applicable (Dashboard/API forms), with explicit allowed origins and methods.
+91. [ ] Introduce JWT/HMAC request signing for Hub API (time-limited tokens minted by Hub) as an alternative to shared secrets; provide migration guidance.
+92. [ ] Support secrets from files via *_FILE env convention and optional integration with external secret stores (AWS Secrets Manager/Azure Key Vault/GCP Secret Manager).
+93. [ ] Add automated security checks: CodeQL workflow, Dependency/Container update automation (Dependabot/Renovate) with review rules.
+94. [ ] Enable horizontal scaling for Hub: move borrow queue to Redis Streams with consumer groups; implement idempotency and deduplication.
+95. [ ] Implement distributed leadership for sweeper jobs using Redis (SETNX + TTL) to coordinate multiple Hub instances safely.
+96. [ ] Quarantine flapping or failing Worker nodes (cooldown period) and surface quarantine state in Dashboard and metrics.
+97. [ ] Add Redis connection options for Sentinel/Cluster and TLS; document configuration and failover behavior.
+98. [ ] Provide idempotency keys for Borrow/Return endpoints to handle client retries without duplicate sessions.
+99. [ ] Enforce per-Worker max concurrent WebSocket connections (configurable); expose saturation metrics and headroom.
+100. [ ] Monitor disk/inode usage in Worker; auto-clean old browser caches/traces; emit alerts when thresholds breached.
+101. [ ] Add WS per-message compression toggle with thresholds to balance CPU vs bandwidth; document defaults.
+102. [ ] Implement safe sidecar upgrade flow (graceful drain + restart) coordinated with Hub to avoid session drops.
+103. [ ] Improve Dashboard accessibility (WCAG 2.1 AA): keyboard navigation, landmarks, focus management, color contrast, ARIA labels.
+104. [ ] Gate Dashboard features by role (admin/viewer) based on OIDC group/claim mapping; hide admin endpoints from non-admins. (extends 36)
+105. [ ] Allow exporting run artifacts (HAR/trace/logs) and provide deep links to Playwright trace viewer; bulk download.
+106. [ ] Add HubClient DI extensions (AddHubClient) with options; support proxies/custom headers; expose retry/jitter tuning knobs.
+107. [ ] Implement idempotency support in HubClient for borrow/return (Idempotency-Key header) and transparent retry handling.
+108. [ ] Package a CLI (dotnet tool) to interact with the grid: login, list-labels, borrow/return, tail logs, diagnose; publish to NuGet.
+109. [ ] Add Prometheus exemplars and trace linkage for borrow latency histograms; propagate runId/traceId via W3C baggage.
+110. [ ] Define and codify SLOs with alerting rules (borrow success rate, p95 latency, node heartbeat gap); ship Prometheus/Grafana alerts.
+111. [ ] Expand testing with property-based and fuzz tests for label parsing/matching and Hub request validation.
+112. [ ] Add chaos tests: Redis outage, Hub/Worker restarts, network partitions, and clock skew; assert recovery within SLO.
+113. [ ] Create a nightly soak test pipeline to run long-duration borrow/return cycles and report regressions.
+114. [ ] Benchmark critical paths (label matching, Redis operations) with BenchmarkDotNet; track regressions in CI.
+115. [ ] Profile Hub/Worker memory/CPU under load; reduce allocations and capture flamegraphs for hot paths.
+116. [ ] Add developer tooling: devcontainer setup, Makefile targets, pre-commit hooks (dotnet format, analyzers) and consistent .editorconfig.
+117. [ ] Optimize Dockerfiles with BuildKit cache mounts and better layer ordering; document cache strategy.
+118. [ ] Author a security threat model (STRIDE) and hardening guide; include SRE runbooks and incident response procedures.
+119. [ ] Automate diagram generation and publishing (Mermaid/PlantUML) as part of mkdocs; integrate with architecture docs (52).
+120. [ ] Validate IPv6 and proxy support end-to-end; document reverse proxy patterns and limitations.
+121. [ ] Provide reverse-proxy examples (Traefik/Nginx) with sticky sessions for WS and TLS termination; include compose overrides.
+122. [ ] Introduce multi-tenancy: namespaced labels and quotas/rate limits per tenant; surface tenant in metrics and logs.
+123. [ ] Enable hot-reload for config via IOptionsMonitor where safe (log levels, borrow strategy flags) without restarts.
+124. [ ] Adopt FeatureManagement for feature flags with environment/tenant targeting; wire to existing strategy toggles (56).
+125. [ ] Ensure audit logs are tamper-evident and optionally export to external SIEM (OTLP/syslog); add retention controls.
+126. [ ] Sign container images (cosign) and publish provenance/SBOM attestations (SLSA level targets) in CI.
+127. [ ] Add localization (i18n) to Dashboard with language switcher; ensure date/number formatting respects locale.
+128. [ ] Document and optionally support GPU acceleration (NVIDIA/Intel VA-API) for headful runs; provide example images and detection.
+129. [ ] Define Redis memory and eviction policies; emit alarms when approaching limits and document tuning guidance.
+130. [ ] Add pagination/filtering/count endpoints for admin APIs (nodes, sessions, runs) to aid tooling and Dashboard.
+131. [ ] Implement a durable store adapter (e.g., PostgreSQL) with schema migrations for long-term run/log retention; make pluggable.
+132. [ ] Minimize telemetry PII; add sampling/redaction policies across traces/logs/metrics with config-driven controls.
+133. [ ] Add scheduled synthetic monitors (GitHub Actions cron) to hit /ready and perform a basic borrow against a local grid.
+
+
+134. [x] Introduce RunName as a first-class, optional human-friendly identifier alongside RunId across the platform (Hub, Worker, Dashboard, HubClient).
+135. [x] Define validation rules for RunName: trim input, max length 128, allow letters/numbers/space/._- only; reject control chars; document case policy.
+136. [x] Domain model: add RunName (string?) to shared DTOs/entities (Run, BorrowRequest/Response, RunSummary) with XML docs and nullability annotations.
+137. [x] Hub API: accept RunName in Borrow request payloads (and propagate in response); expose in Run results and SignalR events; update OpenAPI with examples.
+138. [x] Backward compatibility: keep RunName optional; default display to RunId when RunName is null/empty; do not break existing clients.
+139. [x] Storage: persist RunName alongside RunId in Redis (keys/values); verify schema/read paths; ensure sweeper and TTL logic include RunName where relevant.
+140. [x] Hub logging/metrics: include RunName in structured logs as a field (not a metric label) to avoid high-cardinality metrics; add redaction if enabled.
+142. [x] Worker: carry RunName in WS proxy scopes and forward in event/log messages to Hub; include in sidecar run context if applicable.
+143. [x] HubClient: add optional runName parameter to BorrowAsync and related methods; update overloads and XML docs; maintain existing signatures.
+144. [x] Dashboard UI: display RunName prominently in Results and Run detail pages; fall back to RunId if missing; add filter/search by RunName; include in deep links.
+145. [x] Dashboard API/adapters: extend view models and queries to surface RunName; ensure server-driven paging/sorting can sort by RunName.
+146. [x] Tests – unit: add validation tests for RunName parsing; update DTO serialization tests; cover HubClient overload behavior and null/empty handling.
+147. [x] Tests – integration: borrow a session with RunName set and assert it appears in results, SignalR stream, and Dashboard filtering.
+149. [x] Documentation: update README, API docs (Swagger snippets), and dashboard guidance with examples using RunName; add examples in docs/cli.md if relevant.
+151. [x] Security/PII: clarify that RunName may contain descriptive text; recommend avoiding sensitive data; ensure redaction feature covers RunName if policy set.
+152. [x] Non-goals: do not add RunName to metric labels or Redis keys; keep it as data only to avoid cardinality/compat issues; document rationale.

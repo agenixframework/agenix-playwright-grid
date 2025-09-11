@@ -28,13 +28,13 @@ public class SlotTests
     public void Slot_Record_AssignsProperties()
     {
         using var proc = new Process();
-        var started = DateTime.UtcNow;
+        var started = TestTime.FixedUtc(2025, 1, 1, 0, 0, 0);
         var slot = new Slot(proc, "Chromium", "ws://internal", "ws://public", started);
 
         Assert.That(slot.Proc, Is.SameAs(proc));
         Assert.That(slot.BrowserType, Is.EqualTo("Chromium"));
         Assert.That(slot.InternalWs, Is.EqualTo("ws://internal"));
         Assert.That(slot.PublicWs, Is.EqualTo("ws://public"));
-        Assert.That(slot.StartedAt, Is.EqualTo(started).Within(TimeSpan.FromMilliseconds(1)));
+        Assert.That(slot.StartedAt, Is.EqualTo(started));
     }
 }

@@ -8,6 +8,10 @@
     - Configure via env:
         BROWSER=chromium|firefox|webkit
         CHROMIUM_ARGS="--flag1 --flag2" or "--flag1,--flag2" or JSON array ["--flag1","--flag2"]
+        CHROME_ARGS=... (alias for CHROMIUM_ARGS if CHROMIUM_ARGS not set)
+        WEBKIT_ARGS="--flag1 --flag2" or JSON array
+        FIREFOX_ARGS="--flag1 --flag2" (optional; limited effect for Firefox)
+        FIREFOX_PREFS as JSON object or key=value pairs (comma/semicolon/newline separated)
         PLAYWRIGHT_PACKAGE=playwright (optional)
         PLAYWRIGHT_VERSION=1.54.2 (optional, reported; real version comes from installed package)
     - Interception model:
@@ -58,6 +62,42 @@ function parseArgs(envValue) {
     .filter(Boolean);
 }
 
+function parsePrefs(envValue) {
+  if (!envValue) return undefined;
+  // Try JSON object first
+  try {
+    const obj = JSON.parse(envValue);
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) return obj;
+  } catch {}
+  // Fallback: key=value pairs separated by comma/semicolon/newlines
+  const map = {};
+  const parts = String(envValue).split(/[\r\n;,]+/).map(s => s.trim()).filter(Boolean);
+  for (const p of parts) {
+    const eq = p.indexOf('=');
+    if (eq <= 0) {
+      console.error(`[sidecar] Ignoring malformed FIREFOX_PREFS entry: ${p}`);
+      continue;
+    }
+    const key = p.substring(0, eq).trim();
+    let val = p.substring(eq + 1).trim();
+    if (!key || /\s/.test(key)) {
+      console.error(`[sidecar] Ignoring FIREFOX_PREFS key with whitespace or empty: ${p}`);
+      continue;
+    }
+    // Try to coerce to boolean/number when obvious
+    if (/^(true|false)$/i.test(val)) {
+      map[key] = /^true$/i.test(val);
+    } else if (/^-?\d+(\.\d+)?$/.test(val)) {
+      map[key] = Number(val);
+    } else if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      map[key] = val.slice(1, -1);
+    } else {
+      map[key] = val;
+    }
+  }
+  return Object.keys(map).length ? map : undefined;
+}
+
 (async () => {
   const {mod: pw, pkgName, installedVersion} = loadPlaywright();
   const {chromium, firefox, webkit} = pw;
@@ -70,14 +110,25 @@ function parseArgs(envValue) {
     process.exit(1);
   }
 
-  // Only pass Chromium-compatible flags to Chromium. For Firefox/WebKit, keep args empty.
-  const chromiumArgs = parseArgs(process.env.CHROMIUM_ARGS);
-  const args = name === 'chromium' ? chromiumArgs : [];
+  // Resolve args per browser; allow CHROME_ARGS as alias for Chromium
+  const chromiumArgsEnv = process.env.CHROMIUM_ARGS || process.env.CHROME_ARGS || '';
+  const webkitArgsEnv = process.env.WEBKIT_ARGS || '';
+  const firefoxArgsEnv = process.env.FIREFOX_ARGS || '';
 
-  const server = await browserType.launchServer({
-    headless: true,
-    args
-  });
+  const chromiumArgs = parseArgs(chromiumArgsEnv);
+  const webkitArgs = parseArgs(webkitArgsEnv);
+  const firefoxArgs = parseArgs(firefoxArgsEnv);
+
+  const args = name === 'chromium' ? chromiumArgs : name === 'webkit' ? webkitArgs : firefoxArgs;
+
+  // Firefox user prefs
+  const firefoxPrefs = name === 'firefox' ? parsePrefs(process.env.FIREFOX_PREFS) : undefined;
+
+  const launchOptions = { headless: true };
+  if (args && args.length) launchOptions.args = args;
+  if (name === 'firefox' && firefoxPrefs) launchOptions.firefoxUserPrefs = firefoxPrefs;
+
+  const server = await browserType.launchServer(launchOptions);
 
   const wsEndpoint = server.wsEndpoint();
 

@@ -1,0 +1,126 @@
+# Default values for playwright-grid.
+# These defaults aim for a simple, single-namespace deployment suitable for dev/staging.
+# See charts/playwright-grid/README.md for installation and overrides.
+
+image:
+  hub:
+    repository: ghcr.io/agenixframework/agenix-playwright-grid-hub
+    tag: latest
+    pullPolicy: IfNotPresent
+  worker:
+    repository: ghcr.io/agenixframework/agenix-playwright-grid-worker
+    tag: latest
+    pullPolicy: IfNotPresent
+  dashboard:
+    repository: ghcr.io/agenixframework/agenix-playwright-grid-dashboard
+    tag: latest
+    pullPolicy: IfNotPresent
+
+redis:
+  enabled: true
+  image: redis:7
+  service:
+    port: 6379
+
+hub:
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 5000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    borrow:
+      trailingFallback: "true"
+      prefixExpand: "true"
+      wildcards: "false"
+  secrets:
+    runnerSecret: "runner-secret"
+    nodeSecret: "node-secret"
+  extraEnv: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+worker:
+  replicas: 3
+  service:
+    type: ClusterIP
+    port: 5000
+  shm:
+    enabled: true
+    # Mount a dedicated /dev/shm to improve Chromium stability.
+    # Use medium: Memory to back by RAM. Adjust sizeLimit per node capacity.
+    sizeLimit: 1Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  poolConfig: "AppB:Chromium:UAT=2,AppB:Firefox:UAT=1"
+  playwrightVersion: "1.54.2"
+  nodeSecret: "node-secret"
+  nodeNodeSecret: "node-node-secret"
+  nodeRegion: "local"
+  publicWs:
+    host: ""   # If empty, defaults to the worker Service DNS name
+    port: 5000  # Port clients use to connect to ws://host:port/ws/{browserId}
+    scheme: "ws"
+  extraEnv: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+Dashboard:
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 3001
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  extraEnv: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Optional ingresses per service (disabled by default)
+ingress:
+  hub:
+    enabled: false
+    className: ""
+    hosts:
+      - host: hub.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  worker:
+    enabled: false
+    className: ""
+    hosts:
+      - host: worker.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  dashboard:
+    enabled: false
+    className: ""
+    hosts:
+      - host: dashboard.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []

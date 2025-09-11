@@ -85,6 +85,12 @@ public sealed class WorkerOptions
     public WsDropPolicy WebSocketProxyDropPolicy { get; init; } = WsDropPolicy.DropNewest;
 
     /// <summary>
+    ///     Borrow idle timeout used to refresh Redis borrow_idle:{browserId} key during activity.
+    ///     Sourced from HUB_IDLE_TIMEOUT_SECONDS; clamped to 10 .. 86400 seconds. Default 120.
+    /// </summary>
+    public int BorrowIdleTimeoutSeconds { get; init; } = 120;
+
+    /// <summary>
     ///     Redis connection endpoint (e.g., redis:6379).
     /// </summary>
     public string RedisUrl { get; init; } = "redis:6379";
@@ -122,7 +128,7 @@ public sealed class WorkerOptions
     /// <summary>
     ///     Timeout in seconds to wait for the sidecar to become ready.
     /// </summary>
-    public int SidecarReadyTimeoutSeconds { get; init; } = 60;
+    public int SidecarReadyTimeoutSeconds { get; init; } = 120;
 
     /// <summary>
     ///     Public host name advertised for client WebSocket connections (optional).
@@ -191,9 +197,80 @@ public sealed class WorkerOptions
             pools["AppA:Chromium:Staging"] = 3;
         }
 
+        // Custom node labels with controlled cardinality
+        // Allowed keys: NODE_LABEL_ALLOWED_KEYS (comma/semicolon separated), defaults to "channel,headless"
+        // Allowed values per key via NODE_LABEL_VALUES_<KEY> (e.g., NODE_LABEL_VALUES_CHANNEL=stable,canary,beta,dev,other)
+        // Input values via aggregated NODE_LABELS (e.g., channel=stable;headless=true) and/or NODE_LABEL_<KEY> overrides.
+        var allowedKeysEnv = Environment.GetEnvironmentVariable("NODE_LABEL_ALLOWED_KEYS");
+        var allowedKeys = (allowedKeysEnv ?? "channel,headless")
+            .Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(k => k.ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        // Build allowed values map (lower-cased) with sensible defaults
+        var allowedValues = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var key in allowedKeys)
+        {
+            var envName = "NODE_LABEL_VALUES_" + key.ToUpperInvariant();
+            var valuesEnv = Environment.GetEnvironmentVariable(envName);
+            string defaults = key switch
+            {
+                "channel" => "stable,canary,beta,dev,other",
+                "headless" => "true,false,other",
+                _ => "other" // by default only allow 'other' to minimize cardinality
+            };
+            var vals = (valuesEnv ?? defaults)
+                .Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(v => v.ToLowerInvariant())
+                .ToHashSet(StringComparer.Ordinal);
+            if (!vals.Contains("other"))
+            {
+                vals.Add("other");
+            }
+            allowedValues[key] = vals;
+        }
+
+        // Parse provided labels
+        var provided = new Dictionary<string, string>(StringComparer.Ordinal);
+        var aggEnv = Environment.GetEnvironmentVariable("NODE_LABELS");
+        if (!string.IsNullOrWhiteSpace(aggEnv))
+        {
+            foreach (var part in aggEnv.Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var kv = part.Split('=', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (kv.Length == 2)
+                {
+                    provided[kv[0].ToLowerInvariant()] = kv[1];
+                }
+            }
+        }
+        // Explicit overrides NODE_LABEL_<KEY>
+        foreach (var key in allowedKeys)
+        {
+            var envName = "NODE_LABEL_" + key.ToUpperInvariant();
+            var val = Environment.GetEnvironmentVariable(envName);
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                provided[key] = val;
+            }
+        }
+        // Project to allowed values, coalescing to 'other'
+        foreach (var kvp in provided)
+        {
+            var k = kvp.Key.ToLowerInvariant();
+            if (!allowedValues.TryGetValue(k, out var set)) continue; // ignore unknown keys
+            var v = (kvp.Value ?? string.Empty).Trim().ToLowerInvariant();
+            if (!set.Contains(v))
+            {
+                v = "other";
+            }
+            labels[k] = v;
+        }
+
         // Parse optional sidecar ready timeout (seconds)
         var timeoutEnv = Environment.GetEnvironmentVariable("PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS");
-        var timeoutSeconds = 60;
+        var timeoutSeconds = 120;
         if (!string.IsNullOrWhiteSpace(timeoutEnv) && int.TryParse(timeoutEnv.Trim(), out var parsed))
         {
             // Clamp to sane range 5..600
@@ -254,6 +331,14 @@ public sealed class WorkerOptions
             // Non-fatal: default to DropNewest
             proxyPolicy = WsDropPolicy.DropNewest;
             errors.Add($"WS_PROXY_DROP_POLICY has invalid value '{proxyPolicyEnv}'. Allowed: DropNewest, DropOldest.");
+        }
+
+        // Borrow idle refresh timeout (seconds), sourced from HUB_IDLE_TIMEOUT_SECONDS
+        var borrowIdleEnv = Environment.GetEnvironmentVariable("HUB_IDLE_TIMEOUT_SECONDS");
+        var borrowIdleSeconds = 120;
+        if (!string.IsNullOrWhiteSpace(borrowIdleEnv) && int.TryParse(borrowIdleEnv.Trim(), out var bIdle))
+        {
+            borrowIdleSeconds = Math.Min(86400, Math.Max(10, bIdle));
         }
 
         // Sidecar restart backoff parsing
@@ -329,6 +414,7 @@ public sealed class WorkerOptions
             WebSocketLogDropPolicy = logPolicy,
             WebSocketProxyChannelCapacity = proxyCap,
             WebSocketProxyDropPolicy = proxyPolicy,
+            BorrowIdleTimeoutSeconds = borrowIdleSeconds,
             SidecarBackoff = new BackoffSettings(backoffMin, backoffMax, backoffMult, backoffReset)
         };
     }

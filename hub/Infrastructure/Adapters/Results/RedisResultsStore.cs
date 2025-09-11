@@ -17,6 +17,7 @@
 #endregion
 
 using System.Text.Json;
+using Agenix.PlaywrightGrid.Domain;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
 using StackExchange.Redis;
@@ -39,7 +40,7 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
     private readonly TimeSpan? _runsTtl = ParseResultsTtl(config);
     private readonly TimeSpan? _logsTtl = ParseLogsTtl(config);
 
-    private static string RunsByStartKey => "results:runs:byStart";
+    private static string RunsByStartKey => RedisKeys.ResultsRunsByStart();
 
     public async Task UpsertRunAsync(ResultRunSummaryDto run)
     {
@@ -48,6 +49,18 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
         // Store as JSON string for simplicity
         await db.StringSetAsync(runKey, json);
         TouchExpire(_runsTtl, runKey);
+
+        // Persist optional RunName alongside RunId for quick lookups/display
+        var rnKey = RunNameKey(run.RunId);
+        if (!string.IsNullOrWhiteSpace(run.RunName))
+        {
+            await db.StringSetAsync(rnKey, run.RunName);
+            TouchExpire(_runsTtl, rnKey);
+        }
+        else
+        {
+            try { await db.KeyDeleteAsync((RedisKey)rnKey); } catch { }
+        }
 
         // Update primary index by start time (descending via ZREVRANGE later)
         var score = run.StartedAtUtc.Ticks;
@@ -349,22 +362,27 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
 
     private static string RunKey(string runId)
     {
-        return $"results:run:{runId}";
+        return RedisKeys.ResultsRun(runId);
     }
 
     private static string TestsKey(string runId)
     {
-        return $"results:tests:{runId}";
+        return RedisKeys.ResultsTests(runId);
     }
 
     private static string CmdKey(string runId)
     {
-        return $"results:cmd:{runId}";
+        return RedisKeys.ResultsCmd(runId);
     }
 
     private static string CmdCountKey(string runId)
     {
-        return $"results:cmdcount:{runId}";
+        return RedisKeys.ResultsCmdCount(runId);
+    }
+
+    private static string RunNameKey(string runId)
+    {
+        return RedisKeys.ResultsRunName(runId);
     }
 
     private void TouchExpire(TimeSpan? ttl, params RedisKey[] keys)
@@ -385,5 +403,23 @@ public sealed class RedisResultsStore(IDatabase db, IConfiguration config) : IRe
     {
         try { return JsonSerializer.Deserialize<T>(json, JsonOpts); }
         catch { return default; }
+    }
+
+    public async Task<bool> DeleteRunAsync(string runId)
+    {
+        var runKey = RunKey(runId);
+        bool existed = false;
+        try
+        {
+            existed = await db.KeyDeleteAsync(runKey);
+        }
+        catch { }
+
+        try { await db.KeyDeleteAsync(TestsKey(runId)); } catch { }
+        try { await db.KeyDeleteAsync(CmdKey(runId)); } catch { }
+        try { await db.KeyDeleteAsync(CmdCountKey(runId)); } catch { }
+        try { await db.KeyDeleteAsync((RedisKey)RunNameKey(runId)); } catch { }
+        try { await db.SortedSetRemoveAsync(RunsByStartKey, runId); } catch { }
+        return existed;
     }
 }
