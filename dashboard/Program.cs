@@ -156,6 +156,9 @@ builder.Services.AddSingleton<IConnectionStatusWriter>(sp => sp.GetRequiredServi
 
 builder.Services.AddHostedService<SignalRClientService>();
 
+// Feature flags for Dashboard (env-driven)
+builder.Services.AddSingleton(sp => DashboardFeatureFlags.FromConfiguration(sp.GetRequiredService<IConfiguration>()));
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())

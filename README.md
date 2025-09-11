@@ -39,8 +39,10 @@ Quickstart
     - curl -s -X POST http://127.0.0.1:5100/session/borrow \
       -H 'content-type: application/json' \
       -H 'x-hub-secret: runner-secret' \
-      -d '{"labelKey":"AppB:Chromium:UAT"}'
+      -d '{"labelKey":"AppB:Chromium:UAT","runName":"Smoke UAT #123"}'
     - Response contains browserId, webSocketEndpoint (to connect via Playwright), and browserType.
+    - Note: runName is optional; omit it to fall back to displaying RunId in the Dashboard.
+    - Tip: open the Dashboard filtered to this run name: http://127.0.0.1:3001/results?runName=Smoke%20UAT%20%23123
 5) Return it:
     - curl -s -X POST http://127.0.0.1:5100/session/return \
       -H 'content-type: application/json' \
@@ -123,11 +125,23 @@ Dashboard configuration (env)
 
 HTTP API summary
 
+API limits and timeouts
+- Default request body limits: 64 KiB for control endpoints (borrow/return/register/test), 1 MiB for log endpoints.
+- Default timeouts: 15s headers, 30s keep-alive, 60s per-request timeout. All are configurable; see docs/configuration.md.
+
 - POST /session/borrow
     - Headers: `x-hub-secret: <HUB_RUNNER_SECRET>`
-    - Body: `{ "labelKey": "App:Browser:Env[:...]" }`
+    - Body: `{ "labelKey": "App:Browser:Env[:...]" , "runName": "Optional" }`
     - 200 OK: `{ "browserId": "...", "webSocketEndpoint": "ws://...", "browserType": "chromium|firefox|webkit" }`
     - 503 if no capacity; 401 if secret mismatch; 4xx on bad input.
+    - RunName validation (optional field):
+      - Trimmed; empty is treated as not supplied.
+      - Max length 128.
+      - Allowed chars: letters, digits, space, dot (.), underscore (_), hyphen (-).
+      - Control characters are not allowed.
+      - Case policy: casing is preserved; comparisons/search (e.g., Dashboard) are case-insensitive.
+      - May contain descriptive text to help humans identify runs (e.g., "Smoke UAT #123").
+      - Security/PII: avoid including secrets or personal data. To prevent RunName appearing in hub logs, set HUB_REDACT_RUNNAME=1 (UI/storage still show the provided value).
 - POST /session/return
     - Headers: `x-hub-secret: <HUB_RUNNER_SECRET>`
     - Body: `{ "labelKey": "...", "browserId": "..." }`
@@ -195,9 +209,9 @@ License
 
 - See the repository license.
 
-## Pinning Playwright version and Chromium flags
+## Pinning Playwright version and browser flags
 
-You can pin the Playwright version used by worker images and control Chromium launch flags via docker-compose.
+You can pin the Playwright version used by worker images and control per-browser launch flags and Firefox preferences via docker-compose.
 
 Workers print the Playwright version at startup to the container logs (both the configured env value and the detected
 installed NPM package version).
@@ -205,21 +219,33 @@ installed NPM package version).
 - PLAYWRIGHT_VERSION
     - Build arg used when building worker images to install a specific Playwright NPM version.
     - Also passed as a runtime env so the sidecar script reports it in its JSON line.
-- CHROMIUM_ARGS
-    - Space-, comma-separated, or JSON array of Chromium flags.
-    - Only applied when launching Chromium; ignored for Firefox/WebKit.
+- CHROMIUM_ARGS / CHROME_ARGS
+    - Space-, comma-separated, or JSON array of Chromium flags. CHROME_ARGS is an alias if CHROMIUM_ARGS is not set.
+    - Applied only when launching Chromium.
+- WEBKIT_ARGS
+    - Space-, comma-separated, or JSON array of flags passed when launching WebKit.
+- FIREFOX_ARGS
+    - Optional extra arguments for Firefox launch (limited effect; most tuning is via prefs).
+- FIREFOX_PREFS
+    - Firefox user prefs as JSON object or key=value pairs separated by comma/semicolon/newlines.
+    - Validation: malformed entries are ignored; values are coerced to boolean/number when obvious; otherwise strings.
 
 Example (docker-compose.yml):
 
 worker1:
-build:
-context: ./worker
-args:
-PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
-environment:
+  build:
+    context: ./worker
+    args:
+      PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
+  environment:
+    - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+    - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox
 
-- PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
-- CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox
+worker3:
+  environment:
+    - WEBKIT_ARGS=--disable-http2
+    - FIREFOX_ARGS=--headless
+    - FIREFOX_PREFS={"network.dns.disablePrefetch":true,"browser.cache.disk.enable":false}
 
 Tip: Place PLAYWRIGHT_VERSION=1.54.2 in a .env file to apply project-wide.
 

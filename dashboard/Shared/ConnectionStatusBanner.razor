@@ -1,7 +1,9 @@
 @using Dashboard.Application.Ports
+@using Dashboard.Application
 @implements IDisposable
 @inject IConnectionStatusReader Status
 @inject NavigationManager Nav
+@inject IConfiguration Config
 
 @if (_current.State != ConnectionStateKind.Connected)
 {
@@ -30,6 +32,10 @@
             @if (!string.IsNullOrWhiteSpace(_current.LastError))
             {
                 <span class="ms-2 text-muted">(@_current.LastError)</span>
+            }
+            @if (isRetrying || isDisconnected)
+            {
+                <div class="small text-muted mt-1">@ErrorHints.ForWebSocket(_current.LastError, Config)</div>
             }
         </div>
         <div class="ms-3">

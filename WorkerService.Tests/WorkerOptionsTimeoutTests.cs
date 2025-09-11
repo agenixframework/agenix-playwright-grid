@@ -37,7 +37,7 @@ public class WorkerOptionsTimeoutTests
 
             var opts = WorkerOptions.FromEnvironment();
 
-            Assert.That(opts.SidecarReadyTimeoutSeconds, Is.EqualTo(60));
+            Assert.That(opts.SidecarReadyTimeoutSeconds, Is.EqualTo(120));
         }
         finally
         {

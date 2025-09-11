@@ -1,0 +1,195 @@
+@page "/audit"
+@using System.Net.Http.Json
+@using Dashboard.Application
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
+
+<div class="d-flex align-items-center my-3">
+    <h3 class="mb-0">Audit</h3>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Reload">Refresh</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_items is null)
+{
+    <div class="alert alert-info">Loading...</div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Category</label>
+                    <select class="form-select" @bind="_category">
+                        <option value="">All</option>
+                        <option value="node">node</option>
+                        <option value="secrets">secrets</option>
+                        <option value="admin">admin</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Action</label>
+                    <input class="form-control" placeholder="e.g., register.success" @bind="_action"/>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Since (UTC, ISO-8601)</label>
+                    <input class="form-control" placeholder="e.g., 2025-09-01T00:00:00Z" @bind="_since"/>
+                </div>
+                <div class="col-6 col-md-1">
+                    <label class="form-label">Take</label>
+                    <input class="form-control" type="number" min="1" max="500" @bind="_take"/>
+                </div>
+                <div class="col-6 col-md-2 d-grid">
+                    <button class="btn btn-primary" @onclick="ApplyFilters">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead>
+            <tr>
+                <th style="width: 220px;">Timestamp (UTC)</th>
+                <th>Category</th>
+                <th>Action</th>
+                <th>Actor</th>
+                <th>IP</th>
+                <th>Severity</th>
+                <th>Details</th>
+            </tr>
+            </thead>
+            <tbody>
+            @if (_items.Count == 0)
+            {
+                <tr><td colspan="7" class="text-muted">No entries</td></tr>
+            }
+            else
+            {
+                @foreach (var e in _items)
+                {
+                    <tr>
+                        <td>@e.TimestampUtc.ToString("u")</td>
+                        <td>@e.Category</td>
+                        <td>@e.Action</td>
+                        <td>@(e.Actor ?? "-")</td>
+                        <td>@(e.RemoteIp ?? "-")</td>
+                        <td><span class="badge @SeverityToClass(e.Severity)">@e.Severity</span></td>
+                        <td>
+                            @if (e.Details is null || e.Details.Count == 0)
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                            else
+                            {
+                                <div class="small text-muted">
+                                    @foreach (var kv in e.Details)
+                                    {
+                                        <div><span class="text-dark">@kv.Key</span>: @kv.Value</div>
+                                    }
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex align-items-center gap-2 my-2">
+        <button class="btn btn-sm btn-outline-secondary" @onclick="Prev" disabled="@(_skip==0)">Prev</button>
+        <span class="text-muted small">Showing @(_items.Count) from offset @_skip</span>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="Next" disabled="@(_items.Count < _take)">Next</button>
+    </div>
+}
+
+@code {
+    private List<AuditEntry> _items = new();
+    private string? _error;
+    private int _skip;
+    private int _take = 100;
+    private string _category = string.Empty;
+    private string _action = string.Empty;
+    private string _since = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Reload()
+    {
+        _skip = 0;
+        await Load();
+    }
+
+    private async Task ApplyFilters()
+    {
+        _skip = 0;
+        await Load();
+    }
+
+    private async Task Prev()
+    {
+        _skip = Math.Max(0, _skip - _take);
+        await Load();
+    }
+
+    private async Task Next()
+    {
+        _skip += _take;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _error = null;
+        try
+        {
+            var client = HttpFactory.CreateClient("hub");
+            var qs = new List<string> { $"skip={_skip}", $"take={_take}" };
+            if (!string.IsNullOrWhiteSpace(_category)) qs.Add($"category={Uri.EscapeDataString(_category)}");
+            if (!string.IsNullOrWhiteSpace(_action)) qs.Add($"action={Uri.EscapeDataString(_action)}");
+            if (!string.IsNullOrWhiteSpace(_since)) qs.Add($"sinceUtc={Uri.EscapeDataString(_since)}");
+            var url = "/audit" + (qs.Count > 0 ? ("?" + string.Join('&', qs)) : string.Empty);
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = $"Failed to load audit: {(int)resp.StatusCode} {resp.ReasonPhrase}. " + ErrorHints.ForHttpFailure((int)resp.StatusCode, resp.ReasonPhrase);
+                _items = new();
+                return;
+            }
+            var data = await resp.Content.ReadFromJsonAsync<List<AuditEntry>>(
+                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            _items = data ?? new();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _items = new();
+        }
+    }
+
+    private static string SeverityToClass(string? sev) => (sev ?? "Info") switch
+    {
+        "Error" => "bg-danger",
+        "Warning" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+
+    private sealed class AuditEntry
+    {
+        public DateTime TimestampUtc { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string? Actor { get; set; }
+        public string? RemoteIp { get; set; }
+        public string? Severity { get; set; }
+        public Dictionary<string, string>? Details { get; set; }
+    }
+}

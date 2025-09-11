@@ -42,10 +42,11 @@ public class PoolTests
             try
             {
                 var runId = NewRunId();
-                var (browserId, _, labelKey, browserType) = await client.BorrowAsync(label, runId);
+                var runName = $"PoolFill {label.Replace(':', '-')} {DateTime.UtcNow:HHmmss}";
+                var (browserId, _, labelKey, browserType) = await client.BorrowAsync(label, runId, runName);
                 acquired.Add((labelKey, browserId, runId));
                 TestContext.WriteLine(
-                    $"[Borrowed] label={label} id={browserId} type={browserType ?? "?"} runId={runId}");
+                    $"[Borrowed] label={label} id={browserId} type={browserType ?? "?"} runId={runId} runName='{runName}'");
             }
             catch (HttpRequestException hre) when (hre.StatusCode == HttpStatusCode.ServiceUnavailable ||
                                                    hre.StatusCode == HttpStatusCode.TooManyRequests)
@@ -105,9 +106,10 @@ public class PoolTests
 
         try
         {
-            (browserId, ws, labelKey, browserType) = await client.BorrowAsync(label, runId);
+            var runName = $"PoolNav {label.Replace(':', '-')} {DateTime.UtcNow:HHmmss}";
+            (browserId, ws, labelKey, browserType) = await client.BorrowAsync(label, runId, runName);
             var type = (browserType ?? "chromium").ToLowerInvariant();
-            TestContext.WriteLine($"[Borrow] label={label} id={browserId} type={type}");
+            TestContext.WriteLine($"[Borrow] label={label} id={browserId} type={type} runName='{runName}'");
             var e1 = sw.Elapsed;
             TestContext.WriteLine($"[T] {label} borrow {e1.TotalMilliseconds:0} ms");
             last = e1;
@@ -191,17 +193,10 @@ public class PoolTests
 
             if (!string.IsNullOrEmpty(browserId))
             {
-                try
-                {
-                    await client.ReturnAsync(labelKey, browserId, runId);
-                    var er = sw.Elapsed;
-                    TestContext.WriteLine($"[T] {label} return {(er - last).TotalMilliseconds:0} ms");
-                    TestContext.WriteLine($"[Return] label={label} id={browserId}");
-                }
-                catch (Exception rex)
-                {
-                    TestContext.WriteLine($"[ReturnError] label={label} id={browserId} ex={rex.Message}");
-                }
+                // No explicit return: closing the Playwright connection triggers worker auto-return to the Hub.
+                var er = sw.Elapsed;
+                TestContext.WriteLine($"[T] {label} ws-close/auto-return {(er - last).TotalMilliseconds:0} ms");
+                TestContext.WriteLine($"[AutoReturn] label={label} id={browserId}");
             }
         }
     }
@@ -315,21 +310,11 @@ public class PoolTests
             $"[PoolFilled] Total borrowed across labels = {allBorrowed.Count}. Holding for {holdSeconds}s so dashboard can reflect pool usage...");
         await Task.Delay(TimeSpan.FromSeconds(Math.Max(0, holdSeconds)));
 
-        // Return everything
-        var returns = allBorrowed
-            .Select(x => client.ReturnAsync(x.labelKey, x.browserId, x.runId))
-            .ToArray();
-        try
-        {
-            await Task.WhenAll(returns);
-        }
-        catch (Exception ex)
-        {
-            TestContext.WriteLine($"[ReturnErrors] {ex.Message}");
-        }
+        // No explicit return: allow Hub auto-return/expiration and worker sweeper to reclaim sessions.
+        // We intentionally skip calling ReturnAsync (obsolete/no-op).
 
         TestContext.WriteLine(
-            "[Done] All borrowed sessions attempted to return. Check dashboard history for borrow spikes.");
+            "[Done] All borrowed sessions held for observation. Hub will auto-return/expire them.");
 
         // Test passes if we successfully borrowed at least once.
         Assert.That(allBorrowed.Count, Is.GreaterThan(0));

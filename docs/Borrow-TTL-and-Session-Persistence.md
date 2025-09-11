@@ -42,6 +42,8 @@ Return endpoint:
 - Body: { labelKey: string, browserId: string }
 - Behavior:
   - Returning is idempotent. Whether the item is found in the in-use list or already returned, the Hub cleans up the lease and session keys.
+  - On client WebSocket disconnect, the Worker automatically issues POST /session/return (best-effort) to finalize the session and restore capacity so runs do not remain in the Running state.
+  - When a runId correlation is available, the Hub will mark the run Failed if any test failures were recorded; otherwise Passed. A clean auto-return is equivalent to a Passed run; you may see an AutoReturn event in the log while the run status is Passed.
 
 ## Redis Keys and Lifecycle
 

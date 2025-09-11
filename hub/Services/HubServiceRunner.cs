@@ -18,6 +18,8 @@
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.OpenApi.Models;
@@ -27,6 +29,8 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
+using PlaywrightHub.Infrastructure;
+using PlaywrightHub.Infrastructure.Adapters.Audit;
 using PlaywrightHub.Infrastructure.Adapters.Background;
 using PlaywrightHub.Infrastructure.Adapters.Redis;
 using PlaywrightHub.Infrastructure.Adapters.Results;
@@ -58,6 +62,38 @@ public static class HubServiceRunner
         builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
         // Apply environment-driven log levels (global + per-category overrides)
         LoggingConfigurator.ApplyFromEnvironment(builder.Logging, builder.Configuration);
+
+        // Kestrel limits and request timeouts (env-driven)
+        static long ClampLong(long value, long min, long max) => value < min ? min : (value > max ? max : value);
+        static int ClampInt(int value, int min, int max) => value < min ? min : (value > max ? max : value);
+
+        var hubCfg = builder.Configuration;
+        long TryGetLong(string key, long def) => long.TryParse(hubCfg[key], out var v) ? v : def;
+        int TryGetInt(string key, int def) => int.TryParse(hubCfg[key], out var v) ? v : def;
+
+        var controlLimitBytes = ClampLong(TryGetLong("HUB_MAX_CONTROL_BODY_BYTES", 64 * 1024), 8 * 1024, 1 * 1024 * 1024);
+        var logLimitBytes = ClampLong(TryGetLong("HUB_MAX_LOG_BODY_BYTES", 1 * 1024 * 1024), 8 * 1024, 16 * 1024 * 1024);
+        var globalMaxRequestBodyBytes = Math.Max(controlLimitBytes, logLimitBytes);
+
+        var headersTimeoutSec = ClampInt(TryGetInt("HUB_REQUEST_HEADERS_TIMEOUT_SECONDS", 15), 5, 120);
+        var keepAliveTimeoutSec = ClampInt(TryGetInt("HUB_KEEP_ALIVE_TIMEOUT_SECONDS", 30), 5, 300);
+        var defaultRequestTimeoutSec = ClampInt(TryGetInt("HUB_REQUEST_TIMEOUT_SECONDS", 60), 5, 600);
+
+        builder.WebHost.ConfigureKestrel(o =>
+        {
+            o.AddServerHeader = false;
+            o.Limits.MaxRequestBodySize = globalMaxRequestBodyBytes;
+            o.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(headersTimeoutSec);
+            o.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(keepAliveTimeoutSec);
+        });
+
+        builder.Services.AddRequestTimeouts(options =>
+        {
+            options.DefaultPolicy = new RequestTimeoutPolicy
+            {
+                Timeout = TimeSpan.FromSeconds(defaultRequestTimeoutSec)
+            };
+        });
 
         // OpenTelemetry setup (env-driven exporters)
         var hubServiceName = "playwright-hub";
@@ -131,6 +167,7 @@ public static class HubServiceRunner
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<IConnectionMultiplexer>(_ => mux);
         builder.Services.AddSingleton<IDatabase>(_ => db);
+        builder.Services.AddSingleton<IAuditStore, RedisAuditStore>();
         builder.Services.AddSingleton<IPoolStateReader, RedisPoolStateReader>();
         builder.Services.AddHostedService<RedisPoolStateBroadcastService>();
         builder.Services.AddHostedService<NodeSweeperService>();
@@ -195,9 +232,68 @@ public static class HubServiceRunner
 
             c.AddSecurityDefinition("HubSecret", scheme);
             c.AddSecurityRequirement(new OpenApiSecurityRequirement { { scheme, Array.Empty<string>() } });
+
+            // Include XML comments from the Hub assembly to enrich Swagger schema/operations docs
+            try
+            {
+                var xmlFile = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name + ".xml";
+                var xmlPath = System.IO.Path.Combine(System.AppContext.BaseDirectory, xmlFile);
+                if (System.IO.File.Exists(xmlPath))
+                {
+                    c.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+                }
+            }
+            catch
+            {
+                // best-effort only; ignore failures
+            }
         });
 
         var app = builder.Build();
+
+        // Initialize privacy/redaction settings (env-driven)
+        HubPrivacy.Initialize(app.Configuration);
+
+        // Apply request timeout middleware
+        app.UseRequestTimeouts();
+
+        // Enforce per-path request size limits (413) for known endpoints
+        app.Use(async (context, next) =>
+        {
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                var path = context.Request.Path.Value ?? string.Empty;
+                var isLogs = path.Contains("/commands", StringComparison.OrdinalIgnoreCase) ||
+                             path.Contains("/api-logs", StringComparison.OrdinalIgnoreCase);
+                var limit = isLogs ? logLimitBytes : controlLimitBytes;
+
+                // Enforce per-request MaxRequestBodySize for streaming/chunked bodies (no Content-Length)
+                var sizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+                if (sizeFeature is not null && !sizeFeature.IsReadOnly)
+                {
+                    sizeFeature.MaxRequestBodySize = limit;
+                }
+
+                var len = context.Request.ContentLength;
+                if (len.HasValue && len.Value > limit)
+                {
+                    context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+                    context.Response.ContentType = "application/problem+json";
+                    var pd = new ProblemDetails
+                    {
+                        Status = StatusCodes.Status413PayloadTooLarge,
+                        Title = "Payload Too Large",
+                        Detail = $"Request body exceeds limit of {limit} bytes.",
+                        Type = "https://httpstatuses.com/413",
+                        Instance = context.Request.Path
+                    };
+                    await JsonSerializer.SerializeAsync(context.Response.Body, pd);
+                    return;
+                }
+            }
+
+            await next();
+        });
 
         // Log selected results backend after app is built (logger available)
         app.Logger.LogInformation("[hub] ResultsStore backend: {Backend}", selectedResultsBackend);
@@ -301,10 +397,30 @@ public static class HubServiceRunner
             var cfg = app.Configuration;
             var nodeTimeoutSeconds = int.TryParse(cfg["HUB_NODE_TIMEOUT"], out var t) ? t : 60;
             var dashboardUrl = cfg["DASHBOARD_URL"] ?? "http://localhost:3001";
-            var enableTrailingFallback =
-                !bool.TryParse(cfg["HUB_BORROW_TRAILING_FALLBACK"], out var tf) || tf; // default true
-            var enablePrefixExpand = !bool.TryParse(cfg["HUB_BORROW_PREFIX_EXPAND"], out var pe) || pe; // default true
-            var enableWildcards = bool.TryParse(cfg["HUB_BORROW_WILDCARDS"], out var wc) && wc; // default false
+
+            // Allow per-environment overrides via suffix, e.g., HUB_BORROW_WILDCARDS_Development
+            static bool GetBoolWithEnvironmentOverride(IConfiguration cfg2, string key, string environment, bool defaultValue)
+            {
+                string? value = null;
+                if (!string.IsNullOrWhiteSpace(environment))
+                {
+                    var suffixExact = $"_{environment}";
+                    var suffixUpper = $"_{environment.ToUpperInvariant()}";
+                    var k1 = key + suffixExact;
+                    var k2 = key + suffixUpper;
+                    var v1 = cfg2[k1];
+                    var v2 = cfg2[k2];
+                    if (!string.IsNullOrWhiteSpace(v1)) value = v1;
+                    else if (!string.IsNullOrWhiteSpace(v2)) value = v2;
+                }
+                value ??= cfg2[key];
+                return bool.TryParse(value, out var parsed) ? parsed : defaultValue;
+            }
+
+            var environmentName = app.Environment.EnvironmentName ?? string.Empty;
+            var enableTrailingFallback = GetBoolWithEnvironmentOverride(cfg, "HUB_BORROW_TRAILING_FALLBACK", environmentName, true); // default true
+            var enablePrefixExpand = GetBoolWithEnvironmentOverride(cfg, "HUB_BORROW_PREFIX_EXPAND", environmentName, true); // default true
+            var enableWildcards = GetBoolWithEnvironmentOverride(cfg, "HUB_BORROW_WILDCARDS", environmentName, false); // default false
             var ver = typeof(HubServiceRunner).Assembly.GetName().Version?.ToString() ?? string.Empty;
 
             var reader = app.Services.GetRequiredService<IPoolStateReader>();

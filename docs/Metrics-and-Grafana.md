@@ -141,3 +141,14 @@ See also
 - README.md for ports and quickstart
 - docs/Label-Matching.md for how labels are matched and why label normalization matters for metrics
 - provisioning/dashboards/playwright-grid-metrics.json for the current dashboard definition
+
+
+## RunName and cardinality (Non-goals)
+- RunName is intentionally not used as a Prometheus metric label and is not embedded into any Redis key.
+- Rationale:
+  - Avoid high-cardinality labels: free-form names can explode time series cardinality and harm Prometheus scrape/storage performance and dashboard responsiveness.
+  - Preserve compatibility and stability: our Grafana dashboards and Redis keyspace rely on stable label sets and key patterns (labels, node, outcome). RunName is stored as data (e.g., a value associated with runId) and surfaced in logs, SignalR events, and the Dashboard UI.
+- Practical implications:
+  - Filter/search by RunName via the Dashboard and APIs instead of metrics.
+  - Use metrics for fleet-level signals (by label and node); use logs/traces/results for per-run analysis.
+- Security/PII: RunName may contain descriptive text. If your policy requires it, enable redaction to suppress RunName in logs.

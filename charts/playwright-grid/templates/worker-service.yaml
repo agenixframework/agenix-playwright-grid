@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pg.worker.name" . }}
+  labels:
+    {{- include "pg.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.worker.service.type }}
+  selector:
+    app: {{ include "pg.worker.name" . }}
+  ports:
+    - name: http
+      port: {{ .Values.worker.service.port }}
+      targetPort: http

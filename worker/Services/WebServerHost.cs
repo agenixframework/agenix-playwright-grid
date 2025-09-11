@@ -22,6 +22,8 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Agenix.PlaywrightGrid.Domain;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -30,7 +32,6 @@ using Prometheus;
 using StackExchange.Redis;
 using WorkerService.Application.Ports;
 using WorkerService.Infrastructure;
-using Microsoft.Extensions.Logging;
 
 namespace WorkerService.Services;
 
@@ -131,6 +132,17 @@ public sealed class WebServerHost
             _acceptingBorrows = false;
             try { logger.LogInformation("[worker] ApplicationStopping: initiating graceful drain"); } catch { }
 
+            // Proactively drop TTL keys for any active sessions so Hub sweeper can reclaim
+            try
+            {
+                foreach (var bid in _pool.GetActiveBrowserIds())
+                {
+                    try { _db.KeyDelete(RedisKeys.BorrowTtl(bid)); } catch { }
+                    try { _db.KeyDelete($"borrow_idle:{bid}"); } catch { }
+                }
+            }
+            catch { }
+
             try { appCts.Cancel(); } catch { }
 
             // Drain active WebSocket sessions up to a timeout
@@ -189,7 +201,7 @@ public sealed class WebServerHost
             // Respect maintenance mode: deny borrow while maintenance is active for this label
             try
             {
-                if (_db.KeyExists($"maintenance:{labelKey}"))
+                if (_db.KeyExists(RedisKeys.MaintenanceFlag(labelKey)))
                 {
                     return Results.StatusCode(503);
                 }
@@ -202,7 +214,7 @@ public sealed class WebServerHost
             }
 
             _metrics.IncrementBorrow(_options.NodeId, labelKey);
-            var availableKey = $"available:{labelKey}";
+            var availableKey = RedisKeys.Available(labelKey);
             _metrics.SetPoolAvailable(_options.NodeId, labelKey, await _db.ListLengthAsync(availableKey));
 
             var respObj = new
@@ -231,7 +243,7 @@ public sealed class WebServerHost
                 return Results.BadRequest();
             }
 
-            var availableKey = $"available:{labelKey}";
+            var availableKey = RedisKeys.Available(labelKey);
             _metrics.SetPoolAvailable(_options.NodeId, labelKey, await _db.ListLengthAsync(availableKey));
             return Results.Ok(new { ok = true });
         });
@@ -378,8 +390,40 @@ public sealed class WebServerHost
                 return;
             }
 
+            // Try to resolve runId for this browser from Redis mapping to propagate correlation
+            string? runId = null;
+            string? runName = null;
+            try
+            {
+                var v = await _db.StringGetAsync(RedisKeys.BrowserRun(browserId));
+                if (!v.IsNullOrEmpty)
+                {
+                    runId = v.ToString();
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(runId))
+                        {
+                            var rnVal = await _db.StringGetAsync(RedisKeys.ResultsRunName(runId));
+                            if (!rnVal.IsNullOrEmpty)
+                            {
+                                runName = rnVal.ToString();
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
             using var upstream = new ClientWebSocket();
             upstream.Options.KeepAliveInterval = TimeSpan.FromSeconds(_options.WebSocketPingIntervalSeconds);
+            // Best-effort: include run context for the sidecar
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(runId)) upstream.Options.SetRequestHeader("x-run-id", runId!);
+                if (!string.IsNullOrWhiteSpace(runName)) upstream.Options.SetRequestHeader("x-run-name", runName!);
+            }
+            catch { }
 
             try
             {
@@ -399,17 +443,8 @@ public sealed class WebServerHost
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
 
-            // Try to resolve runId for this browser from Redis mapping to propagate correlation
-            string? runId = null;
-            try
-            {
-                var v = await _db.StringGetAsync($"browser_run:{browserId}");
-                if (!v.IsNullOrEmpty)
-                {
-                    runId = v.ToString();
-                }
-            }
-            catch { }
+            // Enrich logs with run context once available
+            using var _scopeRunCtx = WorkerService.Infrastructure.LoggingScopes.Begin(logger, runId: runId, browserId: browserId, runName: runName);
 
             try
             {
@@ -468,6 +503,13 @@ public sealed class WebServerHost
                         {
                             client.DefaultRequestHeaders.Remove("Correlation-Id");
                             client.DefaultRequestHeaders.TryAddWithoutValidation("Correlation-Id", runId!);
+                            client.DefaultRequestHeaders.Remove("x-run-id");
+                            client.DefaultRequestHeaders.TryAddWithoutValidation("x-run-id", runId!);
+                        }
+                        if (!string.IsNullOrWhiteSpace(runName))
+                        {
+                            client.DefaultRequestHeaders.Remove("x-run-name");
+                            client.DefaultRequestHeaders.TryAddWithoutValidation("x-run-name", runName!);
                         }
 
                         while (await logChannel.Reader.WaitToReadAsync(cts.Token))
@@ -551,6 +593,8 @@ public sealed class WebServerHost
                 var w1 = ForwardWriter(c2sChannel, upstream, cts.Token);
                 var w2 = ForwardWriter(s2cChannel, downstream, cts.Token);
 
+                var borrowIdleTtl = TimeSpan.FromSeconds(Math.Max(10, _options.BorrowIdleTimeoutSeconds));
+                var lastIdleRefresh = DateTime.MinValue;
                 var idleWatch = Task.Run(async () =>
                 {
                     try
@@ -558,6 +602,14 @@ public sealed class WebServerHost
                         while (!cts.IsCancellationRequested)
                         {
                             try { await Task.Delay(TimeSpan.FromSeconds(1), cts.Token); } catch { }
+
+                            // Refresh borrow_idle TTL at most once per second while connection active
+                            if ((DateTime.UtcNow - lastIdleRefresh).TotalSeconds >= 1)
+                            {
+                                try { await _db.KeyExpireAsync($"borrow_idle:{browserId}", borrowIdleTtl); } catch { }
+                                lastIdleRefresh = DateTime.UtcNow;
+                            }
+
                             if (DateTime.UtcNow - lastActivity > idleTimeout)
                             {
                                 try { await downstream.CloseAsync(WebSocketCloseStatus.NormalClosure, "Idle timeout", CancellationToken.None); } catch { }
@@ -577,7 +629,48 @@ public sealed class WebServerHost
                 try { await cts.CancelAsync(); }
                 catch { }
 
+                // On proxied WS close, delete TTL/idle keys so Hub can reclaim promptly
+                try { await _db.KeyDeleteAsync(RedisKeys.BorrowTtl(browserId)); } catch { }
+                try { await _db.KeyDeleteAsync($"borrow_idle:{browserId}"); } catch { }
+
                 _pool.MarkConnectionEnd(browserId);
+
+                // On client WS disconnect, attempt to auto-return the browser to the Hub to finalize the run
+                try
+                {
+                    if (_pool.TryFindLabelByBrowserId(browserId, out var labelKey) && !string.IsNullOrWhiteSpace(labelKey))
+                    {
+                        var hubBase = _options.HubUrl?.TrimEnd('/') ?? string.Empty;
+                        if (!string.IsNullOrEmpty(hubBase))
+                        {
+                            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+                            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
+                            client.DefaultRequestHeaders.Remove("x-hub-secret");
+                            client.DefaultRequestHeaders.TryAddWithoutValidation("x-hub-secret", _options.NodeSecret);
+                            if (!string.IsNullOrWhiteSpace(runId))
+                            {
+                                // propagate correlation for attribution
+                                client.DefaultRequestHeaders.Remove("Correlation-Id");
+                                client.DefaultRequestHeaders.TryAddWithoutValidation("Correlation-Id", runId!);
+                                client.DefaultRequestHeaders.Remove("x-run-id");
+                                client.DefaultRequestHeaders.TryAddWithoutValidation("x-run-id", runId!);
+                            }
+                            if (!string.IsNullOrWhiteSpace(runName))
+                            {
+                                client.DefaultRequestHeaders.Remove("x-run-name");
+                                client.DefaultRequestHeaders.TryAddWithoutValidation("x-run-name", runName!);
+                            }
+
+                            var url = $"{hubBase}/session/return";
+                            var payload = new { labelKey, browserId };
+                            var json = JsonSerializer.Serialize(payload);
+                            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                            try { await client.PostAsync(url, content); }
+                            catch { /* swallow errors; cleanup is best-effort */ }
+                        }
+                    }
+                }
+                catch { }
             }
 
             return;

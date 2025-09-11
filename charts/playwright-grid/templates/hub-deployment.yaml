@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pg.hub.name" . }}
+  labels:
+    {{- include "pg.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.hub.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "pg.hub.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "pg.hub.name" . }}
+        {{- include "pg.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: hub
+          image: "{{ .Values.image.hub.repository }}:{{ .Values.image.hub.tag }}"
+          imagePullPolicy: {{ .Values.image.hub.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.hub.service.port }}
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://0.0.0.0:{{ .Values.hub.service.port }}"
+            - name: REDIS_URL
+              value: {{ if .Values.redis.enabled }}"{{ include "pg.redis.name" . }}:{{ .Values.redis.service.port }}"{{ else }}"{{ .Values.hub.redisUrl | default "redis:6379" }}"{{ end }}
+            - name: HUB_NODE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "pg.hub.name" . }}-secrets
+                  key: hub_node_secret
+            - name: HUB_RUNNER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "pg.hub.name" . }}-secrets
+                  key: hub_runner_secret
+            - name: HUB_BORROW_TRAILING_FALLBACK
+              value: {{ .Values.hub.env.borrow.trailingFallback | quote }}
+            - name: HUB_BORROW_PREFIX_EXPAND
+              value: {{ .Values.hub.env.borrow.prefixExpand | quote }}
+            - name: HUB_BORROW_WILDCARDS
+              value: {{ .Values.hub.env.borrow.wildcards | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.hub.resources | nindent 12 }}
+      {{- with .Values.hub.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hub.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hub.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "pg.hub.name" . }}-secrets
+  labels:
+    {{- include "pg.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  hub_runner_secret: {{ .Values.hub.secrets.runnerSecret | quote }}
+  hub_node_secret: {{ .Values.hub.secrets.nodeSecret | quote }}

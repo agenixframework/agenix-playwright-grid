@@ -34,7 +34,6 @@ public sealed class HubClient : IDisposable
 {
     private readonly Channel<LogEntry> _logChannel;
     private readonly CancellationTokenSource _cts = new();
-    private readonly Task _senderTask;
 
     private readonly int _logBatchSize;
     private readonly int _logFlushMs;
@@ -91,7 +90,7 @@ public sealed class HubClient : IDisposable
             FullMode = BoundedChannelFullMode.DropWrite
         };
         _logChannel = Channel.CreateBounded<LogEntry>(opts);
-        _senderTask = Task.Run(async () => await SenderLoopAsync(_cts.Token).ConfigureAwait(false));
+        Task.Run(async () => await SenderLoopAsync(_cts.Token).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -169,7 +168,7 @@ public sealed class HubClient : IDisposable
             FullMode = BoundedChannelFullMode.DropWrite
         };
         _logChannel = Channel.CreateBounded<LogEntry>(opts);
-        _senderTask = Task.Run(async () => await SenderLoopAsync(_cts.Token).ConfigureAwait(false));
+        Task.Run(async () => await SenderLoopAsync(_cts.Token).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -469,7 +468,7 @@ public sealed class HubClient : IDisposable
     ///     Sends multiple Playwright API/protocol logs from the test runner in one batch.
     ///     This overload accepts IEnumerableand wraps each as an object with direction="runner".
     /// </summary>
-    public async Task SendApiLogsAsync(string browserId, IEnumerable<string>? texts)
+    public async Task SendApiLogsAsync(string browserId, IEnumerable<string?>? texts)
     {
         if (string.IsNullOrWhiteSpace(browserId))
         {
@@ -481,8 +480,9 @@ public sealed class HubClient : IDisposable
             return;
         }
 
-        var items = texts.Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => new Dictionary<string, object?> { ["text"] = s, ["direction"] = "runner" })
+        var items = texts
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => new Dictionary<string, object?> { ["text"] = s!, ["direction"] = "runner" })
             .ToArray();
         if (items.Length == 0)
         {
@@ -501,20 +501,60 @@ public sealed class HubClient : IDisposable
     /// <param name="labelKey">Label key describing the desired session capacity (e.g., App:Browser:Env).</param>
     /// <param name="runId">Optional run identifier to be attributed by the hub (sent as query runId).</param>
     /// <returns>A tuple with the borrowed browser id, WebSocket endpoint, the echoed label key and optional browser type.</returns>
+    /// <remarks>
+    ///     This overload maintains backward compatibility and does not accept a runName. To supply a human-friendly name,
+    ///     use the BorrowAsync(labelKey, runId, runName) overload.
+    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     public async Task<(string browserId, string wsEndpoint, string labelKey, string? browserType)> BorrowAsync(
         string labelKey, string? runId = null)
     {
-        return await BorrowAsync(labelKey, runId, CancellationToken.None).ConfigureAwait(false);
+        return await BorrowAsync(labelKey, runId, null, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Requests a browser session from the hub for the provided label key, allowing you to specify an optional
+    ///     human-friendly RunName in addition to the correlation RunId.
+    /// </summary>
+    /// <param name="labelKey">Label key describing the desired session capacity (e.g., App:Browser:Env).</param>
+    /// <param name="runId">Optional run identifier used for correlation and attributed by the hub (query runId and Correlation-Id header).</param>
+    /// <param name="runName">Optional human-friendly name for the run; validated by the hub (trimmed, &lt;=128 chars, letters/numbers/space/._-).</param>
+    /// <returns>A tuple with the borrowed browser id, WebSocket endpoint, the echoed label key and optional browser type.</returns>
+    public async Task<(string browserId, string wsEndpoint, string labelKey, string? browserType)> BorrowAsync(
+        string labelKey, string? runId, string? runName)
+    {
+        return await BorrowAsync(labelKey, runId, runName, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>
     ///     Requests a browser session with cancellation support.
     /// </summary>
+    /// <param name="labelKey">Label key describing the desired session capacity (e.g., App:Browser:Env).</param>
+    /// <param name="runId">Optional run identifier used for correlation and attribution by the hub.</param>
+    /// <param name="cancellationToken">Cancellation token to abort the request.</param>
+    /// <returns>A tuple with the borrowed browser id, WebSocket endpoint, the echoed label key and optional browser type.</returns>
     public async Task<(string browserId, string wsEndpoint, string labelKey, string? browserType)> BorrowAsync(
         string labelKey, string? runId, CancellationToken cancellationToken)
     {
+        return await BorrowAsync(labelKey, runId, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Requests a browser session with cancellation support, allowing you to specify an optional RunName.
+    /// </summary>
+    /// <param name="labelKey">Label key describing the desired session capacity (e.g., App:Browser:Env).</param>
+    /// <param name="runId">Optional run identifier used for correlation and attribution by the hub.</param>
+    /// <param name="runName">Optional human-friendly name for the run; validated by the hub (trimmed, &lt;=128 chars, letters/numbers/space/._-).</param>
+    /// <param name="cancellationToken">Cancellation token to abort the request.</param>
+    /// <returns>A tuple with the borrowed browser id, WebSocket endpoint, the echoed label key and optional browser type.</returns>
+    public async Task<(string browserId, string wsEndpoint, string labelKey, string? browserType)> BorrowAsync(
+        string labelKey, string? runId, string? runName, CancellationToken cancellationToken)
+    {
         var body = new Dictionary<string, string> { ["labelKey"] = labelKey };
+        if (!string.IsNullOrWhiteSpace(runName))
+        {
+            body["runName"] = runName;
+        }
         var url = string.IsNullOrWhiteSpace(runId)
             ? "/session/borrow"
             : $"/session/borrow?runId={WebUtility.UrlEncode(runId)}";
@@ -569,37 +609,24 @@ public sealed class HubClient : IDisposable
     }
 
     /// <summary>
-    ///     Returns a borrowed browser session to the hub.
+    ///     No-op: hub now auto-finishes/auto-returns sessions. This method remains for backward compatibility.
     /// </summary>
-    /// <param name="labelKey">The key associated with the browser's label.</param>
-    /// <param name="browserId">The unique identifier of the borrowed browser session.</param>
-    /// <param name="runId">Optional run identifier to be attributed by the hub (sent as query runId).</param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
-    public async Task ReturnAsync(string labelKey, string browserId, string? runId = null)
+    /// <param name="labelKey">Unused.</param>
+    /// <param name="browserId">Unused.</param>
+    /// <param name="runId">Unused.</param>
+    /// <returns>A completed task.</returns>
+    [Obsolete("ReturnAsync is no longer required; the hub auto-finishes/auto-returns sessions. This method is a no-op.")]
+    public Task ReturnAsync(string labelKey, string browserId, string? runId = null)
     {
-        await ReturnAsync(labelKey, browserId, runId, CancellationToken.None);
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    ///     Returns a borrowed browser session to the hub with cancellation support.
+    ///     No-op with cancellation support: hub now auto-finishes/auto-returns sessions.
     /// </summary>
-    public async Task ReturnAsync(string labelKey, string browserId, string? runId, CancellationToken cancellationToken)
+    [Obsolete("ReturnAsync is no longer required; the hub auto-finishes/auto-returns sessions. This method is a no-op.")]
+    public Task ReturnAsync(string labelKey, string browserId, string? runId, CancellationToken cancellationToken)
     {
-        var body = new Dictionary<string, string> { ["labelKey"] = labelKey, ["browserId"] = browserId };
-
-        var url = string.IsNullOrWhiteSpace(runId)
-            ? "/session/return"
-            : $"/session/return?runId={WebUtility.UrlEncode(runId)}";
-        var resp = await _retry.ExecuteAsync(ct =>
-        {
-            var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body) };
-            if (!string.IsNullOrWhiteSpace(runId))
-            {
-                req.Headers.TryAddWithoutValidation("Correlation-Id", runId);
-            }
-
-            return _http.SendAsync(req, ct);
-        }, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessOrThrowDomainAsync(resp, "Return", cancellationToken).ConfigureAwait(false);
+        return Task.CompletedTask;
     }
 }

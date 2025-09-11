@@ -17,6 +17,7 @@
 #endregion
 
 using System.Text.Json;
+using Agenix.PlaywrightGrid.Domain;
 using StackExchange.Redis;
 using WorkerService.Infrastructure;
 
@@ -32,14 +33,14 @@ public sealed class HeartbeatService(WorkerOptions options, IDatabase db)
     {
         try
         {
-            var key = $"node:{options.NodeId}";
+            var key = RedisKeys.Node(options.NodeId);
             var nowIso = DateTime.UtcNow.ToString("o");
             await db.HashSetAsync(key, "LastSeen", nowIso);
             var lblsJson = JsonSerializer.Serialize(options.Labels.ToDictionary(k => k.Key, v => v.Value));
             await db.HashSetAsync(key, "Labels", lblsJson);
             await db.HashSetAsync(key, "Capacity", options.PoolConfig.Values.Sum().ToString());
             await db.SetAddAsync("nodes", options.NodeId);
-            await db.StringSetAsync($"node_alive:{options.NodeId}", "1", TimeSpan.FromSeconds(90));
+            await db.StringSetAsync(RedisKeys.NodeAlive(options.NodeId), "1", TimeSpan.FromSeconds(90));
         }
         catch (Exception ex)
         {
@@ -54,14 +55,14 @@ public sealed class HeartbeatService(WorkerOptions options, IDatabase db)
         {
             try
             {
-                var key = $"node:{options.NodeId}";
+                var key = RedisKeys.Node(options.NodeId);
                 var nowIso = DateTime.UtcNow.ToString("o");
                 await db.HashSetAsync(key, "LastSeen", nowIso);
                 var lblsJson = JsonSerializer.Serialize(options.Labels.ToDictionary(k => k.Key, v => v.Value));
                 await db.HashSetAsync(key, "Labels", lblsJson);
                 await db.HashSetAsync(key, "Capacity", options.PoolConfig.Values.Sum().ToString());
                 await db.SetAddAsync("nodes", options.NodeId);
-                await db.StringSetAsync($"node_alive:{options.NodeId}", "1", TimeSpan.FromSeconds(90));
+                await db.StringSetAsync(RedisKeys.NodeAlive(options.NodeId), "1", TimeSpan.FromSeconds(90));
             }
             catch (Exception ex)
             {

@@ -18,13 +18,30 @@
 
 namespace Dashboard;
 
+/// <summary>
+///     Snapshot of the hub's pool capacity and registered workers at a point in time (dashboard projection).
+/// </summary>
 public sealed record PoolStateDto
 {
+    /// <summary>
+    ///     Aggregated pool entries grouped by label key with total and borrowed counts.
+    /// </summary>
     public List<PoolEntryDto> Pools { get; init; } = new();
+
+    /// <summary>
+    ///     Currently known workers and their per-label capacities.
+    /// </summary>
     public List<WorkerStatusDto> Workers { get; init; } = new();
+
+    /// <summary>
+    ///     Server time (UTC) when the snapshot was produced.
+    /// </summary>
     public DateTime Now { get; init; }
 }
 
+/// <summary>
+///     Aggregated capacity stats for a specific label key (dashboard projection).
+/// </summary>
 public sealed record PoolEntryDto
 {
     public string Label { get; init; } = "";
@@ -34,6 +51,9 @@ public sealed record PoolEntryDto
     public bool MaintenanceActive { get; set; }
 }
 
+/// <summary>
+///     Status snapshot for a single worker node (dashboard projection).
+/// </summary>
 public sealed record WorkerStatusDto
 {
     public string Id { get; init; } = "";

@@ -18,6 +18,7 @@
 
 using System.Globalization;
 using System.Text.Json;
+using Agenix.PlaywrightGrid.Domain;
 using PlaywrightHub.Application.DTOs;
 using PlaywrightHub.Application.Ports;
 using StackExchange.Redis;
@@ -50,24 +51,24 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
 
         // Pools: derive from the union of available:* and inuse:* labels to avoid missing pools with zero available
         var labels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var rk in server.Keys(pattern: "available:*"))
+        foreach (var rk in server.Keys(pattern: RedisKeys.AvailablePrefix + "*"))
         {
             var availKey = rk.ToString();
-            var label = availKey["available:".Length..];
+            var label = availKey[RedisKeys.AvailablePrefix.Length..];
             labels.Add(label);
         }
 
-        foreach (var rk in server.Keys(pattern: "inuse:*"))
+        foreach (var rk in server.Keys(pattern: RedisKeys.InUsePrefix + "*"))
         {
             var inuseKey = rk.ToString();
-            var label = inuseKey["inuse:".Length..];
+            var label = inuseKey[RedisKeys.InUsePrefix.Length..];
             labels.Add(label);
         }
 
         foreach (var label in labels)
         {
-            var availKey = $"available:{label}";
-            var inuseKey = $"inuse:{label}";
+            var availKey = RedisKeys.Available(label);
+            var inuseKey = RedisKeys.InUse(label);
 
             var availLen = await db.ListLengthAsync(availKey);
             var inuseLen = await db.ListLengthAsync(inuseKey);
@@ -78,9 +79,9 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
 
             try
             {
-                if (db.KeyExists($"maintenance:{label}"))
+                if (db.KeyExists(RedisKeys.MaintenanceFlag(label)))
                 {
-                    var targetStr = db.StringGet($"maintenance:target:{label}");
+                    var targetStr = db.StringGet(RedisKeys.MaintenanceTarget(label));
                     long target = 0;
                     if (!targetStr.IsNullOrEmpty)
                     {
@@ -88,7 +89,7 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                     }
 
                     // Auto-clear maintenance if finished, but only after a short hold so UI can reflect maintenance state
-                    var sinceStr = db.StringGet($"maintenance:since:{label}");
+                    var sinceStr = db.StringGet(RedisKeys.MaintenanceSince(label));
                     DateTime.TryParse(sinceStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
                         out var since);
                     var hold = TimeSpan.FromSeconds(10);
@@ -99,21 +100,21 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                     {
                         try
                         {
-                            db.KeyDelete($"maintenance:{label}");
-                            db.KeyDelete($"maintenance:target:{label}");
-                            db.KeyDelete($"maintenance:snap_avail:{label}");
-                            db.KeyDelete($"maintenance:snap_inuse:{label}");
-                            db.KeyDelete($"maintenance:since:{label}");
+                            db.KeyDelete(RedisKeys.MaintenanceFlag(label));
+                            db.KeyDelete(RedisKeys.MaintenanceTarget(label));
+                            db.KeyDelete(RedisKeys.MaintenanceSnapAvail(label));
+                            db.KeyDelete(RedisKeys.MaintenanceSnapInuse(label));
+                            db.KeyDelete(RedisKeys.MaintenanceSince(label));
                         }
                         catch { }
                     }
 
                     // If still active, freeze counts to snapshot
-                    maintenanceActive = db.KeyExists($"maintenance:{label}");
+                    maintenanceActive = db.KeyExists(RedisKeys.MaintenanceFlag(label));
                     if (maintenanceActive)
                     {
-                        var sa = db.StringGet($"maintenance:snap_avail:{label}");
-                        var si = db.StringGet($"maintenance:snap_inuse:{label}");
+                        var sa = db.StringGet(RedisKeys.MaintenanceSnapAvail(label));
+                        var si = db.StringGet(RedisKeys.MaintenanceSnapInuse(label));
                         if (!sa.IsNullOrEmpty && int.TryParse(sa.ToString(), out var saInt))
                         {
                             displayAvail = saInt;
@@ -237,10 +238,10 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
             return null;
         }
 
-        foreach (var rk in server.Keys(pattern: "available:*"))
+        foreach (var rk in server.Keys(pattern: RedisKeys.AvailablePrefix + "*"))
         {
             var key = rk.ToString();
-            var label = key["available:".Length..];
+            var label = key[RedisKeys.AvailablePrefix.Length..];
             var items = db.ListRange(key);
             foreach (var item in items)
             {
@@ -262,10 +263,10 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
             }
         }
 
-        foreach (var rk in server.Keys(pattern: "inuse:*"))
+        foreach (var rk in server.Keys(pattern: RedisKeys.InUsePrefix + "*"))
         {
             var key = rk.ToString();
-            var label = key["inuse:".Length..];
+            var label = key[RedisKeys.InUsePrefix.Length..];
             var items = db.ListRange(key);
             foreach (var item in items)
             {

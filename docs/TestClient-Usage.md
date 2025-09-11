@@ -4,7 +4,7 @@ This guide shows how to use Agenix.PlaywrightGrid.HubClient from your .NET test 
 - Borrow a Playwright browser session for a specific label key
 - Attribute actions to a runId for grouping on the Dashboard
 - Optionally forward client-side API log lines to the Hub (runner → hub)
-- Return the session when done
+- Return is no longer required; the Hub auto-finishes/auto-returns sessions. ReturnAsync is deprecated and a no-op.
 
 If you’re looking for a deeper explanation of how the Dashboard assembles data and how protocol/API logs appear, see: docs/TestResultsDashboard-Approach.md
 
@@ -17,7 +17,7 @@ You can pass HUB_URL explicitly to HubClient or set it via environment variables
 
 
 ## Minimal NUnit example
-The example below borrows a browser, connects with Playwright, performs an action, optionally forwards a client-side API log line, and returns the session.
+The example below borrows a browser, connects with Playwright, performs an action, and optionally forwards a client-side API log line.
 
 ```csharp
 using Agenix.PlaywrightGrid.HubClient;
@@ -59,7 +59,7 @@ public class ExampleSuite
         {
             await ctx.CloseAsync();
             await browser.CloseAsync();
-            await client.ReturnAsync(labelKey, browserId, runId);
+            // No explicit return needed; the Hub auto-finishes/auto-returns this session.
         }
     }
 }
@@ -80,7 +80,7 @@ Notes
 
 
 ## xUnit/MSTest sketch
-The same pattern applies: create a runId for your execution, borrow in test setup (or per test), perform actions, and ReturnAsync in teardown.
+The same pattern applies: create a runId for your execution, borrow in test setup (or per test), perform actions, and simply close the browser/context; the Hub will auto-finish/auto-return the session.
 
 
 ## Forwarding your own client-side logs

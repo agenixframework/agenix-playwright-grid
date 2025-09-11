@@ -56,12 +56,12 @@ internal sealed class SignalRClientService(
                 var closedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 Task ClosedHandler(Exception? ex)
-            {
-                var msg = ex?.Message;
-                logger.LogWarning(ex, "SignalR connection closed.");
-                closedTcs.TrySetResult(true);
-                return Task.CompletedTask;
-            }
+                {
+                    var msg = ex?.Message;
+                    logger.LogWarning(ex, "SignalR connection closed.");
+                    closedTcs.TrySetResult(true);
+                    return Task.CompletedTask;
+                }
 
                 conn.Closed += ClosedHandler;
                 try

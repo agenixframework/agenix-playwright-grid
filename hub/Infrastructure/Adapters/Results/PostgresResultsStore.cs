@@ -355,4 +355,48 @@ ON CONFLICT (run_id, test_id) DO UPDATE SET
         try { return JsonSerializer.Deserialize<T>(json, JsonOpts); }
         catch { return default; }
     }
+
+    public async Task<bool> DeleteRunAsync(string runId)
+    {
+        await EnsureCreatedAsync();
+        await using var conn = new NpgsqlConnection(_connString);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        try
+        {
+            // Delete child rows first
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM tests WHERE run_id = @id";
+                cmd.Parameters.AddWithValue("@id", runId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM commands WHERE run_id = @id";
+                cmd.Parameters.AddWithValue("@id", runId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            int affected;
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM runs WHERE run_id = @id";
+                cmd.Parameters.AddWithValue("@id", runId);
+                affected = await cmd.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+            return affected > 0;
+        }
+        catch
+        {
+            try { await tx.RollbackAsync(); } catch { }
+            return false;
+        }
+    }
 }

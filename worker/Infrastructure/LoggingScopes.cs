@@ -20,11 +20,12 @@ namespace WorkerService.Infrastructure;
 
 internal static class LoggingScopes
 {
-    public static IDisposable Begin(ILogger logger, string? runId = null, string? browserId = null)
+    public static IDisposable Begin(ILogger logger, string? runId = null, string? browserId = null, string? runName = null)
     {
-        var dict = new Dictionary<string, object?>(2);
+        var dict = new Dictionary<string, object?>(3);
         if (!string.IsNullOrWhiteSpace(runId)) dict["runId"] = runId;
         if (!string.IsNullOrWhiteSpace(browserId)) dict["browserId"] = browserId;
+        if (!string.IsNullOrWhiteSpace(runName)) dict["runName"] = runName;
         if (dict.Count == 0)
         {
             return NullScope.Instance;

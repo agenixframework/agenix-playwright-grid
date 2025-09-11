@@ -70,6 +70,12 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsSL http://127.0.0.1:5000/health || exit 1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   worker1:
     build:
@@ -153,7 +159,8 @@ services:
       - PUBLIC_WS_HOST=127.0.0.1
       - PUBLIC_WS_PORT=5202
       - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
-      - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb
+      - FIREFOX_ARGS=--headless
+      - FIREFOX_PREFS={"network.dns.disablePrefetch":true,"browser.cache.disk.enable":false}
     depends_on:
       redis:
         condition: service_healthy

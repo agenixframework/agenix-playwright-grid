@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Agenix.PlaywrightGrid.HubClient.Tests</AssemblyName>
+    <RootNamespace>Agenix.PlaywrightGrid.HubClient.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Agenix.PlaywrightGrid.HubClient/Agenix.PlaywrightGrid.HubClient.csproj" />
+  </ItemGroup>
+</Project>

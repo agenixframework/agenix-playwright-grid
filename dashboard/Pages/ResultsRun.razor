@@ -7,9 +7,10 @@
 @inject IConfiguration Config
 @inject IJSRuntime JS
 @inject ILogger<ResultsRun> Logger
+@inject DashboardFeatureFlags Flags
 
 <div class="d-flex align-items-center justify-content-between my-3">
-    <h3 class="mb-0">Run @Short(runId)</h3>
+    <h3 class="mb-0">Run @(!string.IsNullOrWhiteSpace(_run?.RunName) ? _run!.RunName : Short(runId))</h3>
     <a href="/results" class="btn btn-sm btn-outline-secondary" title="Back to Runs">&larr; Back to Runs</a>
 </div>
 
@@ -30,7 +31,7 @@ else
             <div class="d-flex justify-content-between">
                 <div>
                     <div><span class="text-muted">Status:</span> <span
-                            class="badge @StatusBadgeClass(_run.Status)">@_run.Status</span></div>
+                            class="badge @StatusBadgeClass(_run.Status)">@DisplayStatus(_run.Status)</span></div>
                     <div class="small text-muted">App: @_run.App · Browser: @_run.Browser · Env: @_run.Env</div>
                     <div class="small text-muted">Region/OS: @(_run.Region ?? "-") / @GetDisplayOS()</div>
                 </div>
@@ -181,7 +182,10 @@ else
     </div>
 }
 
+<ConfirmDialog @ref="Confirm" />
+
 @code {
+    private ConfirmDialog? Confirm;
     [Parameter] public string runId { get; set; } = string.Empty;
 
     private ResultRunSummaryDto? _run;
@@ -670,7 +674,9 @@ else
         var s = status?.Trim().ToLowerInvariant() ?? "";
         switch (s)
         {
-            case "passed": return "bg-success";
+            case "passed":
+            case "finished":
+                return "bg-success";
             case "failed": return "bg-danger";
             case "running":
             case "inprogress": return "bg-warning text-dark";
@@ -679,6 +685,12 @@ else
             case "autostopped": return "bg-dark";
             default: return "bg-light text-dark";
         }
+    }
+
+    private static string DisplayStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return "-";
+        return string.Equals(status, "Passed", StringComparison.OrdinalIgnoreCase) ? "Finished" : status!;
     }
 
     private bool _stopping = false;
@@ -692,6 +704,9 @@ else
     {
         var id = _run?.RunId;
         if (string.IsNullOrWhiteSpace(id)) return;
+        // Confirm intent
+        var ok = Confirm != null ? await Confirm.Show($"Mark run {Short(id)} as Stopped and release any borrowed sessions?", "Confirm Action", "Yes", "No") : await JS.InvokeAsync<bool>("confirm", $"Mark run {Short(id)} as Stopped and release any borrowed sessions?");
+        if (!ok) return;
         if (_stopping) return;
         _stopping = true;
         using var __scope = Logger.BeginScope(new Dictionary<string, object> { ["runId"] = id! });

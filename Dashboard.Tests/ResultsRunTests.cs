@@ -48,6 +48,7 @@ public class ResultsRunTests
         _ctx.JSInterop.Mode = JSRuntimeMode.Strict;
         _ctx.Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         _ctx.Services.AddSingleton<IHttpClientFactory>(new FakeHttpClientFactory(new NotFoundHandler()));
+        _ctx.Services.AddSingleton(new DashboardFeatureFlags());
     }
 
     [TearDown]

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pg.dashboard.name" . }}
+  labels:
+    {{- include "pg.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.Dashboard.service.type }}
+  selector:
+    app: {{ include "pg.dashboard.name" . }}
+  ports:
+    - name: http
+      port: {{ .Values.Dashboard.service.port }}
+      targetPort: http
