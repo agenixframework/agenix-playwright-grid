@@ -61,6 +61,21 @@ public sealed class WorkerOptions
     public int WebSocketPingIntervalSeconds { get; init; } = 15;
 
     /// <summary>
+    ///     Enable per-message compression (permessage-deflate) for the public WebSocket endpoint exposed by the Worker.
+    ///     Controlled by WS_COMPRESSION with values: on|off|auto. When set to auto (default), compression is enabled
+    ///     when the configured WS_MAX_MESSAGE_BYTES is greater than or equal to WS_COMPRESSION_MIN_BYTES (default 1024).
+    ///     Note: Compression is negotiated at connection level; thresholds are used as a heuristic at connect time.
+    /// </summary>
+    public bool WebSocketCompressionEnabled { get; init; } = true;
+
+    /// <summary>
+    ///     Minimum message size in bytes used by the 'auto' heuristic for WS_COMPRESSION. Messages smaller than this
+    ///     threshold typically do not benefit from compression relative to CPU cost. Controlled by WS_COMPRESSION_MIN_BYTES;
+    ///     clamped to 0..1_048_576. Default 1024 (1 KiB).
+    /// </summary>
+    public int WebSocketCompressionMinBytes { get; init; } = 1024;
+
+    /// <summary>
     ///     Capacity of the bounded channel used to buffer Playwright protocol log messages forwarded to the Hub.
     ///     Controlled by WS_LOG_CHANNEL_CAPACITY; clamped to 16 .. 8192. Default 256.
     /// </summary>
@@ -154,6 +169,52 @@ public sealed class WorkerOptions
     ///     Parsed pool configuration mapping label keys to desired capacity counts.
     /// </summary>
     public ConcurrentDictionary<string, int> PoolConfig { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     Enable periodic disk/inode monitoring and cleanup sweeps. Controlled by DISK_MONITOR_ENABLED (1/0). Default true.
+    /// </summary>
+    public bool DiskMonitorEnabled { get; init; } = true;
+
+    /// <summary>
+    ///     Interval between disk/inode checks in seconds. Controlled by DISK_MONITOR_INTERVAL_SECONDS; clamped 10..3600. Default 60.
+    /// </summary>
+    public int DiskMonitorIntervalSeconds { get; init; } = 60;
+
+    /// <summary>
+    ///     Disk usage high watermark percent (0..100). When reached, cleanup is attempted. Controlled by DISK_USAGE_HIGH_PCT. Default 85.
+    /// </summary>
+    public int DiskUsageHighWatermarkPercent { get; init; } = 85;
+
+    /// <summary>
+    ///     Disk usage critical watermark percent (0..100). When reached, stronger alerts are logged. Controlled by DISK_USAGE_CRITICAL_PCT. Default 95.
+    /// </summary>
+    public int DiskUsageCriticalPercent { get; init; } = 95;
+
+    /// <summary>
+    ///     Inode usage high watermark percent (0..100). Controlled by INODE_USAGE_HIGH_PCT. Default 85.
+    /// </summary>
+    public int InodeUsageHighWatermarkPercent { get; init; } = 85;
+
+    /// <summary>
+    ///     Inode usage critical watermark percent (0..100). Controlled by INODE_USAGE_CRITICAL_PCT. Default 95.
+    /// </summary>
+    public int InodeUsageCriticalPercent { get; init; } = 95;
+
+    /// <summary>
+    ///     Semi-colon/comma/newline-separated list of directories to target for cleanup. Controlled by CLEANUP_TARGET_DIRS.
+    ///     Defaults to a safe temp location under the OS temp path ("pw-traces" subdir). Create it in your compose if needed.
+    /// </summary>
+    public string CleanupTargetDirs { get; init; } = "";
+
+    /// <summary>
+    ///     Minimum file age in minutes before eligible for deletion. Controlled by CLEANUP_MIN_FILE_AGE_MINUTES; clamped 1..10080 (7 days). Default 60.
+    /// </summary>
+    public int CleanupMinFileAgeMinutes { get; init; } = 60;
+
+    /// <summary>
+    ///     Maximum bytes to delete per sweep expressed in MB. Controlled by CLEANUP_MAX_DELETE_MB_PER_SWEEP; clamped 1..102400. Default 1024 (1 GiB).
+    /// </summary>
+    public int CleanupMaxDeleteMbPerSweep { get; init; } = 1024;
 
     /// <summary>
     ///     Constructs WorkerOptions by parsing environment variables and applying defaults and clamping rules.
@@ -300,6 +361,37 @@ public sealed class WorkerOptions
             pingSeconds = Math.Min(300, Math.Max(5, psec));
         }
 
+        // WS compression toggle with heuristic threshold
+        var compEnv = (Environment.GetEnvironmentVariable("WS_COMPRESSION") ?? "auto").Trim().ToLowerInvariant();
+        var compMinEnv = Environment.GetEnvironmentVariable("WS_COMPRESSION_MIN_BYTES");
+        var compMin = 1024;
+        if (!string.IsNullOrWhiteSpace(compMinEnv) && int.TryParse(compMinEnv.Trim(), out var cmin))
+        {
+            compMin = Math.Min(16 * 1024 * 1024, Math.Max(0, cmin));
+        }
+        bool compEnabled;
+        switch (compEnv)
+        {
+            case "on":
+            case "true":
+            case "1":
+                compEnabled = true;
+                break;
+            case "off":
+            case "false":
+            case "0":
+                compEnabled = false;
+                break;
+            case "auto":
+            case "":
+                compEnabled = maxMessageBytes >= compMin;
+                break;
+            default:
+                compEnabled = maxMessageBytes >= compMin;
+                errors.Add($"WS_COMPRESSION has invalid value '{compEnv}'. Allowed: on, off, auto.");
+                break;
+        }
+
         // WS log backpressure
         var logCapEnv = Environment.GetEnvironmentVariable("WS_LOG_CHANNEL_CAPACITY");
         var logCap = 256;
@@ -349,6 +441,19 @@ public sealed class WorkerOptions
         if (backoffMax < backoffMin) backoffMax = backoffMin;
         var backoffMult = clampd(double.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MULTIPLIER"), out var bmul) ? bmul : 2.0, 1.1, 5.0);
         var backoffReset = clamp(int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_FAILURE_RESET_SECONDS"), out var brst) ? brst : 60, 10, 600);
+
+        // Disk/inode monitor settings
+        var diskMonEnabled = !string.Equals(Environment.GetEnvironmentVariable("DISK_MONITOR_ENABLED"), "0", StringComparison.OrdinalIgnoreCase);
+        var diskMonInterval = clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_MONITOR_INTERVAL_SECONDS"), out var di) ? di : 60, 10, 3600);
+        var diskHigh = clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_USAGE_HIGH_PCT"), out var dh) ? dh : 85, 0, 100);
+        var diskCrit = clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_USAGE_CRITICAL_PCT"), out var dc) ? dc : 95, 0, 100);
+        if (diskCrit < diskHigh) diskCrit = Math.Min(100, diskHigh);
+        var inodeHigh = clamp(int.TryParse(Environment.GetEnvironmentVariable("INODE_USAGE_HIGH_PCT"), out var ih) ? ih : 85, 0, 100);
+        var inodeCrit = clamp(int.TryParse(Environment.GetEnvironmentVariable("INODE_USAGE_CRITICAL_PCT"), out var ic) ? ic : 95, 0, 100);
+        if (inodeCrit < inodeHigh) inodeCrit = Math.Min(100, inodeHigh);
+        var cleanupDirs = Environment.GetEnvironmentVariable("CLEANUP_TARGET_DIRS") ?? "";
+        var minAgeMin = clamp(int.TryParse(Environment.GetEnvironmentVariable("CLEANUP_MIN_FILE_AGE_MINUTES"), out var ma) ? ma : 60, 1, 10080);
+        var maxDeleteMb = clamp(int.TryParse(Environment.GetEnvironmentVariable("CLEANUP_MAX_DELETE_MB_PER_SWEEP"), out var md) ? md : 1024, 1, 102400);
 
         // Critical validations
         var hubUrlEnv = Environment.GetEnvironmentVariable("HUB_URL") ?? "http://hub:5000";
@@ -410,12 +515,23 @@ public sealed class WorkerOptions
             WebSocketMaxMessageBytes = maxMessageBytes,
             WebSocketIdleTimeoutSeconds = idleSeconds,
             WebSocketPingIntervalSeconds = pingSeconds,
+            WebSocketCompressionEnabled = compEnabled,
+            WebSocketCompressionMinBytes = compMin,
             WebSocketLogChannelCapacity = logCap,
             WebSocketLogDropPolicy = logPolicy,
             WebSocketProxyChannelCapacity = proxyCap,
             WebSocketProxyDropPolicy = proxyPolicy,
             BorrowIdleTimeoutSeconds = borrowIdleSeconds,
-            SidecarBackoff = new BackoffSettings(backoffMin, backoffMax, backoffMult, backoffReset)
+            SidecarBackoff = new BackoffSettings(backoffMin, backoffMax, backoffMult, backoffReset),
+            DiskMonitorEnabled = diskMonEnabled,
+            DiskMonitorIntervalSeconds = diskMonInterval,
+            DiskUsageHighWatermarkPercent = diskHigh,
+            DiskUsageCriticalPercent = diskCrit,
+            InodeUsageHighWatermarkPercent = inodeHigh,
+            InodeUsageCriticalPercent = inodeCrit,
+            CleanupTargetDirs = cleanupDirs,
+            CleanupMinFileAgeMinutes = minAgeMin,
+            CleanupMaxDeleteMbPerSweep = maxDeleteMb
         };
     }
 

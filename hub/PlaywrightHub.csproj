@@ -21,4 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj"/>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Infrastructure/Adapters/Results/Migrations/*.sql" />
+  </ItemGroup>
 </Project>

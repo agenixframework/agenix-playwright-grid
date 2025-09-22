@@ -315,3 +315,29 @@ Notes
 - To scale workers, either duplicate worker sections/ports in docker-compose.yml or use: docker compose up -d --scale
   worker1=2 (when using a generalized worker service). In this repo workers are declared as worker1/2/3; adjust
   POOL_CONFIG and ports accordingly.
+
+
+## Safe sidecar upgrade – who calls it and how
+
+There are two supported ways to trigger the safe sidecar upgrade flow (graceful drain + restart) added to Workers.
+
+- Recommended (for Dashboard/CI/CD): call the Hub admin endpoint, which fans out a Redis trigger that each target Worker reacts to. This avoids exposing per‑Worker secrets to the UI.
+  - POST http://<hub-host>:5000/admin/nodes/{nodeId}/sidecar/upgrade
+    - Auth: x-hub-secret: <HUB_RUNNER_SECRET>
+    - nodeId: a specific node id (e.g., worker1) or the literal all to trigger every registered node.
+    - Example:
+      - curl -s -X POST http://127.0.0.1:5100/admin/nodes/all/sidecar/upgrade -H 'x-hub-secret: runner-secret'
+  - What happens:
+    - Hub sets a short‑lived key node_upgrade:{nodeId} in Redis for each target.
+    - Each Worker watches for its own node_upgrade:{NodeId} and, when seen, performs the drain → recycle idle slots → wait (up to WORKER_DRAIN_TIMEOUT_SECONDS) → force‑kill if needed → warm pools sequence, then clears the key.
+
+- Direct (ops-only, when you can reach the Worker): call the Worker admin endpoint per node.
+  - POST http://<worker-host>:5000/admin/sidecar/upgrade
+    - Auth: x-node-secret: <NODE_NODE_SECRET>
+  - Example:
+    - curl -s -X POST http://127.0.0.1:5200/admin/sidecar/upgrade -H 'x-node-secret: node-node-secret'
+
+Notes
+- The flow withdraws this node’s availability from Hub first so no new sessions are assigned while it drains.
+- Active sessions are given up to WORKER_DRAIN_TIMEOUT_SECONDS (default 30s) to complete; after that, sidecars are force‑restarted.
+- This is designed to be invoked by the Dashboard (future button) or CI/CD pipelines via the Hub endpoint; direct Worker calls are intended for operators only.

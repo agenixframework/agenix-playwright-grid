@@ -79,10 +79,16 @@ WebSocket limits and backpressure:
 - WS_MAX_MESSAGE_BYTES: Max message size (default 2,097,152; clamp 8 KiB..16 MiB)
 - WS_IDLE_TIMEOUT_SECONDS: Idle timeout (default 60; clamp 5..600)
 - WS_PING_INTERVAL_SECONDS: Keepalive ping interval (default 15; clamp 5..300)
+- WS_COMPRESSION: on | off | auto (default auto). Enables per-message compression (permessage-deflate) for the public WS endpoint. When 'auto', compression is enabled when WS_MAX_MESSAGE_BYTES >= WS_COMPRESSION_MIN_BYTES.
+- WS_COMPRESSION_MIN_BYTES: Threshold in bytes for the 'auto' heuristic (default 1024; clamp 0..16,777,216). Use higher values to reduce CPU on small-message workloads.
 - WS_LOG_CHANNEL_CAPACITY: Capacity for async log forwarding channel (default 256; clamp 16..8192)
 - WS_LOG_DROP_POLICY: DropNewest (default) or DropOldest when log channel is full
 - WS_PROXY_CHANNEL_CAPACITY: Capacity for WS proxy frame channels (default 1024; clamp 32..65536)
 - WS_PROXY_DROP_POLICY: DropNewest (default) or DropOldest for proxy channels
+
+Notes on compression:
+- Compression is negotiated at the connection level and applies to all messages; the 'auto' mode uses a simple heuristic at connect-time and does not toggle mid-connection.
+- Upstream (worker → sidecar) WebSocket remains uncompressed by default to avoid double compression on a typically local link.
 
 Restart/backoff for sidecar replacement:
 - SIDECAR_BACKOFF_MIN_SECONDS: Minimum delay (default 1; clamp 1..120)

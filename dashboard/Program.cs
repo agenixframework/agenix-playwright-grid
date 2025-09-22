@@ -17,6 +17,7 @@
 #endregion
 
 using System.Reflection;
+using System.Text.Json;
 using Dashboard;
 using Dashboard.Application.Ports;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -32,6 +33,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Reduce noisy framework info logs in Dashboard (e.g., /health pipeline messages)
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+// Reduce noisy HttpClient handler INFO logs (e.g., Received HTTP response headers ... - 200)
+// Apply a coarse filter for all HttpClient logs and a specific override for our named client "hub".
+builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http.HttpClient.hub", LogLevel.Warning);
+
 // Apply environment-driven log levels (global + per-category overrides)
 LoggingConfigurator.ApplyFromEnvironment(builder.Logging, builder.Configuration);
 
@@ -173,6 +179,55 @@ app.UseStaticFiles();
 // Optional simple health endpoint
 app.MapGet("/health", () => Results.Ok(new { ok = true }));
 
+// Startup diagnostics dump (effective dashboard config)
+try
+{
+    static string GetInformationalVersion()
+    {
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            var aiv = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+            return aiv?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? string.Empty;
+        }
+        catch { return string.Empty; }
+    }
+    static string TruncVer(string? v)
+    {
+        const int max = 15; // "1.0.1-preview.3".Length
+        if (string.IsNullOrEmpty(v)) return v ?? string.Empty;
+        return v!.Length <= max ? v : v.Substring(0, max);
+    }
+
+    var flags = app.Services.GetRequiredService<DashboardFeatureFlags>();
+    var hubUrl = app.Configuration[hubSignalRConfigKey] ?? "http://hub:5000/ws";
+
+    var diag = new
+    {
+        Version = TruncVer(GetInformationalVersion()),
+        HubSignalR = hubUrl,
+        OpenTelemetry = new
+        {
+            EnableOtlp = enableOtlp,
+            EnablePrometheusOtel = enablePromOtel,
+            OtlpEndpoint = otlpEndpoint,
+            OtlpProtocol = otlpProtocol
+        },
+        Features = new
+        {
+            flags.FiltersEnabled,
+            flags.VirtualizationEnabled,
+            flags.LiveFeedEnabled
+        }
+    };
+
+    var json = JsonSerializer.Serialize(diag, new JsonSerializerOptions { WriteIndented = true });
+    app.Logger.LogInformation("[dashboard] Startup diagnostics:\n{json}", json);
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "[dashboard] Startup diagnostics failed");
+}
 
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");

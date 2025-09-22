@@ -1,4 +1,4 @@
-# Playwright Grid – Improvement Tasks Checklist
+Playwright…≥# Playwright Grid – Improvement Tasks Checklist
 
 Generated: 2025-09-11 11:30 local time
 
@@ -77,7 +77,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 75. [x] Add guardrails for Redis key naming to avoid collisions; centralize key patterns with tests.
 
 76. [ ] Integrate X11 virtual display (Xvfb) in Worker Docker image: install xvfb, xauth, fonts, and required deps; verify image size impact.
-77. [ ] Add WORKER_XVFB_ENABLED env flag (default: false in containers) and DISPLAY management (e.g., :99) in Worker startup.
+77. [ ] Add WORKER_XVFB_ENABLED env flag (default: true in containers) and DISPLAY management (e.g., :99) in Worker startup.
 78. [ ] Implement Worker sidecar/process supervisor to launch Xvfb on boot when enabled; ensure restarts/backoff and logs are captured.
 79. [ ] Provide option to use xvfb-run wrapper vs. dedicated Xvfb process; document pros/cons and choose default.
 80. [ ] Wire Playwright headful mode support via DISPLAY with environment propagation to browser processes; document headless/headful matrix.
@@ -101,9 +101,9 @@ The following is an ordered, actionable checklist covering architectural and cod
 97. [ ] Add Redis connection options for Sentinel/Cluster and TLS; document configuration and failover behavior.
 98. [ ] Provide idempotency keys for Borrow/Return endpoints to handle client retries without duplicate sessions.
 99. [ ] Enforce per-Worker max concurrent WebSocket connections (configurable); expose saturation metrics and headroom.
-100. [ ] Monitor disk/inode usage in Worker; auto-clean old browser caches/traces; emit alerts when thresholds breached.
-101. [ ] Add WS per-message compression toggle with thresholds to balance CPU vs bandwidth; document defaults.
-102. [ ] Implement safe sidecar upgrade flow (graceful drain + restart) coordinated with Hub to avoid session drops.
+100. [x] Monitor disk/inode usage in Worker; auto-clean old browser caches/traces; emit alerts when thresholds breached.
+101. [x] Add WS per-message compression toggle with thresholds to balance CPU vs bandwidth; document defaults.
+102. [x] Implement safe sidecar upgrade flow (graceful drain + restart) coordinated with Hub to avoid session drops.
 103. [ ] Improve Dashboard accessibility (WCAG 2.1 AA): keyboard navigation, landmarks, focus management, color contrast, ARIA labels.
 104. [ ] Gate Dashboard features by role (admin/viewer) based on OIDC group/claim mapping; hide admin endpoints from non-admins. (extends 36)
 105. [ ] Allow exporting run artifacts (HAR/trace/logs) and provide deep links to Playwright trace viewer; bulk download.
@@ -132,7 +132,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 128. [ ] Document and optionally support GPU acceleration (NVIDIA/Intel VA-API) for headful runs; provide example images and detection.
 129. [ ] Define Redis memory and eviction policies; emit alarms when approaching limits and document tuning guidance.
 130. [ ] Add pagination/filtering/count endpoints for admin APIs (nodes, sessions, runs) to aid tooling and Dashboard.
-131. [ ] Implement a durable store adapter (e.g., PostgreSQL) with schema migrations for long-term run/log retention; make pluggable.
+131. [x] Implement a durable store adapter (e.g., PostgreSQL) with schema migrations for long-term run/log retention; make pluggable.
 132. [ ] Minimize telemetry PII; add sampling/redaction policies across traces/logs/metrics with config-driven controls.
 133. [ ] Add scheduled synthetic monitors (GitHub Actions cron) to hit /ready and perform a basic borrow against a local grid.
 
@@ -153,3 +153,22 @@ The following is an ordered, actionable checklist covering architectural and cod
 149. [x] Documentation: update README, API docs (Swagger snippets), and dashboard guidance with examples using RunName; add examples in docs/cli.md if relevant.
 151. [x] Security/PII: clarify that RunName may contain descriptive text; recommend avoiding sensitive data; ensure redaction feature covers RunName if policy set.
 152. [x] Non-goals: do not add RunName to metric labels or Redis keys; keep it as data only to avoid cardinality/compat issues; document rationale.
+
+
+
+153. [ ] AI and LLM Enhancements (optional, privacy‑first, disabled by default)
+154. [ ] Dashboard: "Explain this run" – generate an LLM summary of a run (errors, likely root cause, next steps) from redacted command logs and timings; expose a button on Results/Run pages; include copy-to-issue. Guard with AI_ENABLE=1. 
+155. [ ] Failure triage auto‑classification – categorize failures (capacity, auth/secret, WS/connectivity, site under test, timeouts, browser crash) via prompt with few‑shot examples; store category in run metadata and make it filterable in Dashboard.
+156. [ ] Natural language search for results – convert free‑text queries (e.g., "Chromium UAT runs failing with timeouts yesterday") into structured filters (App/Browser/Env/Status/Time); provide offline synonym map fallback when AI is disabled.
+157. [ ] RAG assistant for docs/config – in‑Dashboard helper that answers "How do I …?" using a local index of project docs (README, tasks, compatibility matrix) and current effective config; prefer local retrieval; only call LLM when explicitly enabled.
+158. [ ] Capacity planning recommender – analyze historical label utilization and borrow queue metrics to suggest POOL_CONFIG adjustments and forecast demand by label; present as a report; use classical stats first; optionally add an LLM summary.
+159. [ ] Anomaly detection and incident notes – detect spikes in borrow latency, WS disconnects, node heartbeats via simple z‑score/EWMA; open an incident card in Dashboard with an optional "AI incident summary" containing probable causes and suggested checks.
+160. [ ] Flakiness detector – cluster intermittent failures across runs/labels; surface flaky labels/tests with confidence; add a weekly dashboard report.
+161. [ ] Auto‑remediation hints – when common misconfigurations are detected (PUBLIC_WS_HOST mismatch, secret mismatch, no capacity for label), show contextual remediation steps; optionally generate an issue template with prefilled diagnostics.
+162. [ ] AI provider plumbing – provider‑agnostic abstraction (OpenAI, Azure OpenAI, Ollama/local) behind an interface; env: AI_PROVIDER, AI_API_KEY/ENDPOINT, AI_MODEL, AI_ENABLE; strict timeouts, retries, and rate limits.
+163. [ ] Safety and cost controls – redact all secrets/PII before prompt; token accounting and per‑day budgets; allow per‑feature enablement; never log prompt/response content, only metadata; document data handling.
+164. [ ] Unit tests for prompt builders/mappers and NL→filter translation; add record/replay fixtures for CI (canned responses) so tests run without network/API keys.
+165. [ ] Telemetry for AI features – Prometheus counters/histograms for usage and latency; exemplar linkage to runId; dashboards for success/error rates; no high‑cardinality content.
+166. [ ] Security review – ensure no secrets (headers, query params) can leak into prompts; honor existing redaction settings; add a global kill switch (AI_ENABLE=0).
+167. [ ] Documentation – add docs/ai.md detailing enabling providers, example prompts, privacy expectations, and local dev via Ollama; link from README and Dashboard help.
+168. [ ] Non‑goals/guardrails – never make core flows depend on AI; AI features must fail‑safe, degrade gracefully, and offer offline paths (e.g., deterministic synonym search, stats‑only reports).

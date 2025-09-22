@@ -44,8 +44,31 @@ public sealed class WorkerServiceRunner
                 return string.IsNullOrEmpty(s) ? "" : "***";
             }
 
+            static string GetInformationalVersion(Type t)
+            {
+                try
+                {
+                    var asm = t.Assembly;
+                    var aiv = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(asm);
+                    return aiv?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? string.Empty;
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+            var version = GetInformationalVersion(typeof(WorkerServiceRunner));
+            static string TruncVer(string? v)
+            {
+                const int max = 15; // "1.0.1-preview.3".Length
+                if (string.IsNullOrEmpty(v)) return v ?? string.Empty;
+                return v!.Length <= max ? v : v.Substring(0, max);
+            }
+            var versionShort = TruncVer(version);
+
             var diag = new
             {
+                Version = versionShort,
                 options.HubUrl,
                 options.RedisUrl,
                 options.NodeId,
@@ -121,6 +144,7 @@ public sealed class WorkerServiceRunner
         var heartbeat = new HeartbeatService(options, db);
         var registrar = new NodeRegistrar(hub, options);
         var webHost = new WebServerHost(options, metrics, pool, db);
+        var diskMon = new DiskUsageMonitor(options);
 
         // Cancellation for background loops
         using var cts = new CancellationTokenSource();
@@ -133,6 +157,7 @@ public sealed class WorkerServiceRunner
         await pool.InitializeAsync();
         await registrar.RegisterAsync();
         _ = pool.ReconcileLoopAsync(cts.Token);
+        _ = diskMon.RunAsync(cts.Token);
 
         // Run web app (blocks until shutdown)
         await webHost.RunAsync(args, cts);

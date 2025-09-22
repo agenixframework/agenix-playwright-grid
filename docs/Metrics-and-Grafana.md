@@ -57,6 +57,21 @@ Worker metrics
 - worker_borrows_total{node,label}
   - Type: Counter
   - Description: Number of borrows served by a worker for a label.
+- worker_disk_bytes_total{node}, worker_disk_bytes_free{node}, worker_disk_bytes_used{node}
+  - Type: Gauge
+  - Description: Total/free/used disk bytes on the worker's target filesystem. Used is computed as total-free. Also see worker_disk_usage_ratio.
+- worker_disk_usage_ratio{node}
+  - Type: Gauge
+  - Description: Disk usage ratio in [0..1] for the worker's target filesystem.
+- worker_inodes_total{node}, worker_inodes_free{node}, worker_inodes_used{node} (Linux only)
+  - Type: Gauge
+  - Description: Total/free/used inodes measured via statvfs on Linux. Also see worker_inodes_usage_ratio.
+- worker_inodes_usage_ratio{node} (Linux only)
+  - Type: Gauge
+  - Description: Inode usage ratio in [0..1] on Linux systems.
+- worker_cleanup_deleted_files_total{node,reason}, worker_cleanup_deleted_bytes_total{node,reason}
+  - Type: Counter
+  - Description: Files and bytes deleted by the worker's pressure-driven cleanup sweeps (reason typically "pressure").
 
 Notes
 - Some metrics (e.g., hub_pool_utilization_ratio) are sampled/updated during borrow operations; values may remain static between borrows.
@@ -84,18 +99,23 @@ Worker capacity and distribution
 - Per-node distribution for a label: worker_pool_available{label="AppB:Chromium:UAT"}
 
 Grafana: provisioned dashboard and customization
-- This repo provisions a dashboard at provisioning/dashboards/playwright-grid-metrics.json and a Prometheus datasource at provisioning/datasources/prometheus.yaml.
-- After docker compose up, open Grafana at http://127.0.0.1:3000 and navigate to the "Playwright Grid" folder to find "Playwright Grid – Hub Metrics".
-- Panels included:
+- This repo provisions Prometheus datasource at provisioning/datasources/prometheus.yaml and two dashboards under provisioning/dashboards/:
+  - playwright-grid-metrics.json → "Playwright Grid – Hub Metrics"
+  - playwright-grid-worker-metrics.json → "Playwright Grid – Worker Metrics"
+- After docker compose up, open Grafana at http://127.0.0.1:3000 and navigate to the "Playwright Grid" folder to find both dashboards.
+- Hub Metrics panels include:
   - Borrow latency quantiles by label (P50/P90/P99)
   - Borrow outcomes (stacked) by label and outcome
   - Pool utilization ratio by label
   - Borrow queue length
   - Pool available count by label
   - Notes on node heartbeats (tracked in Redis)
+- Worker Metrics panels include:
+  - Disk usage ratio and bytes (used/total/free) by node
+  - Inode usage ratio and counts (used/total/free) by node (Linux)
+  - Templated by node to focus on specific workers
 - Customization:
-  - You can duplicate the dashboard and edit queries/thresholds.
-  - Add panels for worker metrics (capacity/available per node) if you need node-level visibility.
+  - You can duplicate the dashboards and edit queries/thresholds.
   - Import additional dashboards via Grafana UI or place JSON under provisioning/dashboards.
 
 Alerting examples
@@ -112,6 +132,16 @@ Define alert rules in Prometheus or via Grafana Alerting.
   - expr: hub_pool_utilization_ratio >= 0.9
   - for: 15m
   - labels: severity: warning
+- Worker disk usage high (>= 90% for 5m):
+  - expr: worker_disk_usage_ratio >= 0.9
+  - for: 5m
+  - labels: severity: warning
+- Worker inode usage high (>= 90% for 5m, Linux):
+  - expr: worker_inodes_usage_ratio >= 0.9
+  - for: 5m
+  - labels: severity: warning
+
+Note: Workers also emit log warnings/errors when disk/inode thresholds are breached. Tune via env: DISK_USAGE_HIGH_PCT, DISK_USAGE_CRITICAL_PCT, INODE_USAGE_HIGH_PCT, INODE_USAGE_CRITICAL_PCT.
 
 Troubleshooting
 - Prometheus shows no targets:

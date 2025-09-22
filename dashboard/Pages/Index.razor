@@ -87,21 +87,26 @@ else
                                               title="Borrowing paused; counts frozen">Maintenance</span>
                                     }
                                     <span class="badge bg-secondary">@p.Total total</span>
-                                    <button class="btn btn-sm btn-outline-warning ms-2"
-                                            disabled="@(IsRestarting(p.Label) || p.MaintenanceActive)"
-                                            title="@(p.MaintenanceActive ? "Pool is in maintenance; restart disabled" : "Recycle all pre-warmed browsers in this pool")"
-                                            @onclick="() => RestartPool(p.Label)">
-                                        @if (IsRestarting(p.Label))
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"
-                                                  aria-hidden="true"></span>
-                                            <span>Restarting…</span>
-                                        }
-                                        else
-                                        {
-                                            <span>Restart All</span>
-                                        }
-                                    </button>
+                                    <div class="dropdown ms-2">
+                                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Pool actions">
+                                            &#8942;
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li>
+                                                <button class="dropdown-item" disabled="@(p.MaintenanceActive || IsRestarting(p.Label))" @onclick="() => RestartPool(p.Label)">
+                                                    @if (IsRestarting(p.Label))
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                        <span>Restarting…</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>Restart All</span>
+                                                    }
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
                             @if (!string.IsNullOrWhiteSpace(p.BrowserVersion))
@@ -169,6 +174,7 @@ else
                     <th scope="col">Last seen</th>
                     <th scope="col">Playwright</th>
                     <th scope="col" class="text-end">Total browsers</th>
+                    <th scope="col" class="text-end">Actions</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -203,6 +209,28 @@ else
                             }
                         </td>
                         <td class="text-end">@w.TotalBrowsers</td>
+                        <td class="text-end">
+                            <div class="dropdown d-inline">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Worker actions">
+                                    &#8942;
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <button class="dropdown-item" disabled="@IsUpgrading(w.Id)" title="Graceful drain and restart sidecars on this worker" @onclick="() => UpgradeWorker(w.Id)">
+                                            @if (IsUpgrading(w.Id))
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                <span>Restarting…</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Restart</span>
+                                            }
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
                     </tr>
                 }
                 </tbody>
@@ -264,6 +292,31 @@ else
         finally
         {
             _restarting.Remove(labelKey);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private readonly HashSet<string> _upgrading = new(StringComparer.OrdinalIgnoreCase);
+    private bool IsUpgrading(string nodeId) => _upgrading.Contains(nodeId);
+    private async Task UpgradeWorker(string nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId)) return;
+        var ok = Confirm != null ? await Confirm.Show($"Restart sidecars on worker '{nodeId}'? Active sessions will drain up to the configured timeout, then restart.", "Confirm Restart", "Restart", "Cancel") : await JS.InvokeAsync<bool>("confirm", $"Restart sidecars on worker '{nodeId}'? Active sessions will drain up to the configured timeout, then restart.");
+        if (!ok) return;
+        if (!_upgrading.Add(nodeId)) return;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var client = HttpFactory.CreateClient("hub");
+            using var resp = await client.PostAsync($"/admin/nodes/{Uri.EscapeDataString(nodeId)}/sidecar/upgrade", new StringContent(""));
+        }
+        catch
+        {
+            // ignore errors for now; could surface toast notifications later
+        }
+        finally
+        {
+            _upgrading.Remove(nodeId);
             await InvokeAsync(StateHasChanged);
         }
     }
