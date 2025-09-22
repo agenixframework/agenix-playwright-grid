@@ -118,7 +118,7 @@ The following is an ordered, actionable checklist covering architectural and cod
 114. [ ] Benchmark critical paths (label matching, Redis operations) with BenchmarkDotNet; track regressions in CI.
 115. [ ] Profile Hub/Worker memory/CPU under load; reduce allocations and capture flamegraphs for hot paths.
 116. [ ] Add developer tooling: devcontainer setup, Makefile targets, pre-commit hooks (dotnet format, analyzers) and consistent .editorconfig.
-117. [ ] Optimize Dockerfiles with BuildKit cache mounts and better layer ordering; document cache strategy.
+117. [x] Optimize Dockerfiles with BuildKit cache mounts and better layer ordering; document cache strategy.
 118. [ ] Author a security threat model (STRIDE) and hardening guide; include SRE runbooks and incident response procedures.
 119. [ ] Automate diagram generation and publishing (Mermaid/PlantUML) as part of mkdocs; integrate with architecture docs (52).
 120. [ ] Validate IPv6 and proxy support end-to-end; document reverse proxy patterns and limitations.
