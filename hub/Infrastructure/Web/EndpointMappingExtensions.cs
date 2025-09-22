@@ -2518,6 +2518,72 @@ return nil
             });
         });
 
+        // Admin: orchestrate sidecar upgrade on one or all nodes via Redis trigger
+        app.MapPost("/admin/nodes/{nodeId}/sidecar/upgrade", async (HttpRequest req, string nodeId) =>
+        {
+            if (!CheckSecret(req, "x-hub-secret", hubRunnerSecret))
+            {
+                return Results.Unauthorized();
+            }
+
+            var remoteIp = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var targets = new List<string>();
+            try
+            {
+                if (string.Equals(nodeId, "all", StringComparison.OrdinalIgnoreCase))
+                {
+                    var all = await db.SetMembersAsync("nodes");
+                    foreach (var v in all)
+                    {
+                        var s = v.ToString();
+                        if (!string.IsNullOrWhiteSpace(s)) targets.Add(s);
+                    }
+                }
+                else
+                {
+                    targets.Add(nodeId);
+                }
+
+                var ttl = TimeSpan.FromMinutes(5);
+                var scheduled = 0;
+                foreach (var nid in targets.Distinct(StringComparer.Ordinal))
+                {
+                    try
+                    {
+                        await db.StringSetAsync(RedisKeys.NodeUpgrade(nid), "1", ttl);
+                        scheduled++;
+                    }
+                    catch { }
+                }
+
+                try
+                {
+                    await auditStore.AppendAsync(new AuditEntryDto
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        Category = "admin",
+                        Action = "node.sidecar.upgrade",
+                        Actor = "dashboard",
+                        RemoteIp = remoteIp,
+                        Details = new Dictionary<string, string>
+                        {
+                            ["requested"] = nodeId,
+                            ["scheduled"] = scheduled.ToString(),
+                            ["targets"] = string.Join(',', targets)
+                        }
+                    });
+                }
+                catch { }
+
+                return Results.Ok(new { scheduled = targets.Count, targets });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[admin] node sidecar upgrade trigger failed for {NodeId}", nodeId);
+                return Results.Problem("failed to schedule upgrade");
+            }
+        });
+
         // Test attribution from client: set current testId for a browserId
         app.MapPost("/results/browser/{browserId}/test", async (HttpRequest req, string browserId) =>
         {
@@ -2953,7 +3019,28 @@ return nil
             var reader = services.GetRequiredService<IPoolStateReader>();
             var state = await reader.GetStateAsync();
 
-            var ver = typeof(EndpointMappingExtensions).Assembly.GetName().Version?.ToString() ?? "";
+            static string GetInformationalVersion(Type t)
+            {
+                try
+                {
+                    var asm = t.Assembly;
+                    var aiv = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(asm);
+                    return aiv?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? string.Empty;
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+
+            var ver = GetInformationalVersion(typeof(EndpointMappingExtensions));
+            static string TruncVer(string? v)
+            {
+                const int max = 15; // "1.0.1-preview.3".Length
+                if (string.IsNullOrEmpty(v)) return v ?? string.Empty;
+                return v!.Length <= max ? v : v.Substring(0, max);
+            }
+            var verShort = TruncVer(ver);
 
             var dto = new HubDiagnosticsDto
             {
@@ -2965,7 +3052,7 @@ return nil
                     BorrowWildcards = enableWildcards,
                     NodeTimeoutSeconds = nodeTimeoutSeconds,
                     DashboardUrl = dashboardUrl,
-                    Version = ver
+                    Version = verShort
                 },
                 Workers = state.Workers,
                 Now = DateTime.UtcNow

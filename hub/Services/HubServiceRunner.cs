@@ -421,7 +421,27 @@ public static class HubServiceRunner
             var enableTrailingFallback = GetBoolWithEnvironmentOverride(cfg, "HUB_BORROW_TRAILING_FALLBACK", environmentName, true); // default true
             var enablePrefixExpand = GetBoolWithEnvironmentOverride(cfg, "HUB_BORROW_PREFIX_EXPAND", environmentName, true); // default true
             var enableWildcards = GetBoolWithEnvironmentOverride(cfg, "HUB_BORROW_WILDCARDS", environmentName, false); // default false
-            var ver = typeof(HubServiceRunner).Assembly.GetName().Version?.ToString() ?? string.Empty;
+            static string GetInformationalVersion(Type t)
+            {
+                try
+                {
+                    var asm = t.Assembly;
+                    var aiv = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(asm);
+                    return aiv?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? string.Empty;
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+            var ver = GetInformationalVersion(typeof(HubServiceRunner));
+            static string TruncVer(string? v)
+            {
+                const int max = 15; // "1.0.1-preview.3".Length
+                if (string.IsNullOrEmpty(v)) return v ?? string.Empty;
+                return v!.Length <= max ? v : v.Substring(0, max);
+            }
+            var verShort = TruncVer(ver);
 
             var reader = app.Services.GetRequiredService<IPoolStateReader>();
             var state = await reader.GetStateAsync();
@@ -436,7 +456,7 @@ public static class HubServiceRunner
                     BorrowWildcards = enableWildcards,
                     NodeTimeoutSeconds = nodeTimeoutSeconds,
                     DashboardUrl = dashboardUrl,
-                    Version = ver
+                    Version = verShort
                 },
                 Workers = state.Workers,
                 Now = DateTime.UtcNow

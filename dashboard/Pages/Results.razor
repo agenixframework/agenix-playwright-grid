@@ -178,20 +178,29 @@ else
                     <td>@(r.WorkerNodeId ?? "-")</td>
                     <td>@(string.Join(" / ", new[] { r.PlaywrightVersion, r.BrowserVersion }.Where(x => !string.IsNullOrWhiteSpace(x))))</td>
                     <td>
-                        @if (IsRunningStatus(r.Status))
-                        {
-                            <button class="btn btn-sm btn-outline-danger" disabled="@_stopping.Contains(r.RunId)"
-                                    @onclick="()=> StopRunAsync(r.RunId)">
-                                @(_stopping.Contains(r.RunId) ? "Stopping..." : "Mark Stopped & Release")
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Run actions">
+                                &#8942;
                             </button>
-                        }
-                        else
-                        {
-                            <button class="btn btn-sm btn-outline-danger" disabled="@_deleting.Contains(r.RunId)"
-                                    @onclick="()=> DeleteRunAsync(r.RunId)">
-                                @(_deleting.Contains(r.RunId) ? "Deleting..." : "Delete")
-                            </button>
-                        }
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                @if (IsRunningStatus(r.Status))
+                                {
+                                    <li>
+                                        <button class="dropdown-item text-danger" disabled="@_stopping.Contains(r.RunId)" @onclick="()=> StopRunAsync(r.RunId)">
+                                            @(_stopping.Contains(r.RunId) ? "Stopping..." : "Mark Stopped & Release")
+                                        </button>
+                                    </li>
+                                }
+                                else
+                                {
+                                    <li>
+                                        <button class="dropdown-item text-danger" disabled="@_deleting.Contains(r.RunId)" @onclick="()=> DeleteRunAsync(r.RunId)">
+                                            @(_deleting.Contains(r.RunId) ? "Deleting..." : "Delete")
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
                     </td>
                 </tr>
             }

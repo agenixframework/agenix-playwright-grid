@@ -1,0 +1,158 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Disk usage ratio by node",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "worker_disk_usage_ratio{node=~\"$node\"}",
+          "legendFormat": "{{node}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk bytes (used/total/free) by node",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes", "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "worker_disk_bytes_used{node=~\"$node\"}",
+          "legendFormat": "used {{node}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "B",
+          "expr": "worker_disk_bytes_free{node=~\"$node\"}",
+          "legendFormat": "free {{node}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "C",
+          "expr": "worker_disk_bytes_total{node=~\"$node\"}",
+          "legendFormat": "total {{node}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Inode usage ratio by node (Linux)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "worker_inodes_usage_ratio{node=~\"$node\"}",
+          "legendFormat": "{{node}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Inodes (used/total/free) by node (Linux)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "A",
+          "expr": "worker_inodes_used{node=~\"$node\"}",
+          "legendFormat": "used {{node}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "B",
+          "expr": "worker_inodes_free{node=~\"$node\"}",
+          "legendFormat": "free {{node}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "refId": "C",
+          "expr": "worker_inodes_total{node=~\"$node\"}",
+          "legendFormat": "total {{node}}"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["playwright", "grid", "worker"],
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "type": "query",
+        "hide": 0,
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "query": "label_values(worker_disk_usage_ratio, node)",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] }
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Playwright Grid – Worker Metrics",
+  "uid": "pw-grid-worker-metrics",
+  "version": 1,
+  "weekStart": ""
+}

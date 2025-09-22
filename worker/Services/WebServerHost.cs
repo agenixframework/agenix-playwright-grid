@@ -228,6 +228,98 @@ public sealed class WebServerHost
             return Results.Ok(respObj);
         });
 
+        // Admin: orchestrate a safe sidecar upgrade on this node (graceful drain + restart)
+        app.MapPost("/admin/sidecar/upgrade", async (HttpRequest req) =>
+        {
+            if (!req.Headers.TryGetValue("x-node-secret", out var s) || s.FirstOrDefault() != _options.NodeNodeSecret)
+            {
+                return Results.Unauthorized();
+            }
+
+            // Stop local direct borrows early
+            _acceptingBorrows = false;
+
+            var started = DateTime.UtcNow;
+            var removed = 0;
+            var scheduledRecycle = 0;
+
+            // 1) Withdraw local availability from Redis so Hub won't assign new sessions to this node
+            foreach (var labelKey in _options.PoolConfig.Keys)
+            {
+                var availKey = RedisKeys.Available(labelKey);
+                try
+                {
+                    var items = await _db.ListRangeAsync(availKey);
+                    foreach (var item in items)
+                    {
+                        var sItem = item.ToString();
+                        if (sItem.Contains($"\"nodeId\":\"{_options.NodeId}\"", StringComparison.Ordinal))
+                        {
+                            await _db.ListRemoveAsync(availKey, item);
+                            removed++;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // 2) Schedule recycle for local sidecars that are not actively serving a WS connection
+            foreach (var kv in _pool.Pools)
+            {
+                var map = kv.Value;
+                foreach (var bid in map.Keys)
+                {
+                    try
+                    {
+                        if (!_pool.HasActiveConnection(bid))
+                        {
+                            await _db.StringSetAsync(RedisKeys.Recycle(bid), "1", TimeSpan.FromMinutes(5));
+                            scheduledRecycle++;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            // 3) Drain active sessions up to a timeout
+            int drainSeconds;
+            try
+            {
+                drainSeconds = int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s2)
+                    ? Math.Max(0, s2) : 30;
+            }
+            catch { drainSeconds = 30; }
+
+            var until = DateTime.UtcNow.AddSeconds(drainSeconds);
+            try
+            {
+                while (DateTime.UtcNow < until)
+                {
+                    if (!_pool.HasAnyActiveConnections()) break;
+                    await Task.Delay(250);
+                }
+            }
+            catch { }
+
+            // 4) If still active after timeout, force-kill sidecars (as in shutdown path)
+            if (_pool.HasAnyActiveConnections())
+            {
+                try { _pool.KillAll(); } catch { }
+            }
+
+            // 5) Warm pools again (fresh sidecars; repopulate availability)
+            await _pool.InitializeAsync();
+
+            var elapsedMs = (int)(DateTime.UtcNow - started).TotalMilliseconds;
+            return Results.Ok(new
+            {
+                status = "ok",
+                removed,
+                scheduledRecycle,
+                elapsedMs
+            });
+        });
+
         app.MapPost("/return/{labelKey}", async (string labelKey, HttpRequest req) =>
         {
             if (!req.Headers.TryGetValue("x-node-secret", out var s) || s.FirstOrDefault() != _options.NodeNodeSecret)
@@ -436,7 +528,8 @@ public sealed class WebServerHost
                 return;
             }
 
-            using var downstream = await ctx.WebSockets.AcceptWebSocketAsync();
+            var wsAccept = new WebSocketAcceptContext { DangerousEnableCompression = _options.WebSocketCompressionEnabled };
+            using var downstream = await ctx.WebSockets.AcceptWebSocketAsync(wsAccept);
 
             // Mark active connection for this browserId to prevent mid-session recycle
             _pool.MarkConnectionStart(browserId);
@@ -773,6 +866,96 @@ public sealed class WebServerHost
                 }
             }
         });
+
+        // Background: watch for Hub-triggered node upgrade command
+        _ = Task.Run(async () =>
+        {
+            while (!appCts.IsCancellationRequested)
+            {
+                try
+                {
+                    var key = RedisKeys.NodeUpgrade(_options.NodeId);
+                    if (await _db.KeyExistsAsync(key))
+                    {
+                        try { await _db.KeyDeleteAsync(key); } catch { }
+
+                        // Stop local direct borrows early
+                        _acceptingBorrows = false;
+
+                        var removed = 0;
+                        var scheduledRecycle = 0;
+
+                        // Withdraw local availability
+                        foreach (var labelKey in _options.PoolConfig.Keys)
+                        {
+                            var availKey = RedisKeys.Available(labelKey);
+                            try
+                            {
+                                var items = await _db.ListRangeAsync(availKey);
+                                foreach (var item in items)
+                                {
+                                    var sItem = item.ToString();
+                                    if (sItem.Contains($"\"nodeId\":\"{_options.NodeId}\"", StringComparison.Ordinal))
+                                    {
+                                        await _db.ListRemoveAsync(availKey, item);
+                                        removed++;
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+
+                        // Schedule recycle for idle sidecars
+                        foreach (var kv in _pool.Pools)
+                        {
+                            var map = kv.Value;
+                            foreach (var bid in map.Keys)
+                            {
+                                try
+                                {
+                                    if (!_pool.HasActiveConnection(bid))
+                                    {
+                                        await _db.StringSetAsync(RedisKeys.Recycle(bid), "1", TimeSpan.FromMinutes(5));
+                                        scheduledRecycle++;
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+
+                        // Drain active sessions up to timeout
+                        int drainSeconds;
+                        try
+                        {
+                            drainSeconds = int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s2)
+                                ? Math.Max(0, s2) : 30;
+                        }
+                        catch { drainSeconds = 30; }
+
+                        var until = DateTime.UtcNow.AddSeconds(drainSeconds);
+                        try
+                        {
+                            while (DateTime.UtcNow < until)
+                            {
+                                if (!_pool.HasAnyActiveConnections()) break;
+                                await Task.Delay(250, appCts.Token);
+                            }
+                        }
+                        catch { }
+
+                        if (_pool.HasAnyActiveConnections())
+                        {
+                            try { _pool.KillAll(); } catch { }
+                        }
+
+                        await _pool.InitializeAsync();
+                    }
+                }
+                catch { }
+
+                try { await Task.Delay(1000, appCts.Token); } catch { }
+            }
+        }, appCts.Token);
 
         await app.RunAsync("http://0.0.0.0:5000");
     }

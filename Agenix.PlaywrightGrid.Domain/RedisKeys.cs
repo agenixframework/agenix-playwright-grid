@@ -33,6 +33,7 @@ public static class RedisKeys
     public const string MaintenancePrefix = "maintenance:";
     public const string NodePrefix = "node:";
     public const string NodeAlivePrefix = "node_alive:";
+    public const string NodeUpgradePrefix = "node_upgrade:";
     public const string BorrowTtlPrefix = "borrow_ttl:";
     public const string RecyclePrefix = "recycle:";
     // General guidance:
@@ -96,6 +97,7 @@ public static class RedisKeys
     // Node registry and liveness
     public static string Node(string nodeId) => $"node:{SanitizeId(nodeId, nameof(nodeId))}";
     public static string NodeAlive(string nodeId) => $"node_alive:{SanitizeId(nodeId, nameof(nodeId))}";
+    public static string NodeUpgrade(string nodeId) => $"node_upgrade:{SanitizeId(nodeId, nameof(nodeId))}";
 
     // Borrow/session TTL marker
     public static string BorrowTtl(string browserId) => $"borrow_ttl:{SanitizeId(browserId, nameof(browserId))}";
