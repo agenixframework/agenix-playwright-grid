@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Build stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
@@ -7,8 +8,8 @@ WORKDIR /src
 COPY . .
 # Restore and publish using robust path detection to support different build contexts
 WORKDIR /src
-RUN if [ -f "Dashboard.csproj" ]; then dotnet restore Dashboard.csproj; else dotnet restore dashboard/Dashboard.csproj; fi
-RUN if [ -f "Dashboard.csproj" ]; then dotnet publish Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false; else dotnet publish dashboard/Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false; fi
+RUN --mount=type=cache,id=nuget-dashboard,target=/root/.nuget/packages,sharing=locked if [ -f "Dashboard.csproj" ]; then dotnet restore Dashboard.csproj; else dotnet restore dashboard/Dashboard.csproj; fi
+RUN --mount=type=cache,id=nuget-dashboard,target=/root/.nuget/packages,sharing=locked if [ -f "Dashboard.csproj" ]; then dotnet publish Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false; else dotnet publish dashboard/Dashboard.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false; fi
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim AS final

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # ---------- Build stage ----------
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
@@ -6,8 +7,8 @@ WORKDIR /src
 COPY . .
 # Restore and publish using robust path detection to support different build contexts
 WORKDIR /src
-RUN if [ -f "WorkerService.csproj" ]; then dotnet restore WorkerService.csproj; else dotnet restore worker/WorkerService.csproj; fi
-RUN if [ -f "WorkerService.csproj" ]; then dotnet publish WorkerService.csproj -c Release -o /app/publish; else dotnet publish worker/WorkerService.csproj -c Release -o /app/publish; fi
+RUN --mount=type=cache,id=nuget-worker,target=/root/.nuget/packages,sharing=locked if [ -f "WorkerService.csproj" ]; then dotnet restore WorkerService.csproj; else dotnet restore worker/WorkerService.csproj; fi
+RUN --mount=type=cache,id=nuget-worker,target=/root/.nuget/packages,sharing=locked if [ -f "WorkerService.csproj" ]; then dotnet publish WorkerService.csproj -c Release -o /app/publish; else dotnet publish worker/WorkerService.csproj -c Release -o /app/publish; fi
 
 
 # ---------- Runtime stage ----------
@@ -36,10 +37,11 @@ RUN set -eux; \
 # Do this BEFORE copying the app so it caches unless the version changes
 ARG PLAYWRIGHT_VERSION=1.54.2
 ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
-RUN set -eux; \
+RUN --mount=type=cache,id=npm-cache,target=/root/.npm \
+    set -eux; \
     npm init -y; \
     npm i --no-save "playwright@${PLAYWRIGHT_VERSION}"; \
-    npx playwright install --with-deps
+    npx playwright install --with-deps chromium chromium-headless-shell firefox webkit
 
 # Bring in published app
 COPY --from=build /app/publish .
