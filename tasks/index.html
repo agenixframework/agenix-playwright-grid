@@ -1,0 +1,987 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://agenixframework.github.io/agenix-playwright-grid/tasks/">
+      
+      
+        <link rel="prev" href="../API-Reference/">
+      
+      
+      
+      <link rel="icon" href="../assets/logos/agenix-favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+    
+    
+      
+        <title>Improvement Tasks - Playwright Grid</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.e53b48f4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/styles.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Playwright Grid" class="md-header__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Playwright Grid
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Improvement Tasks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Playwright Grid" class="md-nav__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    Playwright Grid
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../docs-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview & Quick Start
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configuration Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-sidecar-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Worker Sidecar Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TestClient-Usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Test Client Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    UI User Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Label-Matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Label Matching
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Capacity-Queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Capacity Queue
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Borrow-TTL-and-Session-Persistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Borrow TTL & Session Persistence
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Node-Liveness-and-Sweeper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Node Liveness and Sweeper
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Graceful-Shutdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Graceful Shutdown
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PlaywrightDotNet-pw-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Playwright .NET pw:api
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../presentation-why-playwright-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presentation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Metrics-and-Grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Metrics and Grafana
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Autoscaling Hints (HPA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compose-autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Docker Compose scaling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Session Distribution
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results_store_backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results Store Backends
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../run_cleanup_service_configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run Cleanup Service Configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Compatibility-Matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Compatibility Matrix
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API-Reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Improvement Tasks
+    
+  </span>
+  
+
+      </a>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+  <h1>Improvement Tasks</h1>
+
+<p>Playwright…≥# Playwright Grid – Improvement Tasks Checklist</p>
+<p>Generated: 2025-09-11 11:30 local time</p>
+<p>The following is an ordered, actionable checklist covering architectural and code-level improvements across Hub, Worker, Dashboard, HubClient, tests, and containerization. Check items as they are completed.</p>
+<ol>
+<li>[X] Establish a shared Domain model package for LabelKey parsing/validation to ensure consistent rules across Hub, Worker, Dashboard, and tests.</li>
+<li>[X] Introduce a central Label Matching strategy service with unit tests (exact → trailing fallback → prefix expansion → optional wildcards) and pluggable settings.</li>
+<li>[X] Add input validation and normalization for label keys (trim, case policy, segment count min/max, forbidden characters) with clear 4xx errors.</li>
+<li>[X] Define API versioning (e.g., /api/v1) for Hub endpoints and reserve room for breaking changes.</li>
+<li>[X] Introduce ProblemDetails-based error responses in Hub for consistent 4xx/5xx payloads.</li>
+<li>[X] Add OpenAPI/Swagger to Hub with minimal surface (security header documented) and examples for borrow/return.</li>
+<li>[X] Implement request correlation (Correlation-Id header or generated) propagated as runId/browserId across Hub, Worker, and Dashboard logs.</li>
+<li>[X] Add distributed tracing via OpenTelemetry (traces, metrics, logs) with exporters configurable (OTLP/Prometheus).</li>
+<li>[X] Expand Prometheus metrics: borrow latency histogram, borrow outcomes (success/timeout/denied), pool utilization per label, queue length, node heartbeats.</li>
+<li>[X] Introduce a capacity queue in Hub for pending borrows with timeout and fairness (per-label and per-run caps) to reduce thundering herd.</li>
+<li>[X] Implement node heartbeat/liveness tracker with configurable timeout; evict stale nodes and reclaim/expire orphaned sessions.</li>
+<li>[X] Add borrow TTL and auto-return on timeout; persist session state to Redis to survive Hub restarts.</li>
+<li>[X] Harden Redis usage: resilience (timeouts, retries with jitter, circuit breaker), connection settings, and health checks integrated into readiness.</li>
+<li>[ ] Support secret rotation: accept multiple HUB_RUNNER_SECRET/HUB_NODE_SECRET values (comma-separated) and log deprecation windows.</li>
+<li>[ ] Redact secrets and PII in logs; ensure headers and sensitive values never appear in structured logs.</li>
+<li>[ ] Add rate limiting (per IP and per runner id) on Hub borrow/return to protect from abuse; return 429 with Retry-After.</li>
+<li>[ ] Add optional IP allowlist or token-based auth (e.g., PAT via header) for Hub API alongside shared secrets.</li>
+<li>[X] Implement graceful shutdown: Hub stops accepting new borrows; Worker drains sessions and returns cleanly on SIGTERM.</li>
+<li>[X] Enforce maximum WebSocket message size and idle timeouts in Worker; send periodic pings and close dead connections.</li>
+<li>[X] Add backpressure controls in Worker WS proxy (bounded channels, drop policy, and metrics for drops).</li>
+<li>[X] Strengthen Worker sidecar management: sidecar health endpoint, restart/backoff strategy, and clear error surfacing to Hub.</li>
+<li>[X] Make PLAYWRIGHT_VERSION reporting authoritative: validate against sidecar; surface mismatch in Dashboard and metrics.</li>
+<li>[X] Improve WorkerOptions.FromEnvironment() with strong typing, defaults, range checks, and detailed validation errors.</li>
+<li>[X] Replace ad-hoc HttpClient usage in HubClient with IHttpClientFactory and resilience (timeouts, retries, transient error policy).</li>
+<li>[X] Add CancellationToken overloads to HubClient methods (BorrowAsync, ReturnAsync, SendApiLogAsync).</li>
+<li>[X] Introduce domain-specific exceptions in HubClient (CapacityUnavailableException, AuthenticationException, ProtocolException).</li>
+<li>[X] Batch and rate-limit HubClient log sending; add async buffering to minimize impact on runner.</li>
+<li>[X] Add optional log redaction in PlaywrightEventForwarder (query param scrub, headers whitelist) and sampling controls.</li>
+<li>[X] Ensure nullability annotations are correct across Hub, Worker, HubClient; enable nullable warnings as errors on CI.</li>
+<li>[X] Audit async paths to avoid sync-over-async; ensure proper ConfigureAwait usage in library code where applicable.</li>
+<li>[X] Standardize structured logging (Serilog or built-in ILogger scopes) with runId/browserId scope enrichment.</li>
+<li>[X] Provide configurable log levels and per-component overrides via environment.</li>
+<li>[X] Add graceful error pages and dashboard error boundaries for SignalR disconnections with auto-retry/backoff.</li>
+<li>[X] Implement virtualization/pagination for Dashboard results and command logs to prevent UI slowdowns on large runs.</li>
+<li>[x] Add filtering/search on Dashboard (by App, Browser, Env, Region, Status, runId) and deep links.</li>
+<li>[ ] Introduce authentication for Dashboard (OIDC/OAuth2) with role-based access (viewer/admin); secure SignalR hub accordingly.</li>
+<li>[X] Add retention policies for run results and logs (TTL in Redis; optional durable store adapter e.g., PostgreSQL/SQLite).</li>
+<li>[X] Add API to export run details (JSON/NDJSON) for external archiving.</li>
+<li>[x] Provide Helm chart/Kubernetes manifests with sensible defaults, probes, and resource limits.</li>
+<li>[ ] Harden Docker images: run as non-root user, drop capabilities, read-only filesystem with writable temp for Playwright.</li>
+<li>[ ] Slim Docker images further: prune caches (npm, dotnet), multi-stage for Node assets, consolidate OS packages, consider distroless base.</li>
+<li>[X] Add multi-arch builds (linux/amd64, linux/arm64) for Hub/Worker via buildx.</li>
+<li>[X] Add image vulnerability scanning (Trivy/GHCR) and SBOM generation during CI.</li>
+<li>[X] Introduce GitHub Actions CI: build, unit tests, integration tests (with Testcontainers), publish artifacts, and optional Docker image publish.</li>
+<li>[X] Add workflow caching for dotnet restore, npm playwright installs, and docker layers to speed up CI.</li>
+<li>[X] Expand unit tests for label matching, options parsing (POOL_CONFIG), and secret handling edge cases.</li>
+<li>[x] Add integration tests for: secret mismatch (401), capacity exhaustion (503), borrow queue timeout, and node eviction scenarios.</li>
+<li>[x] Add flaky-test mitigations: deterministic time helpers, extended health timeouts via env, and richer test diagnostics.</li>
+<li>[x] Provide smoke test for Dashboard SignalR stream (connect, receive events, disconnect) without browsers.</li>
+<li>[ ] Add load/pressure test harness (NUnit category) with configurable CONCURRENCY/ITERATIONS and asserts on latency percentiles.</li>
+<li>[ ] Add architecture diagrams (C4 model: Context, Container, Component) and sequence diagram for borrow/return.</li>
+<li>[X] Create CONTRIBUTING.md (coding standards, commit messages, branching, PR checklist).</li>
+<li>[X] Establish versioning and release notes; tag releases and publish Agenix.PlaywrightGrid.HubClient to NuGet.</li>
+<li>[X] Add compatibility matrix documenting supported Playwright versions and Docker base image tags.</li>
+<li>[x] Add configuration to toggle wildcards separately from trailing fallback/prefix expansion per-environment.</li>
+<li>[x] Add per-label concurrency caps and fair sharing to prevent one label from starving others.</li>
+<li>[x] Provide metrics-driven autoscaling hints (HPA annotations) based on borrow queue length and CPU for Workers.</li>
+<li>[ ] Ensure graceful recovery scenarios: Hub restart does not break in-flight WebSocket sessions; document impact and mitigation.</li>
+<li>[x] Add health and readiness endpoints separation; ensure /health checks critical dependencies and /ready reflects capacity.</li>
+<li>[X] Add startup diagnostics dump (effective config, labels registered per node) visible in logs and Dashboard.</li>
+<li>[x] Implement audit logging for node registration, secret changes, and admin actions.</li>
+<li>[x] Add command-line tooling or scripts to validate POOL_CONFIG and compute effective capacity before boot.</li>
+<li>[x] Provide local dev convenience: make .env support across Hub/Worker and docs on docker compose overrides.</li>
+<li>[x] Improve error messages in Dashboard UI to point to remediation steps (e.g., capacity missing, secret mismatch, WS unreachable).</li>
+<li>[x] Add browser-specific tuning options (Chromium args, Firefox prefs, WebKit flags) with validation and documentation.</li>
+<li>[x] Enforce API request size limits and reasonable timeouts in Hub; document limits.</li>
+<li>[x] Add support for custom labels (e.g., Channel, Headless) with controlled cardinality to avoid metrics explosion.</li>
+<li>[X] Refactor Dashboard Results pages to use server-driven paging and streaming for command logs.</li>
+<li>[x] Ensure all public APIs and DTOs have XML docs and nullable annotations; generate API docs from XML.</li>
+<li>[ ] Introduce coding analyzers (StyleCop/IDisposable analyzers) and fix high-signal warnings.</li>
+<li>
+<p>[x] Add guardrails for Redis key naming to avoid collisions; centralize key patterns with tests.</p>
+</li>
+<li>
+<p>[ ] Integrate X11 virtual display (Xvfb) in Worker Docker image: install xvfb, xauth, fonts, and required deps; verify image size impact.</p>
+</li>
+<li>[ ] Add WORKER_XVFB_ENABLED env flag (default: true in containers) and DISPLAY management (e.g., :99) in Worker startup.</li>
+<li>[ ] Implement Worker sidecar/process supervisor to launch Xvfb on boot when enabled; ensure restarts/backoff and logs are captured.</li>
+<li>[ ] Provide option to use xvfb-run wrapper vs. dedicated Xvfb process; document pros/cons and choose default.</li>
+<li>[ ] Wire Playwright headful mode support via DISPLAY with environment propagation to browser processes; document headless/headful matrix.</li>
+<li>[ ] Add health/readiness checks for Xvfb (e.g., xdpyinfo sanity) and expose a metric (worker_xvfb_up) and logs for diagnostics.</li>
+<li>[ ] Ensure graceful shutdown: stop accepting new sessions, close browsers, then terminate Xvfb cleanly.</li>
+<li>[ ] Harden security: run Xvfb as non-root, restrict access control (xauth cookie), avoid TCP listeners.</li>
+<li>[ ] Extend WorkerOptions.FromEnvironment() to parse XVFB-related envs (enabled, display number, screen size, dpi); add unit tests.</li>
+<li>[ ] Add integration test path that borrows a session with headful=true and validates navigation succeeds under Xvfb.</li>
+<li>[ ] Update worker/Dockerfile and docker-compose.yml with XVFB packages and env examples; include minimal fonts set and note locales.</li>
+<li>[ ] Update docs: README.md (usage), docs/Compatibility-Matrix.md (headful notes), and dashboard guidance for troubleshooting Xvfb.</li>
+<li>
+<p>[ ] Add troubleshooting playbook: common errors (cannot open display, fonts missing), with steps and env toggles to disable/enable Xvfb.</p>
+</li>
+<li>
+<p>[ ] Enforce HTTPS by default in docker-compose via reverse proxy (Traefik/Nginx), enable HSTS, secure cookies, and strong TLS settings; document local dev exceptions.</p>
+</li>
+<li>[ ] Tighten CORS and add CSRF protection where applicable (Dashboard/API forms), with explicit allowed origins and methods.</li>
+<li>[ ] Introduce JWT/HMAC request signing for Hub API (time-limited tokens minted by Hub) as an alternative to shared secrets; provide migration guidance.</li>
+<li>[ ] Support secrets from files via *_FILE env convention and optional integration with external secret stores (AWS Secrets Manager/Azure Key Vault/GCP Secret Manager).</li>
+<li>[ ] Add automated security checks: CodeQL workflow, Dependency/Container update automation (Dependabot/Renovate) with review rules.</li>
+<li>[ ] Enable horizontal scaling for Hub: move borrow queue to Redis Streams with consumer groups; implement idempotency and deduplication.</li>
+<li>[ ] Implement distributed leadership for sweeper jobs using Redis (SETNX + TTL) to coordinate multiple Hub instances safely.</li>
+<li>[ ] Quarantine flapping or failing Worker nodes (cooldown period) and surface quarantine state in Dashboard and metrics.</li>
+<li>[ ] Add Redis connection options for Sentinel/Cluster and TLS; document configuration and failover behavior.</li>
+<li>[ ] Provide idempotency keys for Borrow/Return endpoints to handle client retries without duplicate sessions.</li>
+<li>[ ] Enforce per-Worker max concurrent WebSocket connections (configurable); expose saturation metrics and headroom.</li>
+<li>[x] Monitor disk/inode usage in Worker; auto-clean old browser caches/traces; emit alerts when thresholds breached.</li>
+<li>[x] Add WS per-message compression toggle with thresholds to balance CPU vs bandwidth; document defaults.</li>
+<li>[x] Implement safe sidecar upgrade flow (graceful drain + restart) coordinated with Hub to avoid session drops.</li>
+<li>[ ] Improve Dashboard accessibility (WCAG 2.1 AA): keyboard navigation, landmarks, focus management, color contrast, ARIA labels.</li>
+<li>[ ] Gate Dashboard features by role (admin/viewer) based on OIDC group/claim mapping; hide admin endpoints from non-admins. (extends 36)</li>
+<li>[ ] Allow exporting run artifacts (HAR/trace/logs) and provide deep links to Playwright trace viewer; bulk download.</li>
+<li>[ ] Add HubClient DI extensions (AddHubClient) with options; support proxies/custom headers; expose retry/jitter tuning knobs.</li>
+<li>[ ] Implement idempotency support in HubClient for borrow/return (Idempotency-Key header) and transparent retry handling.</li>
+<li>[ ] Package a CLI (dotnet tool) to interact with the grid: login, list-labels, borrow/return, tail logs, diagnose; publish to NuGet.</li>
+<li>[ ] Add Prometheus exemplars and trace linkage for borrow latency histograms; propagate runId/traceId via W3C baggage.</li>
+<li>[ ] Define and codify SLOs with alerting rules (borrow success rate, p95 latency, node heartbeat gap); ship Prometheus/Grafana alerts.</li>
+<li>[ ] Expand testing with property-based and fuzz tests for label parsing/matching and Hub request validation.</li>
+<li>[ ] Add chaos tests: Redis outage, Hub/Worker restarts, network partitions, and clock skew; assert recovery within SLO.</li>
+<li>[ ] Create a nightly soak test pipeline to run long-duration borrow/return cycles and report regressions.</li>
+<li>[ ] Benchmark critical paths (label matching, Redis operations) with BenchmarkDotNet; track regressions in CI.</li>
+<li>[ ] Profile Hub/Worker memory/CPU under load; reduce allocations and capture flamegraphs for hot paths.</li>
+<li>[ ] Add developer tooling: devcontainer setup, Makefile targets, pre-commit hooks (dotnet format, analyzers) and consistent .editorconfig.</li>
+<li>[x] Optimize Dockerfiles with BuildKit cache mounts and better layer ordering; document cache strategy.</li>
+<li>[ ] Author a security threat model (STRIDE) and hardening guide; include SRE runbooks and incident response procedures.</li>
+<li>[ ] Automate diagram generation and publishing (Mermaid/PlantUML) as part of mkdocs; integrate with architecture docs (52).</li>
+<li>[ ] Validate IPv6 and proxy support end-to-end; document reverse proxy patterns and limitations.</li>
+<li>[ ] Provide reverse-proxy examples (Traefik/Nginx) with sticky sessions for WS and TLS termination; include compose overrides.</li>
+<li>[ ] Introduce multi-tenancy: namespaced labels and quotas/rate limits per tenant; surface tenant in metrics and logs.</li>
+<li>[ ] Enable hot-reload for config via IOptionsMonitor where safe (log levels, borrow strategy flags) without restarts.</li>
+<li>[ ] Adopt FeatureManagement for feature flags with environment/tenant targeting; wire to existing strategy toggles (56).</li>
+<li>[ ] Ensure audit logs are tamper-evident and optionally export to external SIEM (OTLP/syslog); add retention controls.</li>
+<li>[ ] Sign container images (cosign) and publish provenance/SBOM attestations (SLSA level targets) in CI.</li>
+<li>[ ] Add localization (i18n) to Dashboard with language switcher; ensure date/number formatting respects locale.</li>
+<li>[ ] Document and optionally support GPU acceleration (NVIDIA/Intel VA-API) for headful runs; provide example images and detection.</li>
+<li>[ ] Define Redis memory and eviction policies; emit alarms when approaching limits and document tuning guidance.</li>
+<li>[ ] Add pagination/filtering/count endpoints for admin APIs (nodes, sessions, runs) to aid tooling and Dashboard.</li>
+<li>[x] Implement a durable store adapter (e.g., PostgreSQL) with schema migrations for long-term run/log retention; make pluggable.</li>
+<li>[ ] Minimize telemetry PII; add sampling/redaction policies across traces/logs/metrics with config-driven controls.</li>
+<li>
+<p>[ ] Add scheduled synthetic monitors (GitHub Actions cron) to hit /ready and perform a basic borrow against a local grid.</p>
+</li>
+<li>
+<p>[x] Introduce RunName as a first-class, optional human-friendly identifier alongside RunId across the platform (Hub, Worker, Dashboard, HubClient).</p>
+</li>
+<li>[x] Define validation rules for RunName: trim input, max length 128, allow letters/numbers/space/._- only; reject control chars; document case policy.</li>
+<li>[x] Domain model: add RunName (string?) to shared DTOs/entities (Run, BorrowRequest/Response, RunSummary) with XML docs and nullability annotations.</li>
+<li>[x] Hub API: accept RunName in Borrow request payloads (and propagate in response); expose in Run results and SignalR events; update OpenAPI with examples.</li>
+<li>[x] Backward compatibility: keep RunName optional; default display to RunId when RunName is null/empty; do not break existing clients.</li>
+<li>[x] Storage: persist RunName alongside RunId in Redis (keys/values); verify schema/read paths; ensure sweeper and TTL logic include RunName where relevant.</li>
+<li>[x] Hub logging/metrics: include RunName in structured logs as a field (not a metric label) to avoid high-cardinality metrics; add redaction if enabled.</li>
+<li>[x] Worker: carry RunName in WS proxy scopes and forward in event/log messages to Hub; include in sidecar run context if applicable.</li>
+<li>[x] HubClient: add optional runName parameter to BorrowAsync and related methods; update overloads and XML docs; maintain existing signatures.</li>
+<li>[x] Dashboard UI: display RunName prominently in Results and Run detail pages; fall back to RunId if missing; add filter/search by RunName; include in deep links.</li>
+<li>[x] Dashboard API/adapters: extend view models and queries to surface RunName; ensure server-driven paging/sorting can sort by RunName.</li>
+<li>[x] Tests – unit: add validation tests for RunName parsing; update DTO serialization tests; cover HubClient overload behavior and null/empty handling.</li>
+<li>[x] Tests – integration: borrow a session with RunName set and assert it appears in results, SignalR stream, and Dashboard filtering.</li>
+<li>[x] Documentation: update README, API docs (Swagger snippets), and dashboard guidance with examples using RunName; add examples in docs/cli.md if relevant.</li>
+<li>[x] Security/PII: clarify that RunName may contain descriptive text; recommend avoiding sensitive data; ensure redaction feature covers RunName if policy set.</li>
+<li>
+<p>[x] Non-goals: do not add RunName to metric labels or Redis keys; keep it as data only to avoid cardinality/compat issues; document rationale.</p>
+</li>
+<li>
+<p>[ ] AI and LLM Enhancements (optional, privacy‑first, disabled by default)</p>
+</li>
+<li>[ ] Dashboard: "Explain this run" – generate an LLM summary of a run (errors, likely root cause, next steps) from redacted command logs and timings; expose a button on Results/Run pages; include copy-to-issue. Guard with AI_ENABLE=1. </li>
+<li>[ ] Failure triage auto‑classification – categorize failures (capacity, auth/secret, WS/connectivity, site under test, timeouts, browser crash) via prompt with few‑shot examples; store category in run metadata and make it filterable in Dashboard.</li>
+<li>[ ] Natural language search for results – convert free‑text queries (e.g., "Chromium UAT runs failing with timeouts yesterday") into structured filters (App/Browser/Env/Status/Time); provide offline synonym map fallback when AI is disabled.</li>
+<li>[ ] RAG assistant for docs/config – in‑Dashboard helper that answers "How do I …?" using a local index of project docs (README, tasks, compatibility matrix) and current effective config; prefer local retrieval; only call LLM when explicitly enabled.</li>
+<li>[ ] Capacity planning recommender – analyze historical label utilization and borrow queue metrics to suggest POOL_CONFIG adjustments and forecast demand by label; present as a report; use classical stats first; optionally add an LLM summary.</li>
+<li>[ ] Anomaly detection and incident notes – detect spikes in borrow latency, WS disconnects, node heartbeats via simple z‑score/EWMA; open an incident card in Dashboard with an optional "AI incident summary" containing probable causes and suggested checks.</li>
+<li>[ ] Flakiness detector – cluster intermittent failures across runs/labels; surface flaky labels/tests with confidence; add a weekly dashboard report.</li>
+<li>[ ] Auto‑remediation hints – when common misconfigurations are detected (PUBLIC_WS_HOST mismatch, secret mismatch, no capacity for label), show contextual remediation steps; optionally generate an issue template with prefilled diagnostics.</li>
+<li>[ ] AI provider plumbing – provider‑agnostic abstraction (OpenAI, Azure OpenAI, Ollama/local) behind an interface; env: AI_PROVIDER, AI_API_KEY/ENDPOINT, AI_MODEL, AI_ENABLE; strict timeouts, retries, and rate limits.</li>
+<li>[ ] Safety and cost controls – redact all secrets/PII before prompt; token accounting and per‑day budgets; allow per‑feature enablement; never log prompt/response content, only metadata; document data handling.</li>
+<li>[ ] Unit tests for prompt builders/mappers and NL→filter translation; add record/replay fixtures for CI (canned responses) so tests run without network/API keys.</li>
+<li>[ ] Telemetry for AI features – Prometheus counters/histograms for usage and latency; exemplar linkage to runId; dashboards for success/error rates; no high‑cardinality content.</li>
+<li>[ ] Security review – ensure no secrets (headers, query params) can leak into prompts; honor existing redaction settings; add a global kill switch (AI_ENABLE=0).</li>
+<li>[ ] Documentation – add docs/ai.md detailing enabling providers, example prompts, privacy expectations, and local dev via Ollama; link from README and Dashboard help.</li>
+<li>[ ] Non‑goals/guardrails – never make core flows depend on AI; AI features must fail‑safe, degrade gracefully, and offer offline paths (e.g., deterministic synonym search, stats‑only reports).</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.expand", "navigation.tracking", "toc.integrate", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

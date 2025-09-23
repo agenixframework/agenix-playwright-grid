@@ -1,0 +1,1084 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://agenixframework.github.io/agenix-playwright-grid/presentation-why-playwright-grid/">
+      
+      
+        <link rel="prev" href="../PlaywrightDotNet-pw-api/">
+      
+      
+        <link rel="next" href="../Metrics-and-Grafana/">
+      
+      
+      <link rel="icon" href="../assets/logos/agenix-favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+    
+    
+      
+        <title>Presentation - Playwright Grid</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.e53b48f4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/styles.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#why-agenix-playwright-grid" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Playwright Grid" class="md-header__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Playwright Grid
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Presentation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Playwright Grid" class="md-nav__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    Playwright Grid
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../docs-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview & Quick Start
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configuration Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-sidecar-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Worker Sidecar Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TestClient-Usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Test Client Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    UI User Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Label-Matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Label Matching
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Capacity-Queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Capacity Queue
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Borrow-TTL-and-Session-Persistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Borrow TTL & Session Persistence
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Node-Liveness-and-Sweeper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Node Liveness and Sweeper
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Graceful-Shutdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Graceful Shutdown
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PlaywrightDotNet-pw-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Playwright .NET pw:api
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Presentation
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presentation
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tldr" class="md-nav__link">
+    <span class="md-ellipsis">
+      TL;DR
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-problem-with-playwright-directly-in-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      The problem with “Playwright directly in CI”
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-grid-solves-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      How the Grid solves this
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-not-just-use-browserstack-or-similar" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why not just use BrowserStack (or similar)?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cost-and-capacity-simple-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost and capacity: simple model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-and-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security and compliance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developer-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      Developer experience
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-prefer-alternatives" class="md-nav__link">
+    <span class="md-ellipsis">
+      When to prefer alternatives
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adoption-path-lowrisk" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adoption path (low‑risk)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    <span class="md-ellipsis">
+      FAQ
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-feature-matrix-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      Appendix: Feature matrix snapshot
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Metrics-and-Grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Metrics and Grafana
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Autoscaling Hints (HPA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compose-autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Docker Compose scaling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Session Distribution
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results_store_backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results Store Backends
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../run_cleanup_service_configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run Cleanup Service Configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Compatibility-Matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Compatibility Matrix
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API-Reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Improvement Tasks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="why-agenix-playwright-grid">Why Agenix Playwright Grid<a class="headerlink" href="#why-agenix-playwright-grid" title="Permanent link">&para;</a></h1>
+<p>Subtitle: When to choose a self-hosted Playwright Grid over direct CI runs or BrowserStack</p>
+<p>Date: 2025-08-25
+Audience: QA/Dev Leads, SRE, Engineering Managers</p>
+<hr />
+<h2 id="tldr">TL;DR<a class="headerlink" href="#tldr" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Use Grid when you need consistent, scalable, cost‑efficient, and observable Playwright execution across many repos/teams.</li>
+<li>Compared to running Playwright directly in CI:</li>
+<li>Centralizes capacity and reduces flakiness by pre‑warming browsers and reusing pools.</li>
+<li>Gives you labels (App:Browser:Env[:Region[:OS…]]) to route the right capacity automatically.</li>
+<li>Adds first‑class observability (Prometheus/Grafana) and a live Dashboard with protocol/API logs.</li>
+<li>Compared to BrowserStack/SaaS clouds:</li>
+<li>Lowers cost at sustained scale, improves data control/compliance, and removes vendor queueing.</li>
+<li>Provides LAN‑grade latency to your services and unlimited customization of browser flags/versions.</li>
+</ul>
+<hr />
+<h2 id="the-problem-with-playwright-directly-in-ci">The problem with “Playwright directly in CI”<a class="headerlink" href="#the-problem-with-playwright-directly-in-ci" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Cold starts and environment drift</li>
+<li>Installing browsers/OS deps on every job wastes minutes and increases flake risk.</li>
+<li>Multiple pipelines pinning different Playwright versions → inconsistent results across repos.</li>
+<li>Fragmented capacity and under‑utilization</li>
+<li>Each project over‑provisions CI runners to hit SLAs; no global pooling.</li>
+<li>Peaks in one repo/star branch cause queuing while other runners idle.</li>
+<li>Limited observability and forensics</li>
+<li>Logs and traces distributed across countless jobs; no cross‑suite view.</li>
+<li>Hard to correlate protocol‑level events, API logs, screenshots/videos, and test metadata.</li>
+<li>Network and security</li>
+<li>Egress patterns vary per job; hard to apply consistent network policies or IP allowlists.</li>
+<li>Secrets handling is duplicated across repos and pipelines.</li>
+</ul>
+<hr />
+<h2 id="how-the-grid-solves-this">How the Grid solves this<a class="headerlink" href="#how-the-grid-solves-this" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Pre‑warmed capacity</li>
+<li>Workers keep Playwright sidecars hot; Hub borrows/returns sessions in milliseconds.</li>
+<li>Label‑driven routing</li>
+<li>Use ordered keys <code>App:Browser:Env[:Region[:OS…]]</code> to match exactly, fallback by trailing segments, or expand prefixes.</li>
+<li>Guarantees the right browser/channel/OS for each app/env without bespoke pipeline logic.</li>
+<li>Centralized observability</li>
+<li>Built‑in Prometheus metrics and Grafana dashboards.</li>
+<li>Dashboard shows runs with mirrored protocol commands and runner‑forwarded API logs.</li>
+<li>Simple, secure APIs</li>
+<li>Minimal endpoints for borrow/return; secrets for runners and nodes; Redis‑backed state.</li>
+<li>Elastic scaling</li>
+<li>Add/remove workers per pool without touching test repos or CI definitions.</li>
+</ul>
+<hr />
+<h2 id="why-not-just-use-browserstack-or-similar">Why not just use BrowserStack (or similar)?<a class="headerlink" href="#why-not-just-use-browserstack-or-similar" title="Permanent link">&para;</a></h2>
+<p>Pros of SaaS clouds
+- Zero infra to start; broad browser/device catalog; shared responsibility for upkeep.</p>
+<p>Cons at scale
+- Cost and concurrency
+  - Minute‑based billing and plan caps lead to queues or expensive upgrades under sustained load.
+- Data, compliance, and performance
+  - Test data and traffic traverse vendor infra; IP allowlists and data residency can be limiting.
+  - Cross‑DC latency to your services can slow tests and increase flakiness.
+- Limited customization
+  - Browser flags, experimental protocols, pinned Playwright versions, and OS tuning are constrained by the vendor’s images.
+- Lock‑in
+  - Switching vendors or bringing execution in‑house later can be costly.</p>
+<p>Grid advantages
+- Predictable cost curve (own the hardware or autoscale in your cloud).
+- LAN‑close to your services → lower latency and more stable tests.
+- Full control over images, flags, and Playwright versions; consistent across teams.
+- First‑class integration with your observability stack.</p>
+<hr />
+<h2 id="cost-and-capacity-simple-model">Cost and capacity: simple model<a class="headerlink" href="#cost-and-capacity-simple-model" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Direct CI</li>
+<li>Install browsers per run: 1–3 min overhead × N jobs/day.</li>
+<li>Parallelism limited by per‑repo runner quotas; idle capacity elsewhere can’t help.</li>
+<li>BrowserStack</li>
+<li>Concurrency is plan‑bound; bursts cause queues.</li>
+<li>Per‑minute pricing scales linearly with test time.</li>
+<li>Grid (self‑hosted)</li>
+<li>Pre‑warm overhead amortized; near‑zero setup time per borrow.</li>
+<li>Global pool across all repos; unused capacity is reused instantly.</li>
+<li>Scale horizontally: add workers labeled to the hot pools.</li>
+</ul>
+<p>Tip: Start with a small node pool (e.g., 2–3 workers per hot label), measure utilization in Grafana, grow only where needed.</p>
+<hr />
+<h2 id="security-and-compliance">Security and compliance<a class="headerlink" href="#security-and-compliance" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Stable egress via workers; put them in the same VPC/VNet as your services or behind a controlled NAT.</li>
+<li>Centralized secrets (HUB_RUNNER_SECRET, HUB_NODE_SECRET) vs spreading secrets across many CI pipelines.</li>
+<li>Data locality: you choose the region/cloud; keep traffic inside your boundaries.</li>
+</ul>
+<hr />
+<h2 id="developer-experience">Developer experience<a class="headerlink" href="#developer-experience" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Consistent local vs CI behavior: the same borrow/return APIs work locally and in pipelines.</li>
+<li>Faster feedback via hot pools and fewer flakes from cold installs.</li>
+<li>Dashboard helps triage quickly with protocol/API logs, screenshots, and test attribution.</li>
+</ul>
+<hr />
+<h2 id="when-to-prefer-alternatives">When to prefer alternatives<a class="headerlink" href="#when-to-prefer-alternatives" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Direct CI may be enough if:</li>
+<li>You have a small suite, few contributors, and no strong parallelism/latency needs.</li>
+<li>Infrequent runs and no desire to maintain any infra.</li>
+<li>BrowserStack/SaaS may be better if:</li>
+<li>You need wide real‑device coverage or legacy OS/browser variants the grid doesn’t target.</li>
+<li>You want a purely managed service with no ops surface area.</li>
+</ul>
+<hr />
+<h2 id="adoption-path-lowrisk">Adoption path (low‑risk)<a class="headerlink" href="#adoption-path-lowrisk" title="Permanent link">&para;</a></h2>
+<p>1) Compose the stack locally: <code>docker compose up --build</code>.
+2) Point a subset of suites to the Grid using Agenix.PlaywrightGrid.HubClient and labels.
+3) Compare runtime and flake rates vs baseline.
+4) Incrementally move suites; add workers only for hot labels.
+5) Wire Prometheus/Grafana dashboards into your observability and set SLOs.</p>
+<hr />
+<h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
+<ul>
+<li>How do we keep Playwright versions consistent?</li>
+<li>Pin via Dockerfiles and PLAYWRIGHT_VERSION env; workers report the version to Dashboard.</li>
+<li>Can we isolate teams or apps?</li>
+<li>Yes, by label namespaces (e.g., AppA:Chromium:Staging) and per‑pool worker assignments.</li>
+<li>What about spikes during release time?</li>
+<li>Temporarily add workers or adjust pool counts; no changes in test repos.</li>
+<li>Do we lose any Playwright features?</li>
+<li>No. Tests connect to the worker‑proxied WebSocket exposed to the client. You can still use channels/flags.</li>
+</ul>
+<hr />
+<h2 id="appendix-feature-matrix-snapshot">Appendix: Feature matrix snapshot<a class="headerlink" href="#appendix-feature-matrix-snapshot" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Routing</li>
+<li>Exact, trailing fallback, prefix expansion, optional wildcards.</li>
+<li>Observability</li>
+<li>Prometheus metrics; Grafana dashboards; protocol/API log mirroring.</li>
+<li>Security</li>
+<li>Shared‑secret auth; stable egress; optional per‑pool isolation.</li>
+<li>Operations</li>
+<li>Redis‑backed Hub state; horizontal scaling; Docker‑first.</li>
+</ul>
+<p>Links
+- Root README: ../README.md
+- Test client usage: ./TestClient-Usage.md
+- Playwright .NET API logging: ./PlaywrightDotNet-pw-api.md</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.expand", "navigation.tracking", "toc.integrate", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

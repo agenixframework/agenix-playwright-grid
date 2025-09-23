@@ -1,0 +1,27 @@
+/* Minimal tweaks on top of Material theme */
+
+/* Improve code block readability */
+:root {
+  --code-bg: #0b1220;
+}
+.md-typeset pre>code {
+  background-color: var(--code-bg);
+  color: #e6edf3;
+}
+
+/* Slightly tighter paragraphs */
+.md-typeset p {
+  line-height: 1.55;
+}
+
+/* Make tables scroll on small screens */
+.md-typeset table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* Subtle link underline on hover */
+.md-typeset a:hover {
+  text-decoration: underline;
+}

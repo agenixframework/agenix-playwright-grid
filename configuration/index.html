@@ -1,0 +1,1214 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://agenixframework.github.io/agenix-playwright-grid/configuration/">
+      
+      
+        <link rel="prev" href="../docs-guide/">
+      
+      
+        <link rel="next" href="../cli/">
+      
+      
+      <link rel="icon" href="../assets/logos/agenix-favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+    
+    
+      
+        <title>Configuration Guide - Playwright Grid</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.e53b48f4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/styles.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Playwright Grid" class="md-header__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Playwright Grid
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Playwright Grid" class="md-nav__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    Playwright Grid
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../docs-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview & Quick Start
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Configuration Guide
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configuration Guide
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hub
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker" class="md-nav__link">
+    <span class="md-ellipsis">
+      Worker
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logging configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dashboard
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-gridtests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tests (GridTests)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Examples
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#docker-compose-excerpt" class="md-nav__link">
+    <span class="md-ellipsis">
+      Docker Compose (excerpt)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-run-of-tests-against-a-composed-grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local run of tests against a composed grid
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      Common Pitfalls
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See also
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pool-config-validator" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pool config validator
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-development-env-support-and-compose-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local development: .env support and Compose overrides
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-sidecar-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Worker Sidecar Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TestClient-Usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Test Client Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    UI User Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Label-Matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Label Matching
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Capacity-Queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Capacity Queue
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Borrow-TTL-and-Session-Persistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Borrow TTL & Session Persistence
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Node-Liveness-and-Sweeper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Node Liveness and Sweeper
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Graceful-Shutdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Graceful Shutdown
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PlaywrightDotNet-pw-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Playwright .NET pw:api
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../presentation-why-playwright-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presentation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Metrics-and-Grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Metrics and Grafana
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Autoscaling Hints (HPA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compose-autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Docker Compose scaling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Session Distribution
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results_store_backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results Store Backends
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../run_cleanup_service_configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run Cleanup Service Configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Compatibility-Matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Compatibility Matrix
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API-Reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Improvement Tasks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration-guide">Configuration Guide<a class="headerlink" href="#configuration-guide" title="Permanent link">&para;</a></h1>
+<p>This guide consolidates configuration for Hub, Worker, Dashboard, tests, and Docker. It also highlights defaults, ranges, and common pitfalls.</p>
+<p>For a quick start, see docs-guide.md and docker-compose.yml in the repo root.</p>
+<h2 id="hub">Hub<a class="headerlink" href="#hub" title="Permanent link">&para;</a></h2>
+<p>Environment variables:
+- REDIS_URL: Redis host:port (default redis:6379)
+- HUB_RUNNER_SECRET: Shared secret runners must send via header x-hub-secret
+- HUB_NODE_SECRET: Shared secret workers must send for /node/register
+- HUB_BORROW_TRAILING_FALLBACK: Enable trailing fallback label matching (true/false; default true)
+- HUB_BORROW_PREFIX_EXPAND: Enable prefix expansion (true/false; default true)
+- HUB_BORROW_WILDCARDS: Enable explicit wildcards in label matching (true/false; default false)
+  - Per‑environment overrides supported: append _{EnvironmentName}, e.g., HUB_BORROW_WILDCARDS_Production=true. Overrides apply to each flag independently.
+- HUB_RESULTS_BACKEND: memory (default), redis, sqlite, or postgres. Selects the results store adapter used by the Hub.
+- HUB_RESULTS_TTL_SECONDS / HUB_RESULTS_TTL_DAYS: Retention TTL for run summaries and tests (Redis and Postgres adapters support TTL).
+- HUB_LOGS_TTL_SECONDS / HUB_LOGS_TTL_DAYS: Retention TTL for command logs (Redis and Postgres adapters support TTL).
+  - Legacy: HUB_RESULTS_RETENTION_DAYS is still accepted for backward compatibility (applies to runs/tests/logs if specific TTLs are not set).
+- HUB_RESULTS_SQLITE: Connection string/path for sqlite backend (default "Data Source=results.db").
+- HUB_RESULTS_POSTGRES: Connection string for Postgres backend (default in compose: Host=postgres;Port=5432;Username=postgres;Password=postgres;Database=playwrightgrid).
+- HUB_MAX_CONTROL_BODY_BYTES: Max body size for control endpoints (borrow/return/register/test), default 65536 (64 KiB), clamp 8 KiB..1 MiB.
+- HUB_MAX_LOG_BODY_BYTES: Max body size for log endpoints (/results/browser/.../commands and /api-logs), default 1048576 (1 MiB), clamp 8 KiB..16 MiB.
+- HUB_REQUEST_HEADERS_TIMEOUT_SECONDS: Request headers timeout for Kestrel, default 15s, clamp 5..120.
+- HUB_KEEP_ALIVE_TIMEOUT_SECONDS: Keep-alive timeout for Kestrel, default 30s, clamp 5..300.
+- HUB_REQUEST_TIMEOUT_SECONDS: Default per-request timeout enforced via middleware, default 60s, clamp 5..600.</p>
+<p>Notes on limits:
+- Requests exceeding the configured per-path body limits are rejected with HTTP 413 (application/problem+json).
+- Reasonable defaults are chosen to protect the Hub; increase cautiously if your clients send larger batches of logs.</p>
+<p>Ports:
+- HTTP: container 5000 (default host 5100 in docker-compose.yml)</p>
+<p>Notes:
+- Health: GET /health should return 200 OK if Hub is up and Redis reachable.
+- Diagnostics are surfaced via dashboard and APIs documented elsewhere.</p>
+<h2 id="worker">Worker<a class="headerlink" href="#worker" title="Permanent link">&para;</a></h2>
+<p>Core:
+- HUB_URL: Hub base URL (default http://hub:5000)
+- REDIS_URL: Redis host:port (default redis:6379)
+- NODE_ID: Unique identifier for the worker (default generated node-xxxxxxxx)
+- NODE_SECRET: Secret for node registration/authentication with Hub
+- NODE_NODE_SECRET: Secondary secret for node-to-node scenarios (optional)
+- POOL_CONFIG: Comma-separated label-to-count mapping, e.g. AppA:Chromium:Staging=3,AppB:Firefox:UAT=2
+- NODE_REGION: Added to labels; shows up in Dashboard (default local)
+- NODE_OS: Optional override for detected OS label</p>
+<p>Playwright sidecar:
+- PLAYWRIGHT_SIDECAR: Script launching the Node sidecar (default launch_playwright_server.js)
+- PLAYWRIGHT_SIDECAR_READY_TIMEOUT_SECONDS: Wait for wsEndpoint on stdout (default 60; clamp 5..600)
+- PLAYWRIGHT_SERVER_DEBUG: Set to 1 or pw:server,pw:protocol for Node sidecar DEBUG logs
+- WORKER_VALIDATE_WS: If "true", validate internal wsEndpoint on warmup/replacement (one restart allowed)
+- CHROMIUM_ARGS: Space-, comma-separated, or JSON array of Chromium flags. Applied only for Chromium.
+- CHROME_ARGS: Alias for CHROMIUM_ARGS when CHROMIUM_ARGS is not set (backward-compat convenience).
+- WEBKIT_ARGS: Space-, comma-separated, or JSON array of flags passed when launching WebKit.
+- FIREFOX_ARGS: Optional extra arguments for Firefox launch (limited effect; most tuning is via prefs).
+- FIREFOX_PREFS: Firefox user prefs as JSON object or as key=value pairs separated by comma/semicolon/newlines.
+  - Validation: malformed entries are ignored; keys must be non-empty (dot-separated recommended), values are coerced
+    to boolean/number when obvious (true/false, numeric), otherwise treated as strings.</p>
+<p>Examples:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">worker3</span><span class="p">:</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WEBKIT_ARGS=--no-sandbox --disable-http2</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FIREFOX_ARGS=--headless</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FIREFOX_PREFS={&quot;network.dns.disablePrefetch&quot;:true,&quot;browser.cache.disk.enable&quot;:false}</span>
+</code></pre></div></p>
+<p>Public WebSocket address:
+- PUBLIC_WS_HOST / PUBLIC_WS_PORT / PUBLIC_WS_SCHEME: Advertised host, port, scheme (default ws). If unset, the node id may be used inside the cluster network.</p>
+<p>WebSocket limits and backpressure:
+- WS_MAX_MESSAGE_BYTES: Max message size (default 2,097,152; clamp 8 KiB..16 MiB)
+- WS_IDLE_TIMEOUT_SECONDS: Idle timeout (default 60; clamp 5..600)
+- WS_PING_INTERVAL_SECONDS: Keepalive ping interval (default 15; clamp 5..300)
+- WS_COMPRESSION: on | off | auto (default auto). Enables per-message compression (permessage-deflate) for the public WS endpoint. When 'auto', compression is enabled when WS_MAX_MESSAGE_BYTES &gt;= WS_COMPRESSION_MIN_BYTES.
+- WS_COMPRESSION_MIN_BYTES: Threshold in bytes for the 'auto' heuristic (default 1024; clamp 0..16,777,216). Use higher values to reduce CPU on small-message workloads.
+- WS_LOG_CHANNEL_CAPACITY: Capacity for async log forwarding channel (default 256; clamp 16..8192)
+- WS_LOG_DROP_POLICY: DropNewest (default) or DropOldest when log channel is full
+- WS_PROXY_CHANNEL_CAPACITY: Capacity for WS proxy frame channels (default 1024; clamp 32..65536)
+- WS_PROXY_DROP_POLICY: DropNewest (default) or DropOldest for proxy channels</p>
+<p>Notes on compression:
+- Compression is negotiated at the connection level and applies to all messages; the 'auto' mode uses a simple heuristic at connect-time and does not toggle mid-connection.
+- Upstream (worker → sidecar) WebSocket remains uncompressed by default to avoid double compression on a typically local link.</p>
+<p>Restart/backoff for sidecar replacement:
+- SIDECAR_BACKOFF_MIN_SECONDS: Minimum delay (default 1; clamp 1..120)
+- SIDECAR_BACKOFF_MAX_SECONDS: Maximum delay (default 30; clamp 1..600; coerced to &gt;= min)
+- SIDECAR_BACKOFF_MULTIPLIER: Growth factor (default 2.0; clamp 1.1..5.0)
+- SIDECAR_BACKOFF_FAILURE_RESET_SECONDS: Reset window (default 60; clamp 10..600)</p>
+<p>Redis timeouts (optional fine-tuning):
+- REDIS_CONNECT_TIMEOUT_MS (default 5000)
+- REDIS_SYNC_TIMEOUT_MS (default 5000)
+- REDIS_ASYNC_TIMEOUT_MS (default 5000)
+- REDIS_HEALTH_TIMEOUT_MS (default 1000 for /health/ready ping)</p>
+<p>Observability toggles:
+- ENABLE_OTLP=1 to export OTLP traces/metrics
+- ENABLE_PROMETHEUS_OTEL=1 to expose Prometheus via OpenTelemetry (in addition to prometheus-net)
+- OTEL_EXPORTER_OTLP_ENDPOINT (default http://localhost:4317)
+- OTEL_EXPORTER_OTLP_PROTOCOL: grpc (default) or http/protobuf</p>
+<h2 id="logging-configuration">Logging configuration<a class="headerlink" href="#logging-configuration" title="Permanent link">&para;</a></h2>
+<p>Global logging controls are available across Hub, Worker, and Dashboard via environment variables:
+- LOG_LEVEL: sets the global minimum level (Trace|Debug|Information|Warning|Error|Critical|None)
+- LOG_LEVEL_OVERRIDES: per-category overrides using <code>Category=Level</code> pairs; multiple pairs can be separated by comma, semicolon, or newlines
+- Standard .NET alternatives are also supported: <code>Logging__LogLevel__Default</code> and <code>Logging__LogLevel__{Category}</code></p>
+<p>Examples
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">hub</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="nt">LOG_LEVEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Information</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="nt">LOG_LEVEL_OVERRIDES</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Microsoft.AspNetCore=Warning&quot;</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">worker1</span><span class="p">:</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="nt">LOG_LEVEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Debug</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">      </span><span class="nt">LOG_LEVEL_OVERRIDES</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">        </span><span class="no">WorkerService=Debug</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">        </span><span class="no">Microsoft=Warning</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nt">dashboard</span><span class="p">:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">      </span><span class="nt">Logging__LogLevel__Default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Information</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">      </span><span class="nt">Logging__LogLevel__Microsoft.AspNetCore</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Warning</span>
+</code></pre></div></p>
+<p>Notes
+- Framework noise from <code>Microsoft.AspNetCore</code> is set to Warning by default; you can relax/tighten via overrides.
+- Overrides are additive: the most specific category match applies.</p>
+<h2 id="dashboard">Dashboard<a class="headerlink" href="#dashboard" title="Permanent link">&para;</a></h2>
+<ul>
+<li>HUB_SIGNALR: Hub base URL for SignalR (default http://hub:5000/ws)</li>
+<li>Port: default host 3001 in docker-compose.yml</li>
+</ul>
+<h2 id="tests-gridtests">Tests (GridTests)<a class="headerlink" href="#tests-gridtests" title="Permanent link">&para;</a></h2>
+<p>Env knobs used by integration suite:
+- GRID_TESTS_SKIP_CONTAINERS=1: Don’t start Testcontainers (requires a running grid)
+- GRID_TESTS_USE_LOCAL=1: Use an already running local grid (docker compose up)
+- HUB_URL, HUB_RUNNER_SECRET: When attaching to local grid
+- GRID_TESTS_FORCE_BUILD=1: Force docker build (default true)
+- GRID_TESTS_REUSE=1, GRID_TESTS_SKIP_CLEANUP=1: Speed up iteration
+- GRID_TESTS_HEALTH_TIMEOUT_SECONDS: Increase when building images on cold cache
+- GRID_TESTS_RESULTS_BACKEND: redis (default) or postgres — when postgres, TestEnvironment provisions a PostgreSQL container and wires the Hub.
+- GRID_TESTS_POSTGRES_IMAGE / GRID_TESTS_POSTGRES_DB / GRID_TESTS_POSTGRES_USER / GRID_TESTS_POSTGRES_PASSWORD: Optional overrides for the Postgres container (defaults: postgres:16-alpine / playwrightgrid / postgres / postgres).
+- LABELS: Comma-/semicolon-/newline-separated label list for borrowing
+- CONCURRENCY, ITERATIONS: Pressure test tuning (defaults 4 and 3)</p>
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<h3 id="docker-compose-excerpt">Docker Compose (excerpt)<a class="headerlink" href="#docker-compose-excerpt" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">hub</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">agenix/grid-hub:dev</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">      </span><span class="nt">REDIS_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis:6379</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="nt">HUB_RUNNER_SECRET</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-secret</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">      </span><span class="nt">HUB_NODE_SECRET</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node-secret</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">worker1</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">agenix/grid-worker:dev</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">      </span><span class="nt">HUB_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://hub:5000</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="nt">REDIS_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis:6379</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">      </span><span class="nt">NODE_ID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker1</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">      </span><span class="nt">NODE_SECRET</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node-secret</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">      </span><span class="nt">POOL_CONFIG</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AppA:Chromium:Staging=3,AppB:Firefox:UAT=1</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">      </span><span class="nt">NODE_REGION</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">      </span><span class="nt">PUBLIC_WS_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">      </span><span class="nt">PUBLIC_WS_PORT</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5200&quot;</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">      </span><span class="nt">WS_MAX_MESSAGE_BYTES</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2097152&quot;</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">      </span><span class="nt">WS_IDLE_TIMEOUT_SECONDS</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;60&quot;</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">      </span><span class="nt">WS_PING_INTERVAL_SECONDS</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15&quot;</span>
+</code></pre></div>
+<h3 id="local-run-of-tests-against-a-composed-grid">Local run of tests against a composed grid<a class="headerlink" href="#local-run-of-tests-against-a-composed-grid" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GRID_TESTS_USE_LOCAL</span><span class="o">=</span><span class="m">1</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">HUB_URL</span><span class="o">=</span>http://127.0.0.1:5100
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">HUB_RUNNER_SECRET</span><span class="o">=</span>runner-secret
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w"> </span>dotnet<span class="w"> </span><span class="nb">test</span><span class="w"> </span>tests/GridTests.csproj<span class="w"> </span>-c<span class="w"> </span>Debug
+</code></pre></div>
+<h2 id="common-pitfalls">Common Pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
+<ul>
+<li>PUBLIC_WS_HOST/PORT must be reachable by the test host (not just inside Docker network).</li>
+<li>Ensure Node and Playwright versions inside the worker image are aligned with expectations; see worker logs for the detected Playwright version.</li>
+<li>If borrowing hangs, verify Hub /health is ready and that there is capacity for the requested labels.</li>
+</ul>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Worker Sidecar Management: worker-sidecar-management.md</li>
+<li>Metrics and Grafana: Metrics-and-Grafana.md</li>
+<li>Label Matching: Label-Matching.md</li>
+</ul>
+<h2 id="pool-config-validator">Pool config validator<a class="headerlink" href="#pool-config-validator" title="Permanent link">&para;</a></h2>
+<p>Before starting a Worker, you can validate POOL_CONFIG and see the effective capacity computed from your labels.</p>
+<p>See the full CLI documentation: CLI Reference (cli.md).</p>
+<ul>
+<li>Bash (macOS/Linux):</li>
+<li>scripts/validate-pool-config.sh --pool "AppA:Chromium:Staging=3,AppB:Firefox:UAT=1"</li>
+<li>PowerShell (Windows):</li>
+<li>scripts/validate-pool-config.ps1 --pool "AppA:Chromium:Staging=3,AppB:Firefox:UAT=1"</li>
+<li>Or directly via dotnet:</li>
+<li>dotnet run --project worker/WorkerService.csproj -- validate-pool-config --pool "AppA:Chromium:Staging=3,AppB:Firefox:UAT=1"</li>
+</ul>
+<p>Notes
+- If --pool is omitted, the validator reads POOL_CONFIG from the environment.
+- Use --json for machine-readable output.
+- Label keys are validated using the shared Domain rules (App:Browser:Env[:...], Browser as second segment); duplicates are normalized and summed.</p>
+<h2 id="local-development-env-support-and-compose-overrides">Local development: .env support and Compose overrides<a class="headerlink" href="#local-development-env-support-and-compose-overrides" title="Permanent link">&para;</a></h2>
+<p>For local developer convenience, both Hub and Worker now load environment variables from a .env file if present. This is optional and disabled in containers by default.</p>
+<p>How it works
+- On process start, a lightweight loader looks for a .env file starting from the current working directory and walking up. If found, non-empty key=value lines are applied to process environment variables.
+- Existing environment variables are not overridden by default.
+- You can disable this behavior by setting DISABLE_DOTENV=1 (useful in production or when variables must come exclusively from the host/container).</p>
+<p>Precedence
+1) Explicit environment variables (export, container env) take precedence.
+2) Values from .env are applied only for keys not already set.</p>
+<p>Example .env (repo root)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># Hub
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>REDIS_URL=redis:6379
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>HUB_RUNNER_SECRET=runner-secret
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>HUB_NODE_SECRET=node-secret
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>HUB_BORROW_TRAILING_FALLBACK=true
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>HUB_BORROW_PREFIX_EXPAND=true
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>HUB_BORROW_WILDCARDS=false
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a># Worker
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>HUB_URL=http://127.0.0.1:5100
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>REDIS_URL=localhost:6379
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>NODE_ID=worker-local
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>NODE_SECRET=node-secret
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>POOL_CONFIG=AppB:Chromium:UAT=2,AppB:Firefox:UAT=1
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>NODE_REGION=local
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>PUBLIC_WS_HOST=127.0.0.1
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>PUBLIC_WS_PORT=5200
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a># Logging
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>LOG_LEVEL=Information
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>LOG_LEVEL_OVERRIDES=Microsoft.AspNetCore=Warning
+</code></pre></div></p>
+<p>Disable .env loading
+- Set DISABLE_DOTENV=1 to opt-out. This guard is checked on startup by both Hub and Worker.</p>
+<p>Compose overrides and .env
+- Docker Compose supports a docker-compose.override.yml file that is automatically applied alongside docker-compose.yml. Use it to tweak environment and ports for local work without editing the base file.
+- Compose also supports a .env file for variable substitution within compose files. This is separate from the application-level .env loading described above.</p>
+<p>Example docker-compose.override.yml (local ports and env)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">hub</span><span class="p">:</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;5100:5000&quot;</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="nt">LOG_LEVEL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Debug</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">worker1</span><span class="p">:</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;5200:5200&quot;</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">      </span><span class="nt">PUBLIC_WS_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">      </span><span class="nt">PUBLIC_WS_PORT</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5200&quot;</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">      </span><span class="nt">NODE_REGION</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span><span class="nt">dashboard</span><span class="p">:</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;3001:3001&quot;</span>
+</code></pre></div></p>
+<p>Using Compose with an env file for substitutions
+- Put key=value pairs in a file and pass it via --env-file or rely on default .env next to your compose file:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Uses default .env in the same directory</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Or specify a custom env file</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env.local<span class="w"> </span>up<span class="w"> </span>-d
+</code></pre></div></p>
+<p>Notes
+- Application-level .env loading is a convenience for running Hub/Worker directly via dotnet run; inside containers you typically pass environment via compose or orchestrator.
+- If both Compose substitution and application .env are used, be mindful of which layer sets variables first. Compose env becomes container environment, which takes precedence over app-level .env.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.expand", "navigation.tracking", "toc.integrate", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1030 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://agenixframework.github.io/agenix-playwright-grid/distribution/">
+      
+      
+        <link rel="prev" href="../compose-autoscaling/">
+      
+      
+        <link rel="next" href="../results_store_backends/">
+      
+      
+      <link rel="icon" href="../assets/logos/agenix-favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+    
+    
+      
+        <title>Session Distribution - Playwright Grid</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.e53b48f4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/styles.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#session-distribution-across-workers" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Playwright Grid" class="md-header__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Playwright Grid
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Session Distribution
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Playwright Grid" class="md-nav__button md-logo" aria-label="Playwright Grid" data-md-component="logo">
+      
+  <img src="../assets/logos/agenix-logo.svg" alt="logo">
+
+    </a>
+    Playwright Grid
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/agenixframework/agenix-playwright-grid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../docs-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview & Quick Start
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configuration Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-sidecar-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Worker Sidecar Management
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TestClient-Usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Test Client Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    UI User Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Label-Matching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Label Matching
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Capacity-Queue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Capacity Queue
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Borrow-TTL-and-Session-Persistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Borrow TTL & Session Persistence
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Node-Liveness-and-Sweeper/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Node Liveness and Sweeper
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Graceful-Shutdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Graceful Shutdown
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PlaywrightDotNet-pw-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Playwright .NET pw:api
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../presentation-why-playwright-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presentation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Metrics-and-Grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Metrics and Grafana
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Autoscaling Hints (HPA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compose-autoscaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Docker Compose scaling
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Session Distribution
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Session Distribution
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-distributed-and-what-isnt" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is distributed (and what isn’t)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacity-math-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Capacity math at a glance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selection-strategy-and-pinning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Selection strategy and pinning
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#label-keys-and-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      Label keys and matching
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networking-how-the-client-connects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Networking: how the client connects
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-verify-distribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      How to verify distribution
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Troubleshooting
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    <span class="md-ellipsis">
+      FAQ
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-checklist-for-distributed-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick checklist for distributed runs
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results_store_backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results Store Backends
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../run_cleanup_service_configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run Cleanup Service Configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Compatibility-Matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Compatibility Matrix
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API-Reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Improvement Tasks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="session-distribution-across-workers">Session distribution across workers<a class="headerlink" href="#session-distribution-across-workers" title="Permanent link">&para;</a></h1>
+<p>This page explains how the Hub distributes borrows across multiple Workers and what it means for capacity, routing, and client connections.</p>
+<h2 id="what-is-distributed-and-what-isnt">What is distributed (and what isn’t)<a class="headerlink" href="#what-is-distributed-and-what-isnt" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Distributed: the Hub spreads concurrent borrows across any Workers that advertise capacity for the requested label. Aggregate capacity is the sum of per-Worker slots.</li>
+<li>Not distributed: a single Playwright session is never split between Workers. Once a session is borrowed, it is pinned to the selected Worker until returned or disconnected.</li>
+</ul>
+<h2 id="capacity-math-at-a-glance">Capacity math at a glance<a class="headerlink" href="#capacity-math-at-a-glance" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Each Worker declares one or more label pools via <code>POOL_CONFIG</code>, for example: <code>AppX:Chromium:UAT=3</code>.</li>
+<li>The Hub aggregates capacity across Workers for the same label key.</li>
+</ul>
+<p>Example:
+- Worker1: <code>POOL_CONFIG=AppX:Chromium:UAT=3</code>
+- Worker2: <code>POOL_CONFIG=AppX:Chromium:UAT=3</code>
+- Effective capacity for <code>AppX:Chromium:UAT</code> = 6 concurrent sessions.</p>
+<p>If you request a 7th session while all 6 are in use, the Hub will deny or time out the request (a fair waiting queue is on the roadmap).</p>
+<h2 id="selection-strategy-and-pinning">Selection strategy and pinning<a class="headerlink" href="#selection-strategy-and-pinning" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The Hub matches the requested label using the configured rules: exact → trailing fallback → prefix expansion → optional wildcards (see HUB_BORROW_* settings).</li>
+<li>When multiple Workers have free slots for the matching label, the Hub assigns the borrow to any eligible Worker with free capacity (today typically first-available). The session remains pinned to that Worker until returned or the connection ends.</li>
+</ul>
+<h2 id="label-keys-and-matching">Label keys and matching<a class="headerlink" href="#label-keys-and-matching" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Recommended label shape: <code>App:Browser:Env[:Region[:OS…]]</code> with Browser as the second segment.</li>
+<li>Relevant Hub settings (environment variables):</li>
+<li><code>HUB_BORROW_TRAILING_FALLBACK=true|false</code></li>
+<li><code>HUB_BORROW_PREFIX_EXPAND=true|false</code></li>
+<li><code>HUB_BORROW_WILDCARDS=false|true</code></li>
+<li>To share capacity across Workers, ensure they advertise the same label key (or rely on matching behaviors you explicitly enable).</li>
+</ul>
+<h2 id="networking-how-the-client-connects">Networking: how the client connects<a class="headerlink" href="#networking-how-the-client-connects" title="Permanent link">&para;</a></h2>
+<ul>
+<li>After a successful borrow, the Hub returns the Worker’s public WebSocket endpoint for Playwright.</li>
+<li>The runner connects directly to the Worker’s WS; the Hub does not proxy Playwright commands end-to-end.</li>
+<li>Configure the Worker’s public endpoint via:</li>
+<li><code>PUBLIC_WS_HOST</code></li>
+<li><code>PUBLIC_WS_PORT</code></li>
+<li><code>PUBLIC_WS_SCHEME</code> (ws or wss)</li>
+<li>These must be reachable from the test host (your machine or CI agent).</li>
+</ul>
+<h2 id="example-configuration">Example configuration<a class="headerlink" href="#example-configuration" title="Permanent link">&para;</a></h2>
+<p>Two Workers sharing a Chromium pool for the same app/env:</p>
+<p>Worker1:
+- <code>POOL_CONFIG=AppX:Chromium:UAT=3</code>
+- <code>PUBLIC_WS_HOST=127.0.0.1</code> (adjust for your network)
+- <code>PUBLIC_WS_PORT=5200</code></p>
+<p>Worker2:
+- <code>POOL_CONFIG=AppX:Chromium:UAT=3</code>
+- <code>PUBLIC_WS_HOST=127.0.0.1</code>
+- <code>PUBLIC_WS_PORT=5201</code></p>
+<p>Hub (typical via docker compose):
+- <code>REDIS_URL=redis:6379</code>
+- <code>HUB_RUNNER_SECRET=runner-secret</code>
+- <code>HUB_NODE_SECRET=node-secret</code>
+- <code>HUB_BORROW_TRAILING_FALLBACK=true</code>
+- <code>HUB_BORROW_PREFIX_EXPAND=true</code>
+- <code>HUB_BORROW_WILDCARDS=false</code></p>
+<h2 id="how-to-verify-distribution">How to verify distribution<a class="headerlink" href="#how-to-verify-distribution" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Dashboard: open http://127.0.0.1:3001 and start multiple borrows; you should see sessions landing on different Workers.</li>
+<li>Integration tests (against a local grid):
+  1) <code>docker compose up --build</code>
+  2) <code>export GRID_TESTS_USE_LOCAL=1</code>
+  3) <code>export HUB_URL=http://127.0.0.1:5100</code>
+  4) <code>export HUB_RUNNER_SECRET=runner-secret</code>
+  5) <code>dotnet test tests/GridTests.csproj -c Debug</code></li>
+<li>Metrics: Prometheus/Grafana show per-Worker utilization and total capacity.</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Borrow succeeds but WS connect fails:</li>
+<li><code>PUBLIC_WS_*</code> must reflect an address reachable from the test host.</li>
+<li>Confirm ports are exposed and not blocked by a firewall.</li>
+<li>Requests never match capacity:</li>
+<li>Ensure Workers advertise the exact label key you borrow.</li>
+<li>Review <code>HUB_BORROW_*</code> settings; disable wildcards unless intentional.</li>
+<li>Validate <code>POOL_CONFIG</code> formatting: <code>LabelKey=Count</code>, comma-separated for multiple pools.</li>
+<li>Starvation or uneven spread:</li>
+<li>Current strategy is first-available; fairness and queues are on the roadmap.</li>
+</ul>
+<h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Does having two Workers with <code>=3</code> each give me six total sessions? Yes—aggregate capacity is 6.</li>
+<li>Can a single session move between Workers? No—once allocated, it stays on the selected Worker.</li>
+<li>What happens on the 7th borrow when 6 are busy? The request is denied or times out (queueing is on the roadmap).</li>
+<li>Do I need Playwright locally for GridTests? No—binaries are handled inside the Worker containers.</li>
+</ul>
+<h2 id="quick-checklist-for-distributed-runs">Quick checklist for distributed runs<a class="headerlink" href="#quick-checklist-for-distributed-runs" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[ ] Workers advertise the same label (e.g., <code>AppX:Chromium:UAT</code>).</li>
+<li>[ ] <code>PUBLIC_WS_*</code> points to reachable endpoints from the runner.</li>
+<li>[ ] Hub matching settings (<code>HUB_BORROW_*</code>) align with your label usage.</li>
+<li>[ ] Dashboard/metrics confirm sessions spread across Workers.</li>
+<li>[ ] Secrets (<code>HUB_RUNNER_SECRET</code>, <code>HUB_NODE_SECRET</code>) are consistent across components.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.expand", "navigation.tracking", "toc.integrate", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
