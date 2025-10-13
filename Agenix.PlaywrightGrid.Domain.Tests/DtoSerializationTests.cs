@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -33,12 +33,7 @@ public class DtoSerializationTests
     [Test]
     public void BorrowRequestDto_Serializes_With_RunName_When_Present()
     {
-        var dto = new BorrowRequestDto
-        {
-            LabelKey = "AppB:Chromium:UAT",
-            RunId = "rid-123",
-            RunName = "My Run"
-        };
+        var dto = new BorrowRequestDto { LabelKey = "AppB:Chromium:UAT", RunId = "rid-123", RunName = "My Run" };
 
         var json = JsonSerializer.Serialize(dto, WebJson);
         TestContext.WriteLine(json);
@@ -51,12 +46,7 @@ public class DtoSerializationTests
     [Test]
     public void BorrowRequestDto_Omits_RunName_When_Null()
     {
-        var dto = new BorrowRequestDto
-        {
-            LabelKey = "AppB:Chromium:UAT",
-            RunId = "rid-456",
-            RunName = null
-        };
+        var dto = new BorrowRequestDto { LabelKey = "AppB:Chromium:UAT", RunId = "rid-456", RunName = null };
 
         var json = JsonSerializer.Serialize(dto, WebJson);
         TestContext.WriteLine(json);

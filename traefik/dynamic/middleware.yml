@@ -1,0 +1,295 @@
+# ==============================================================================
+# Traefik Dynamic Configuration - Middleware
+# ==============================================================================
+# This file defines reusable middleware for request/response transformation.
+# Hot-reloads automatically when changed.
+#
+# Apply middleware to services using labels:
+#   - "traefik.http.routers.hub.middlewares=rate-limit@file,security-headers@file"
+# ==============================================================================
+
+http:
+  middlewares:
+    # ==========================================================================
+    # Rate Limiting
+    # ==========================================================================
+
+    # General rate limit: 100 requests/second per IP
+    rate-limit:
+      rateLimit:
+        average: 100      # Average requests per second
+        burst: 50         # Burst allowance (requests above average)
+        period: "1s"      # Time window
+        # sourceCriterion:
+        #   requestHost: true  # Rate limit per Host header instead of IP
+
+    # API rate limit: Stricter for API endpoints
+    api-rate-limit:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: "1s"
+
+    # Upload rate limit: For artifact uploads
+    upload-rate-limit:
+      rateLimit:
+        average: 5
+        burst: 10
+        period: "1s"
+
+    # ==========================================================================
+    # Security Headers
+    # ==========================================================================
+
+    # Comprehensive security headers (production)
+    security-headers:
+      headers:
+        # HTTPS enforcement
+        sslRedirect: true
+        stsSeconds: 31536000              # 1 year
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+
+        # XSS protection
+        browserXssFilter: true
+        customBrowserXSSValue: "1; mode=block"
+
+        # Content type sniffing prevention
+        contentTypeNosniff: true
+
+        # Clickjacking protection
+        frameDeny: false
+        customFrameOptionsValue: "SAMEORIGIN"
+
+        # Content Security Policy (adjust for your needs)
+        contentSecurityPolicy: >
+          default-src 'self';
+          script-src 'self' 'unsafe-inline' 'unsafe-eval';
+          style-src 'self' 'unsafe-inline';
+          img-src 'self' data: https:;
+          font-src 'self' data:;
+          connect-src 'self' ws: wss:;
+          frame-ancestors 'self';
+
+        # Referrer policy
+        referrerPolicy: "strict-origin-when-cross-origin"
+
+        # Permissions policy (formerly Feature-Policy)
+        permissionsPolicy: >
+          geolocation=(),
+          microphone=(),
+          camera=(),
+          payment=(),
+          usb=(),
+          magnetometer=(),
+          gyroscope=(),
+          accelerometer=()
+
+    # Development security headers (less strict)
+    security-headers-dev:
+      headers:
+        browserXssFilter: true
+        contentTypeNosniff: true
+        frameDeny: false
+        customFrameOptionsValue: "SAMEORIGIN"
+
+    # ==========================================================================
+    # Compression
+    # ==========================================================================
+
+    # Gzip/Brotli compression for responses
+    compression:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"       # SSE (Server-Sent Events)
+          - "application/grpc"         # gRPC
+          - "application/octet-stream" # Binary data
+        minResponseBodyBytes: 1024     # Only compress responses >= 1KB
+
+    # ==========================================================================
+    # CORS (Cross-Origin Resource Sharing)
+    # ==========================================================================
+
+    # Permissive CORS (development)
+    cors-dev:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowOriginList:
+          - "*"
+        accessControlAllowHeaders:
+          - "*"
+        accessControlMaxAge: 3600
+        addVaryHeader: true
+
+    # Restrictive CORS (production)
+    cors-prod:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+        accessControlAllowOriginList:
+          - "https://dashboard.your-domain.com"
+          - "https://hub.your-domain.com"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+        accessControlExposeHeaders:
+          - "Content-Length"
+        accessControlMaxAge: 3600
+        addVaryHeader: true
+
+    # ==========================================================================
+    # Authentication
+    # ==========================================================================
+
+    # Basic authentication for admin endpoints
+    # Generate password hash: htpasswd -nb admin password
+    admin-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/"  # admin:admin
+        removeHeader: true  # Remove Authorization header after auth
+        realm: "Agenix Playwright Grid Admin"
+
+    # ==========================================================================
+    # IP Whitelisting
+    # ==========================================================================
+
+    # Office/VPN access only
+    admin-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"      # Localhost
+          - "192.168.1.0/24"    # Local network
+          - "10.0.0.0/8"        # Private network
+          # - "your-office-ip/32"  # Office public IP
+
+    # ==========================================================================
+    # Path Manipulation
+    # ==========================================================================
+
+    # Strip /api prefix before forwarding
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api"
+        forceSlash: false
+
+    # Strip /grafana prefix
+    strip-grafana-prefix:
+      stripPrefix:
+        prefixes:
+          - "/grafana"
+
+    # Add prefix
+    add-api-prefix:
+      addPrefix:
+        prefix: "/api"
+
+    # Replace path
+    replace-path:
+      replacePath:
+        path: "/health"
+
+    # ==========================================================================
+    # Redirects
+    # ==========================================================================
+
+    # HTTP → HTTPS redirect
+    redirect-to-https:
+      redirectScheme:
+        scheme: "https"
+        permanent: true
+        port: 443
+
+    # Redirect to www
+    redirect-to-www:
+      redirectRegex:
+        regex: "^https://example\\.com/(.*)"
+        replacement: "https://www.example.com/${1}"
+        permanent: true
+
+    # ==========================================================================
+    # Buffering
+    # ==========================================================================
+
+    # Request buffering (for large uploads)
+    buffering:
+      buffering:
+        maxRequestBodyBytes: 104857600  # 100 MB
+        memRequestBodyBytes: 2097152    # 2 MB (in-memory buffer)
+        maxResponseBodyBytes: 104857600 # 100 MB
+        memResponseBodyBytes: 2097152   # 2 MB
+        retryExpression: "IsNetworkError() && Attempts() < 3"
+
+    # ==========================================================================
+    # Circuit Breaker
+    # ==========================================================================
+
+    # Circuit breaker: Stop forwarding if backend unhealthy
+    circuit-breaker:
+      circuitBreaker:
+        expression: "NetworkErrorRatio() > 0.5 || ResponseCodeRatio(500, 600, 0, 600) > 0.3"
+        checkPeriod: "10s"
+        fallbackDuration: "30s"
+        recoveryDuration: "60s"
+
+    # ==========================================================================
+    # Retry
+    # ==========================================================================
+
+    # Automatic retry on network errors
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: "100ms"
+
+    # ==========================================================================
+    # Timeouts
+    # ==========================================================================
+
+    # Note: In Traefik v3.x, timeouts are configured at the service level, not as middleware.
+    # Configure timeouts in your service definition or in the static configuration.
+    # See: https://doc.traefik.io/traefik/routing/services/#response-forwarding-timeouts
+
+    # timeouts:
+    #   # Timeouts are not available as middleware in Traefik v3.x
+    #   # Configure at service level instead
+
+    # timeouts-long:
+    #   # Timeouts are not available as middleware in Traefik v3.x
+    #   # Configure at service level instead
+
+    # ==========================================================================
+    # Request ID
+    # ==========================================================================
+
+    # Note: Traefik v3.x does not support dynamic request ID generation via templates.
+    # For request tracing, consider using a plugin or implementing at application level.
+    # See: https://doc.traefik.io/traefik/middlewares/http/headers/
+
+    # request-id:
+    #   headers:
+    #     customRequestHeaders:
+    #       X-Request-ID: "static-value-only"
+
+# ==============================================================================
+# TCP Middleware (for TCP routers)
+# ==============================================================================
+tcp:
+  middlewares:
+    # IP whitelist for TCP services
+    tcp-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "192.168.1.0/24"

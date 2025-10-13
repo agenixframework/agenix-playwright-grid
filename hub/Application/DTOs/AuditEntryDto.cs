@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -16,8 +16,6 @@
 // limitations under the License.
 #endregion
 
-using System.Text.Json.Serialization;
-
 namespace PlaywrightHub.Application.DTOs;
 
 /// <summary>
@@ -27,9 +25,9 @@ namespace PlaywrightHub.Application.DTOs;
 public sealed class AuditEntryDto
 {
     /// <summary>
-    ///     UTC timestamp when the event occurred.
+    ///     Timestamp when the event occurred (in server's local timezone).
     /// </summary>
-    public required DateTime TimestampUtc { get; init; }
+    public required DateTime Timestamp { get; init; }
 
     /// <summary>
     ///     Logical category (e.g., node, admin, secrets).
@@ -39,12 +37,13 @@ public sealed class AuditEntryDto
     /// <summary>
     ///     Action identifier (e.g., register.success, register.denied, rotation.enabled).
     /// </summary>
-    public required string Action { get; init; } = string.Empty;   // e.g., register.success, register.denied, rotation.enabled
+    public required string Action { get; init; } =
+        string.Empty; // e.g., register.success, register.denied, rotation.enabled
 
     /// <summary>
     ///     Optional actor that triggered the event (dashboard, runner, nodeId).
     /// </summary>
-    public string? Actor { get; init; }                             // e.g., dashboard, runner, nodeId
+    public string? Actor { get; init; } // e.g., dashboard, runner, nodeId
 
     /// <summary>
     ///     Optional remote IP address as observed by the hub.
@@ -59,7 +58,7 @@ public sealed class AuditEntryDto
     /// <summary>
     ///     Severity level (Info|Warning|Error). Default: Info.
     /// </summary>
-    public string? Severity { get; init; } = "Info";               // Info|Warning|Error
+    public string? Severity { get; init; } = "Info"; // Info|Warning|Error
 
     /// <summary>
     ///     Free-form details map. Do not include secrets or PII. Keep values concise.

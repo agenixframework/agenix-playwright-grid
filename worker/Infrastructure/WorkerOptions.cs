@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -28,13 +28,14 @@ namespace WorkerService.Infrastructure;
 /// </summary>
 public sealed class WorkerOptions
 {
-    public sealed record BackoffSettings(int MinSeconds, int MaxSeconds, double Multiplier, int FailureResetSeconds);
-    public BackoffSettings SidecarBackoff { get; init; } = new(1, 30, 2.0, 60);
     public enum WsDropPolicy
     {
         DropNewest,
         DropOldest
     }
+
+    public BackoffSettings SidecarBackoff { get; init; } = new(1, 30, 2.0, 60);
+
     /// <summary>
     ///     Hub base URL (e.g., http://hub:5000).
     /// </summary>
@@ -94,16 +95,36 @@ public sealed class WorkerOptions
     public int WebSocketProxyChannelCapacity { get; init; } = 1024;
 
     /// <summary>
-    ///     Drop policy when the proxy frame channel is full. Controlled by WS_PROXY_DROP_POLICY; allowed values: DropNewest, DropOldest.
+    ///     Drop policy when the proxy frame channel is full. Controlled by WS_PROXY_DROP_POLICY; allowed values: DropNewest,
+    ///     DropOldest.
     ///     Default DropNewest.
     /// </summary>
     public WsDropPolicy WebSocketProxyDropPolicy { get; init; } = WsDropPolicy.DropNewest;
+
+    /// <summary>
+    ///     Maximum number of concurrent client WebSocket connections accepted by this Worker.
+    ///     Controlled by WS_MAX_CONNECTIONS; 0 means unlimited. Values are clamped to 0..65535. Default 0 (unlimited).
+    /// </summary>
+    public int WebSocketMaxConnections { get; init; }
 
     /// <summary>
     ///     Borrow idle timeout used to refresh Redis borrow_idle:{browserId} key during activity.
     ///     Sourced from HUB_IDLE_TIMEOUT_SECONDS; clamped to 10 .. 86400 seconds. Default 120.
     /// </summary>
     public int BorrowIdleTimeoutSeconds { get; init; } = 120;
+
+    /// <summary>
+    ///     Interval (in seconds) for verifying worker registration with hub.
+    ///     If worker is not found in hub diagnostics, it will re-register automatically.
+    ///     Sourced from AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS; clamped to 10 .. 600 seconds. Default 60.
+    /// </summary>
+    public int RegistrationVerificationIntervalSeconds { get; init; } = 60;
+
+    /// <summary>
+    ///     Interval (in seconds) for sending heartbeat to hub.
+    ///     Sourced from AGENIX_WORKER_HEARTBEAT_INTERVAL_SECONDS; clamped to 10 .. 300 seconds. Default 30.
+    /// </summary>
+    public int HeartbeatIntervalSeconds { get; init; } = 30;
 
     /// <summary>
     ///     Redis connection endpoint (e.g., redis:6379).
@@ -176,17 +197,20 @@ public sealed class WorkerOptions
     public bool DiskMonitorEnabled { get; init; } = true;
 
     /// <summary>
-    ///     Interval between disk/inode checks in seconds. Controlled by DISK_MONITOR_INTERVAL_SECONDS; clamped 10..3600. Default 60.
+    ///     Interval between disk/inode checks in seconds. Controlled by DISK_MONITOR_INTERVAL_SECONDS; clamped 10..3600.
+    ///     Default 60.
     /// </summary>
     public int DiskMonitorIntervalSeconds { get; init; } = 60;
 
     /// <summary>
-    ///     Disk usage high watermark percent (0..100). When reached, cleanup is attempted. Controlled by DISK_USAGE_HIGH_PCT. Default 85.
+    ///     Disk usage high watermark percent (0..100). When reached, cleanup is attempted. Controlled by DISK_USAGE_HIGH_PCT.
+    ///     Default 85.
     /// </summary>
     public int DiskUsageHighWatermarkPercent { get; init; } = 85;
 
     /// <summary>
-    ///     Disk usage critical watermark percent (0..100). When reached, stronger alerts are logged. Controlled by DISK_USAGE_CRITICAL_PCT. Default 95.
+    ///     Disk usage critical watermark percent (0..100). When reached, stronger alerts are logged. Controlled by
+    ///     DISK_USAGE_CRITICAL_PCT. Default 95.
     /// </summary>
     public int DiskUsageCriticalPercent { get; init; } = 95;
 
@@ -201,18 +225,27 @@ public sealed class WorkerOptions
     public int InodeUsageCriticalPercent { get; init; } = 95;
 
     /// <summary>
+    ///     Interval in seconds between ReconcileLoop checks for browser process health and recycle flags.
+    ///     Controlled by AGENIX_WORKER_RECONCILE_LOOP_INTERVAL_SECONDS; clamped to 1..60 seconds.
+    ///     Default 5 seconds. Lower values provide faster response to health check failures but increase CPU usage.
+    /// </summary>
+    public int ReconcileLoopIntervalSeconds { get; init; } = 5;
+
+    /// <summary>
     ///     Semi-colon/comma/newline-separated list of directories to target for cleanup. Controlled by CLEANUP_TARGET_DIRS.
     ///     Defaults to a safe temp location under the OS temp path ("pw-traces" subdir). Create it in your compose if needed.
     /// </summary>
     public string CleanupTargetDirs { get; init; } = "";
 
     /// <summary>
-    ///     Minimum file age in minutes before eligible for deletion. Controlled by CLEANUP_MIN_FILE_AGE_MINUTES; clamped 1..10080 (7 days). Default 60.
+    ///     Minimum file age in minutes before eligible for deletion. Controlled by CLEANUP_MIN_FILE_AGE_MINUTES; clamped
+    ///     1..10080 (7 days). Default 60.
     /// </summary>
     public int CleanupMinFileAgeMinutes { get; init; } = 60;
 
     /// <summary>
-    ///     Maximum bytes to delete per sweep expressed in MB. Controlled by CLEANUP_MAX_DELETE_MB_PER_SWEEP; clamped 1..102400. Default 1024 (1 GiB).
+    ///     Maximum bytes to delete per sweep expressed in MB. Controlled by CLEANUP_MAX_DELETE_MB_PER_SWEEP; clamped
+    ///     1..102400. Default 1024 (1 GiB).
     /// </summary>
     public int CleanupMaxDeleteMbPerSweep { get; init; } = 1024;
 
@@ -223,7 +256,8 @@ public sealed class WorkerOptions
     {
         var errors = new List<string>();
 
-        var poolConfigEnv = Environment.GetEnvironmentVariable("POOL_CONFIG") ?? "AppA:Chromium:Staging=3";
+        var poolConfigEnv = Environment.GetEnvironmentVariable("AGENIX_WORKER_POOL_CONFIG") ??
+                            "AppA:Chromium:Staging=3";
         // Labels
         var labels = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -241,9 +275,11 @@ public sealed class WorkerOptions
             if (kv.Length == 2 && int.TryParse(kv[1], out var v))
             {
                 var rawKey = kv[0];
+                // Validate with LabelKey but store rawKey to preserve original case
+                // Dictionary uses OrdinalIgnoreCase so lookups are case-insensitive anyway
                 if (LabelKey.TryParse(rawKey, out var lk))
                 {
-                    pools[lk!.Normalized] = v;
+                    pools[rawKey] = v;
                 }
                 else
                 {
@@ -275,7 +311,7 @@ public sealed class WorkerOptions
         {
             var envName = "NODE_LABEL_VALUES_" + key.ToUpperInvariant();
             var valuesEnv = Environment.GetEnvironmentVariable(envName);
-            string defaults = key switch
+            var defaults = key switch
             {
                 "channel" => "stable,canary,beta,dev,other",
                 "headless" => "true,false,other",
@@ -289,6 +325,7 @@ public sealed class WorkerOptions
             {
                 vals.Add("other");
             }
+
             allowedValues[key] = vals;
         }
 
@@ -297,7 +334,8 @@ public sealed class WorkerOptions
         var aggEnv = Environment.GetEnvironmentVariable("NODE_LABELS");
         if (!string.IsNullOrWhiteSpace(aggEnv))
         {
-            foreach (var part in aggEnv.Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (var part in aggEnv.Split(new[] { ',', ';', '\n' },
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
                 var kv = part.Split('=', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 if (kv.Length == 2)
@@ -306,6 +344,7 @@ public sealed class WorkerOptions
                 }
             }
         }
+
         // Explicit overrides NODE_LABEL_<KEY>
         foreach (var key in allowedKeys)
         {
@@ -316,16 +355,22 @@ public sealed class WorkerOptions
                 provided[key] = val;
             }
         }
+
         // Project to allowed values, coalescing to 'other'
         foreach (var kvp in provided)
         {
             var k = kvp.Key.ToLowerInvariant();
-            if (!allowedValues.TryGetValue(k, out var set)) continue; // ignore unknown keys
+            if (!allowedValues.TryGetValue(k, out var set))
+            {
+                continue; // ignore unknown keys
+            }
+
             var v = (kvp.Value ?? string.Empty).Trim().ToLowerInvariant();
             if (!set.Contains(v))
             {
                 v = "other";
             }
+
             labels[k] = v;
         }
 
@@ -369,6 +414,7 @@ public sealed class WorkerOptions
         {
             compMin = Math.Min(16 * 1024 * 1024, Math.Max(0, cmin));
         }
+
         bool compEnabled;
         switch (compEnv)
         {
@@ -402,7 +448,7 @@ public sealed class WorkerOptions
 
         var logPolicyEnv = Environment.GetEnvironmentVariable("WS_LOG_DROP_POLICY") ?? "DropNewest";
         var logPolicy = WsDropPolicy.DropNewest;
-        if (!Enum.TryParse<WsDropPolicy>(logPolicyEnv, true, out logPolicy))
+        if (!Enum.TryParse(logPolicyEnv, true, out logPolicy))
         {
             // Non-fatal: default to DropNewest
             logPolicy = WsDropPolicy.DropNewest;
@@ -416,13 +462,22 @@ public sealed class WorkerOptions
         {
             proxyCap = Math.Min(65536, Math.Max(32, pcap));
         }
+
         var proxyPolicyEnv = Environment.GetEnvironmentVariable("WS_PROXY_DROP_POLICY") ?? "DropNewest";
         var proxyPolicy = WsDropPolicy.DropNewest;
-        if (!Enum.TryParse<WsDropPolicy>(proxyPolicyEnv, true, out proxyPolicy))
+        if (!Enum.TryParse(proxyPolicyEnv, true, out proxyPolicy))
         {
             // Non-fatal: default to DropNewest
             proxyPolicy = WsDropPolicy.DropNewest;
             errors.Add($"WS_PROXY_DROP_POLICY has invalid value '{proxyPolicyEnv}'. Allowed: DropNewest, DropOldest.");
+        }
+
+        // WS max concurrent connections (0 = unlimited)
+        var maxConnsEnv = Environment.GetEnvironmentVariable("WS_MAX_CONNECTIONS");
+        var maxConns = 0;
+        if (!string.IsNullOrWhiteSpace(maxConnsEnv) && int.TryParse(maxConnsEnv.Trim(), out var mcon))
+        {
+            maxConns = Math.Min(65535, Math.Max(0, mcon));
         }
 
         // Borrow idle refresh timeout (seconds), sourced from HUB_IDLE_TIMEOUT_SECONDS
@@ -433,50 +488,132 @@ public sealed class WorkerOptions
             borrowIdleSeconds = Math.Min(86400, Math.Max(10, bIdle));
         }
 
+        // Registration verification interval (seconds)
+        var registrationVerificationEnv = Environment.GetEnvironmentVariable("AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS");
+        var registrationVerificationSeconds = 60;
+        if (!string.IsNullOrWhiteSpace(registrationVerificationEnv) && int.TryParse(registrationVerificationEnv.Trim(), out var regVerif))
+        {
+            registrationVerificationSeconds = Math.Min(600, Math.Max(10, regVerif));
+        }
+
+        // Heartbeat interval (seconds)
+        var heartbeatIntervalEnv = Environment.GetEnvironmentVariable("AGENIX_WORKER_HEARTBEAT_INTERVAL_SECONDS");
+        var heartbeatIntervalSeconds = 30;
+        if (!string.IsNullOrWhiteSpace(heartbeatIntervalEnv) && int.TryParse(heartbeatIntervalEnv.Trim(), out var hbInterval))
+        {
+            heartbeatIntervalSeconds = Math.Min(300, Math.Max(10, hbInterval));
+        }
+
         // Sidecar restart backoff parsing
-        int clamp(int v, int min, int max) => Math.Min(max, Math.Max(min, v));
-        double clampd(double v, double min, double max) => Math.Min(max, Math.Max(min, v));
-        var backoffMin = clamp(int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MIN_SECONDS"), out var bmin) ? bmin : 1, 1, 120);
-        var backoffMax = clamp(int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MAX_SECONDS"), out var bmax) ? bmax : 30, 1, 600);
-        if (backoffMax < backoffMin) backoffMax = backoffMin;
-        var backoffMult = clampd(double.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MULTIPLIER"), out var bmul) ? bmul : 2.0, 1.1, 5.0);
-        var backoffReset = clamp(int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_FAILURE_RESET_SECONDS"), out var brst) ? brst : 60, 10, 600);
+        int clamp(int v, int min, int max)
+        {
+            return Math.Min(max, Math.Max(min, v));
+        }
+
+        double clampd(double v, double min, double max)
+        {
+            return Math.Min(max, Math.Max(min, v));
+        }
+
+        var backoffMin =
+            clamp(
+                int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MIN_SECONDS"), out var bmin)
+                    ? bmin
+                    : 1, 1, 120);
+        var backoffMax =
+            clamp(
+                int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MAX_SECONDS"), out var bmax)
+                    ? bmax
+                    : 30, 1, 600);
+        if (backoffMax < backoffMin)
+        {
+            backoffMax = backoffMin;
+        }
+
+        var backoffMult =
+            clampd(
+                double.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_MULTIPLIER"), out var bmul)
+                    ? bmul
+                    : 2.0, 1.1, 5.0);
+        var backoffReset =
+            clamp(
+                int.TryParse(Environment.GetEnvironmentVariable("SIDECAR_BACKOFF_FAILURE_RESET_SECONDS"), out var brst)
+                    ? brst
+                    : 60, 10, 600);
 
         // Disk/inode monitor settings
-        var diskMonEnabled = !string.Equals(Environment.GetEnvironmentVariable("DISK_MONITOR_ENABLED"), "0", StringComparison.OrdinalIgnoreCase);
-        var diskMonInterval = clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_MONITOR_INTERVAL_SECONDS"), out var di) ? di : 60, 10, 3600);
-        var diskHigh = clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_USAGE_HIGH_PCT"), out var dh) ? dh : 85, 0, 100);
-        var diskCrit = clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_USAGE_CRITICAL_PCT"), out var dc) ? dc : 95, 0, 100);
-        if (diskCrit < diskHigh) diskCrit = Math.Min(100, diskHigh);
-        var inodeHigh = clamp(int.TryParse(Environment.GetEnvironmentVariable("INODE_USAGE_HIGH_PCT"), out var ih) ? ih : 85, 0, 100);
-        var inodeCrit = clamp(int.TryParse(Environment.GetEnvironmentVariable("INODE_USAGE_CRITICAL_PCT"), out var ic) ? ic : 95, 0, 100);
-        if (inodeCrit < inodeHigh) inodeCrit = Math.Min(100, inodeHigh);
+        var diskMonEnabled = !string.Equals(Environment.GetEnvironmentVariable("DISK_MONITOR_ENABLED"), "0",
+            StringComparison.OrdinalIgnoreCase);
+        var diskMonInterval =
+            clamp(
+                int.TryParse(Environment.GetEnvironmentVariable("DISK_MONITOR_INTERVAL_SECONDS"), out var di) ? di : 60,
+                10, 3600);
+        var diskHigh =
+            clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_USAGE_HIGH_PCT"), out var dh) ? dh : 85, 0,
+                100);
+        var diskCrit =
+            clamp(int.TryParse(Environment.GetEnvironmentVariable("DISK_USAGE_CRITICAL_PCT"), out var dc) ? dc : 95, 0,
+                100);
+        if (diskCrit < diskHigh)
+        {
+            diskCrit = Math.Min(100, diskHigh);
+        }
+
+        var inodeHigh =
+            clamp(int.TryParse(Environment.GetEnvironmentVariable("INODE_USAGE_HIGH_PCT"), out var ih) ? ih : 85, 0,
+                100);
+        var inodeCrit =
+            clamp(int.TryParse(Environment.GetEnvironmentVariable("INODE_USAGE_CRITICAL_PCT"), out var ic) ? ic : 95, 0,
+                100);
+        if (inodeCrit < inodeHigh)
+        {
+            inodeCrit = Math.Min(100, inodeHigh);
+        }
+
         var cleanupDirs = Environment.GetEnvironmentVariable("CLEANUP_TARGET_DIRS") ?? "";
-        var minAgeMin = clamp(int.TryParse(Environment.GetEnvironmentVariable("CLEANUP_MIN_FILE_AGE_MINUTES"), out var ma) ? ma : 60, 1, 10080);
-        var maxDeleteMb = clamp(int.TryParse(Environment.GetEnvironmentVariable("CLEANUP_MAX_DELETE_MB_PER_SWEEP"), out var md) ? md : 1024, 1, 102400);
+        var minAgeMin =
+            clamp(
+                int.TryParse(Environment.GetEnvironmentVariable("CLEANUP_MIN_FILE_AGE_MINUTES"), out var ma) ? ma : 60,
+                1, 10080);
+        var maxDeleteMb =
+            clamp(
+                int.TryParse(Environment.GetEnvironmentVariable("CLEANUP_MAX_DELETE_MB_PER_SWEEP"), out var md)
+                    ? md
+                    : 1024, 1, 102400);
+
+        // ReconcileLoop interval (Phase 1: Configurable interval)
+        var reconcileLoopInterval =
+            clamp(
+                int.TryParse(Environment.GetEnvironmentVariable("AGENIX_WORKER_RECONCILE_LOOP_INTERVAL_SECONDS"), out var rli)
+                    ? rli
+                    : 5, 1, 60);
 
         // Critical validations
-        var hubUrlEnv = Environment.GetEnvironmentVariable("HUB_URL") ?? "http://hub:5000";
+        var hubUrlEnv = Environment.GetEnvironmentVariable("AGENIX_HUB_URL") ?? "http://hub:5000";
         if (!Uri.TryCreate(hubUrlEnv, UriKind.Absolute, out var hubUri) ||
-            !(hubUri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || hubUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+            !(hubUri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) ||
+              hubUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
         {
             errors.Add($"HUB_URL must be a valid http/https URL. Value: '{hubUrlEnv}'.");
         }
 
-        var publicWsHost = Environment.GetEnvironmentVariable("PUBLIC_WS_HOST");
-        var publicWsPortRaw = Environment.GetEnvironmentVariable("PUBLIC_WS_PORT");
-        var publicWsScheme = Environment.GetEnvironmentVariable("PUBLIC_WS_SCHEME") ?? "ws";
+        var publicWsHost = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST");
+        var publicWsPortRaw = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT");
+        var publicWsScheme = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_SCHEME") ?? "ws";
         if (!string.IsNullOrWhiteSpace(publicWsScheme) &&
-            !(publicWsScheme.Equals("ws", StringComparison.OrdinalIgnoreCase) || publicWsScheme.Equals("wss", StringComparison.OrdinalIgnoreCase)))
+            !(publicWsScheme.Equals("ws", StringComparison.OrdinalIgnoreCase) ||
+              publicWsScheme.Equals("wss", StringComparison.OrdinalIgnoreCase)))
         {
             errors.Add($"PUBLIC_WS_SCHEME must be 'ws' or 'wss'. Value: '{publicWsScheme}'.");
         }
+
         var hostProvided = !string.IsNullOrWhiteSpace(publicWsHost);
         var portProvided = !string.IsNullOrWhiteSpace(publicWsPortRaw);
         if (hostProvided ^ portProvided)
         {
             errors.Add("PUBLIC_WS_HOST and PUBLIC_WS_PORT must be provided together to enable public WS endpoint.");
         }
+
         int? publicPort = null;
         if (portProvided)
         {
@@ -490,7 +627,8 @@ public sealed class WorkerOptions
             }
         }
 
-        if (errors.Count > 0 && (errors.Any(e => e.StartsWith("HUB_URL")) || errors.Any(e => e.StartsWith("PUBLIC_WS_"))))
+        if (errors.Count > 0 &&
+            (errors.Any(e => e.StartsWith("AGENIX_HUB_URL")) || errors.Any(e => e.StartsWith("PUBLIC_WS_"))))
         {
             throw new ArgumentException("Invalid worker configuration:\n - " + string.Join("\n - ", errors));
         }
@@ -499,9 +637,9 @@ public sealed class WorkerOptions
         {
             HubUrl = hubUrlEnv,
             RedisUrl = Environment.GetEnvironmentVariable("REDIS_URL") ?? "redis:6379",
-            NodeId = Environment.GetEnvironmentVariable("NODE_ID") ?? $"node-{Guid.NewGuid():N}",
-            NodeSecret = Environment.GetEnvironmentVariable("NODE_SECRET") ?? "node-secret",
-            NodeNodeSecret = Environment.GetEnvironmentVariable("NODE_NODE_SECRET") ?? "node-node-secret",
+            NodeId = GetNodeId(),
+            NodeSecret = Environment.GetEnvironmentVariable("AGENIX_WORKER_NODE_SECRET") ?? "node-secret",
+            NodeNodeSecret = Environment.GetEnvironmentVariable("AGENIX_WORKER_NODE_NODE_SECRET") ?? "node-node-secret",
             PoolConfigEnv = poolConfigEnv,
             NodeExe = Environment.GetEnvironmentVariable("NODE_EXE") ?? "node",
             SidecarScript =
@@ -521,7 +659,10 @@ public sealed class WorkerOptions
             WebSocketLogDropPolicy = logPolicy,
             WebSocketProxyChannelCapacity = proxyCap,
             WebSocketProxyDropPolicy = proxyPolicy,
+            WebSocketMaxConnections = maxConns,
             BorrowIdleTimeoutSeconds = borrowIdleSeconds,
+            RegistrationVerificationIntervalSeconds = registrationVerificationSeconds,
+            HeartbeatIntervalSeconds = heartbeatIntervalSeconds,
             SidecarBackoff = new BackoffSettings(backoffMin, backoffMax, backoffMult, backoffReset),
             DiskMonitorEnabled = diskMonEnabled,
             DiskMonitorIntervalSeconds = diskMonInterval,
@@ -531,8 +672,33 @@ public sealed class WorkerOptions
             InodeUsageCriticalPercent = inodeCrit,
             CleanupTargetDirs = cleanupDirs,
             CleanupMinFileAgeMinutes = minAgeMin,
-            CleanupMaxDeleteMbPerSweep = maxDeleteMb
+            CleanupMaxDeleteMbPerSweep = maxDeleteMb,
+            ReconcileLoopIntervalSeconds = reconcileLoopInterval
         };
+    }
+
+    /// <summary>
+    ///     Gets the worker node ID from environment variables, with fallback to generated GUID.
+    ///     Handles empty strings (which Docker/containers sometimes set for HOSTNAME).
+    /// </summary>
+    private static string GetNodeId()
+    {
+        // Try AGENIX_WORKER_NODE_ID first
+        var nodeId = Environment.GetEnvironmentVariable("AGENIX_WORKER_NODE_ID");
+        if (!string.IsNullOrWhiteSpace(nodeId))
+        {
+            return nodeId;
+        }
+
+        // Try HOSTNAME (but check for empty string, not just null)
+        var hostname = Environment.GetEnvironmentVariable("HOSTNAME");
+        if (!string.IsNullOrWhiteSpace(hostname))
+        {
+            return hostname;
+        }
+
+        // Fallback to unique GUID-based identifier
+        return $"node-{Guid.NewGuid():N}";
     }
 
     /// <summary>
@@ -584,4 +750,6 @@ public sealed class WorkerOptions
             return RuntimeInformation.OSDescription;
         }
     }
+
+    public sealed record BackoffSettings(int MinSeconds, int MaxSeconds, double Multiplier, int FailureResetSeconds);
 }

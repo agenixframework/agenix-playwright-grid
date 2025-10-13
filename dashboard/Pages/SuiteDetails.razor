@@ -1,0 +1,2422 @@
+@page "/{ProjectKey}/launches/{LaunchIdOrNumber}/suites"
+@using System.Globalization
+@using System.Net
+@using System.Text.RegularExpressions
+@implements IAsyncDisposable
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
+@inject ILogger<SuiteDetails> Logger
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<link href="/css/suite-details.css" rel="stylesheet"/>
+
+<div class="suite-details">
+    @if (_launch == null || _suites == null)
+    {
+        <div class="loading-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="mt-3 text-muted">Loading launch suites...</div>
+        </div>
+    }
+    else
+    {
+        @* Action Panel Component *@
+        <LaunchActionPanel Launch="@GetLaunchInfo()"
+                           BreadcrumbItems="@GetBreadcrumbs()"
+                           OnNavigateBack="NavigateBack"
+                           OnRefresh="RefreshAsync"
+                           ShowStubDataButton="false"
+                           RenderMarkdown="@RenderMarkdown"
+                           DescriptionTruncateLength="150"
+                           AllowCollapse="true"/>
+
+        @* Statistics Section - Always calculate from filtered suites *@
+        var filteredSuitesList = FilteredSuites;
+        var totalRuns = filteredSuitesList.Sum(s => s.TotalTests);
+        var passedTests = filteredSuitesList.Sum(s => s.PassedTests);
+        var failedTests = filteredSuitesList.Sum(s => s.FailedTests);
+        var skippedTests = filteredSuitesList.Sum(s => s.SkippedTests);
+        var timedoutTests = filteredSuitesList.Sum(s => s.TimedoutTests);
+        var passedPercentage = totalRuns > 0 ? passedTests * 100.0 / totalRuns : 0;
+
+        @* Info Panel with View Tabs and Test Status Types *@
+        <div class="info-panel">
+            <div class="info-line">
+                <div class="view-tabs">
+                    <button class="view-tab @(_activeView == "list" ? "active" : "")"
+                            @onclick='() => SwitchView("list")'>
+                        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 20">
+                            <path
+                                d="M11.815 2A2.99 2.99 0 0 0 9 0a2.99 2.99 0 0 0-2.815 2H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4.185zM9 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm2 14H4v-2h7v2zm3-4H4v-2h10v2zM4 9V7h10v2H4z"></path>
+                        </svg>
+                        List view
+                    </button>
+                    <button class="view-tab @(_activeView == "errors" ? "active" : "")"
+                            @onclick='() => SwitchView("errors")'>
+                        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                            <path
+                                d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z"/>
+                            <path
+                                d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z"/>
+                        </svg>
+                        Unique Errors
+                        @if (_uniqueErrors != null && _uniqueErrors.Any())
+                        {
+                            <span class="badge bg-danger ms-1">@_uniqueErrors.Count</span>
+                        }
+                    </button>
+                    <button class="view-tab @(_activeView == "history" ? "active" : "")"
+                            @onclick='() => SwitchView("history")'>
+                        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                            <path
+                                d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"></path>
+                            <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"></path>
+                        </svg>
+                        History
+                    </button>
+                </div>
+                <div class="stats-right">
+                    <div class="passed-percentage-info">
+                        Passed: <span class="value">@passedPercentage.ToString("0.0")%</span>
+                    </div>
+                    <div class="total-info">
+                        Total: <span class="value">@totalRuns</span>
+                    </div>
+                </div>
+                <div class="test-status-types">
+                    <div class="test-status-type" title="Failed">
+                        <div class="test-status-type-block">
+                            <div class="circle" style="background-color: #dc2626;"></div>
+                            <span class="title">F</span>
+                            <div class="stats" style="border-color: #dc2626;">
+                                <span class="value">@failedTests</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="test-status-type" title="Skipped">
+                        <div class="test-status-type-block">
+                            <div class="circle" style="background-color: #6b7280;"></div>
+                            <span class="title">S</span>
+                            <div class="stats" style="border-color: #6b7280;">
+                                <span class="value">@skippedTests</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="test-status-type" title="Passed">
+                        <div class="test-status-type-block">
+                            <div class="circle" style="background-color: #4caf50;"></div>
+                            <span class="title">P</span>
+                            <div class="stats" style="border-color: #4caf50;">
+                                <span class="value">@passedTests</span>
+                            </div>
+                        </div>
+                    </div>
+                    @if (timedoutTests > 0)
+                    {
+                        <div class="test-status-type" title="Timedout">
+                            <div class="test-status-type-block">
+                                <div class="circle" style="background-color: #f59e0b;"></div>
+                                <span class="title">T</span>
+                                <div class="stats" style="border-color: #f59e0b;">
+                                    <span class="value">@timedoutTests</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* List View Content *@
+        @if (_activeView == "list")
+        {
+            @* Filter Section *@
+            <div class="card mb-3">
+                <div class="card-header filter-panel-header" @onclick="ToggleFilterPanel" style="cursor: pointer;">
+                    <div class="filter-panel-title-wrapper">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                             viewBox="0 0 16 16" class="filter-collapse-icon">
+                            @if (_showFilterPanel)
+                            {
+                                <path fill-rule="evenodd"
+                                      d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                            }
+                            else
+                            {
+                                <path fill-rule="evenodd"
+                                      d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                            }
+                        </svg>
+                        <span class="filter-panel-title">Filters</span>
+                    </div>
+                </div>
+                @if (_showFilterPanel)
+                {
+                    <div class="card-body">
+                        <div class="filter-panel">
+                            <div class="filter-criteria-container">
+                                <div class="filter-criteria-header">
+                                    <div class="filter-header-field">Field</div>
+                                    <div class="filter-header-operator">Condition</div>
+                                    <div class="filter-header-value">Value</div>
+                                    <div class="filter-header-actions"></div>
+                                </div>
+
+                                <div class="filter-criteria-list">
+                                    @foreach (var (filter, index) in _filterCriteria.Select((f, i) => (f, i)))
+                                    {
+                                        @if (index > 0)
+                                        {
+                                            <div class="filter-logical-operator">
+                                                <select class="form-select form-select-sm logical-operator-select"
+                                                        @bind="_filterCriteria[index].LogicalOperator">
+                                                    <option value="AND">AND</option>
+                                                    <option value="OR">OR</option>
+                                                </select>
+                                            </div>
+                                        }
+
+                                        <div class="filter-criterion" key="@index">
+                                            <select class="form-select form-select-sm filter-field" @bind="filter.Field"
+                                                    @bind:after="@(() => OnFieldChange(filter))">
+                                                <option value="name">Name</option>
+                                                <option value="description">Description</option>
+                                                <option value="status">Status</option>
+                                                <option value="attribute">Attribute</option>
+                                                <option value="started_time">Started Time</option>
+                                                <option value="duration">Duration</option>
+                                                <option value="total">Total</option>
+                                                <option value="passed">Passed</option>
+                                                <option value="failed">Failed</option>
+                                                <option value="skipped">Skipped</option>
+                                            </select>
+
+                                            @if (filter.Field == "status")
+                                            {
+                                                <select class="form-select form-select-sm filter-operator" disabled>
+                                                    <option value="equals">equals</option>
+                                                </select>
+                                            }
+                                            else if (filter.Field == "started_time")
+                                            {
+                                                <select class="form-select form-select-sm filter-operator" disabled>
+                                                    <option value="range">in range</option>
+                                                </select>
+                                            }
+                                            else if (filter.Field == "duration" || filter.Field == "total" || filter.Field == "passed" || filter.Field == "failed" || filter.Field == "skipped")
+                                            {
+                                                <select class="form-select form-select-sm filter-operator"
+                                                        @bind="filter.Operator">
+                                                    <option value="equals">equals</option>
+                                                    <option value="gte">greater than or equal</option>
+                                                    <option value="lte">less than or equal</option>
+                                                </select>
+                                            }
+                                            else if (filter.Field == "attribute")
+                                            {
+                                                <select class="form-select form-select-sm filter-operator"
+                                                        @bind="filter.Operator">
+                                                    <option value="all">all</option>
+                                                    <option value="without_all">without all</option>
+                                                    <option value="any">any</option>
+                                                    <option value="without_any">without any</option>
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <select class="form-select form-select-sm filter-operator"
+                                                        @bind="filter.Operator">
+                                                    <option value="contains">contains</option>
+                                                    <option value="not_contains">not contains</option>
+                                                    <option value="equals">equals</option>
+                                                    <option value="not_equals">not equals</option>
+                                                </select>
+                                            }
+
+                                            @if (filter.Field == "status")
+                                            {
+                                                <select class="form-select form-select-sm filter-value"
+                                                        @bind="filter.Value">
+                                                    <option value="">Select status...</option>
+                                                    <option value="Passed">Passed</option>
+                                                    <option value="Failed">Failed</option>
+                                                    <option value="Skipped">Skipped</option>
+                                                    <option value="InProgress">In Progress</option>
+                                                    <option value="Interrupted">Interrupted</option>
+                                                    <option value="Errored">Errored</option>
+                                                </select>
+                                            }
+                                            else if (filter.Field == "duration")
+                                            {
+                                                <input type="number" class="form-control form-control-sm filter-value"
+                                                       placeholder="Duration in seconds" @bind="filter.Value"
+                                                       @bind:event="oninput"/>
+                                            }
+                                            else if (filter.Field == "total")
+                                            {
+                                                <input type="number" class="form-control form-control-sm filter-value"
+                                                       placeholder="Total count" @bind="filter.Value"
+                                                       @bind:event="oninput"/>
+                                            }
+                                            else if (filter.Field == "passed")
+                                            {
+                                                <input type="number" class="form-control form-control-sm filter-value"
+                                                       placeholder="Passed count" @bind="filter.Value"
+                                                       @bind:event="oninput"/>
+                                            }
+                                            else if (filter.Field == "failed")
+                                            {
+                                                <input type="number" class="form-control form-control-sm filter-value"
+                                                       placeholder="Failed count" @bind="filter.Value"
+                                                       @bind:event="oninput"/>
+                                            }
+                                            else if (filter.Field == "skipped")
+                                            {
+                                                <input type="number" class="form-control form-control-sm filter-value"
+                                                       placeholder="Skipped count" @bind="filter.Value"
+                                                       @bind:event="oninput"/>
+                                            }
+                                            else if (filter.Field == "started_time")
+                                            {
+                                                <div class="date-range-picker-wrapper">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary date-range-toggle"
+                                                            @onclick="@(() => filter.ShowDateRangePicker = !filter.ShowDateRangePicker)">
+                                                        @GetDateRangeDisplay(filter)
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                             fill="currentColor" viewBox="0 0 16 16" class="ms-1">
+                                                            <path
+                                                                d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                                                        </svg>
+                                                    </button>
+                                                    @if (filter.ShowDateRangePicker)
+                                                    {
+                                                        <div class="date-range-picker-dropdown">
+                                                            <div class="date-range-presets">
+                                                                <button type="button"
+                                                                        class="date-preset-btn @(filter.DateRangePreset == "today" ? "active" : "")"
+                                                                        @onclick="@(() => SetDateRangePreset(filter, "today"))">
+                                                                    Today
+                                                                </button>
+                                                                <button type="button"
+                                                                        class="date-preset-btn @(filter.DateRangePreset == "last_2_days" ? "active" : "")"
+                                                                        @onclick="@(() => SetDateRangePreset(filter, "last_2_days"))">
+                                                                    Last 2 days
+                                                                </button>
+                                                                <button type="button"
+                                                                        class="date-preset-btn @(filter.DateRangePreset == "last_7_days" ? "active" : "")"
+                                                                        @onclick="@(() => SetDateRangePreset(filter, "last_7_days"))">
+                                                                    Last 7 days
+                                                                </button>
+                                                                <button type="button"
+                                                                        class="date-preset-btn @(filter.DateRangePreset == "last_30_days" ? "active" : "")"
+                                                                        @onclick="@(() => SetDateRangePreset(filter, "last_30_days"))">
+                                                                    Last 30 days
+                                                                </button>
+                                                                <button type="button"
+                                                                        class="date-preset-btn @(filter.DateRangePreset == "custom" ? "active" : "")"
+                                                                        @onclick="@(() => SetDateRangePreset(filter, "custom"))">
+                                                                    Custom range
+                                                                </button>
+                                                            </div>
+                                                            @if (filter.DateRangePreset == "custom")
+                                                            {
+                                                                <div class="date-range-custom">
+                                                                    <div class="date-range-inputs">
+                                                                        <div class="date-input-group">
+                                                                            <label>FROM</label>
+                                                                            <input type="date"
+                                                                                   class="form-control form-control-sm"
+                                                                                   value="@filter.FromDate"
+                                                                                   @onchange="@(e =>
+                                                                                              {
+                                                                                                  var args = e;
+                                                                                                  filter.FromDate = args.Value?.ToString() ?? string.Empty;
+                                                                                                  StateHasChanged();
+                                                                                              })"/>
+                                                                        </div>
+                                                                        <div class="date-input-group">
+                                                                            <label>TO</label>
+                                                                            <input type="date"
+                                                                                   class="form-control form-control-sm"
+                                                                                   value="@filter.ToDate"
+                                                                                   @onchange="@(e =>
+                                                                                              {
+                                                                                                  var args = e;
+                                                                                                  filter.ToDate = args.Value?.ToString() ?? string.Empty;
+                                                                                                  StateHasChanged();
+                                                                                              })"/>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                            else if (filter.Field == "attribute")
+                                            {
+                                                <div class="attribute-tags-container">
+                                                    @foreach (var attr in filter.Attributes)
+                                                    {
+                                                        <span class="attribute-tag">
+                                                    @attr.Key@(string.IsNullOrWhiteSpace(attr.Value) ? "" : $":{attr.Value}")
+                                                            <button type="button" class="attribute-tag-remove"
+                                                                    @onclick="() => RemoveAttribute(filter, attr)"
+                                                                    title="Remove attribute">×</button>
+                                                </span>
+                                                    }
+                                                    <div class="attribute-input-wrapper">
+                                                        <input type="text"
+                                                               class="form-control form-control-sm attribute-key-input"
+                                                               placeholder="Key" @bind="filter.TempAttributeKey"
+                                                               @bind:event="oninput" @onkeydown="@(e =>
+                                                                                                 {
+                                                                                                     if (e.Code == "Enter" || e.Key == "Enter") AddAttribute(filter);
+                                                                                                 })"/>
+                                                        <span class="attribute-separator">:</span>
+                                                        <input type="text"
+                                                               class="form-control form-control-sm attribute-value-input"
+                                                               placeholder="Value" @bind="filter.TempAttributeValue"
+                                                               @bind:event="oninput" @onkeydown="@(e =>
+                                                                                                 {
+                                                                                                     if (e.Code == "Enter" || e.Key == "Enter") AddAttribute(filter);
+                                                                                                 })"/>
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-primary attribute-add-btn"
+                                                                @onclick="() => AddAttribute(filter)"
+                                                                title="Add attribute">+
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <input type="text" class="form-control form-control-sm filter-value"
+                                                       placeholder="Enter value" @bind="filter.Value"
+                                                       @bind:event="oninput"/>
+                                            }
+
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-danger remove-criterion-btn"
+                                                    @onclick="@(() => RemoveFilterCriterion(index))"
+                                                    title="Remove criterion">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                     fill="currentColor"
+                                                     viewBox="0 0 16 16">
+                                                    <path
+                                                        d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                                    <path fill-rule="evenodd"
+                                                          d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="filter-panel-footer">
+                                    <button type="button" class="btn btn-sm btn-primary" @onclick="AddFilterCriterion">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                             fill="currentColor"
+                                             viewBox="0 0 16 16" class="me-1">
+                                            <path
+                                                d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                                        </svg>
+                                        Add new clause
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                                            @onclick="ClearFilters">
+                                        Clear filters
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Suites Table *@
+            <div class="suites-section">
+                @if (_suites == null || !_suites.Any())
+                {
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                            <path
+                                d="M8.93 6.588l-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                        </svg>
+                        <p>No suites found for this launch</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="suites-table-container">
+                        @* SVG Definitions *@
+                        <svg style="display: none;">
+                            <defs>
+                                <symbol id="filter-icon" viewBox="0 0 16 16" fill="currentColor">
+                                    <path
+                                        d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/>
+                                </symbol>
+                            </defs>
+                        </svg>
+                        <table class="runs-table">
+                            <thead>
+                            <tr>
+                                <th class="run-name-col sortable-header">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="filter-toggle-wrapper" title="Hide passed suites">
+                                            <label class="filter-toggle">
+                                                <input type="checkbox" @bind="_hidePassedSuites"
+                                                       @bind:after="StateHasChanged">
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                        <div class="column-header-content">
+                                            <svg class="filter-icon" @onclick="@(() => AddFilterForField("name"))"
+                                                 @onclick:stopPropagation>
+                                                <use href="#filter-icon"/>
+                                            </svg>
+                                            <span @onclick='() => SortBy("name")'>Suite Name</span>
+                                            @if (_sortBy.StartsWith("name"))
+                                            {
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                     fill="currentColor"
+                                                     viewBox="0 0 16 16" class="sort-icon"
+                                                     @onclick='() => SortBy("name")'>
+                                                    @if (_sortBy == "name_asc")
+                                                    {
+                                                        <path fill-rule="evenodd"
+                                                              d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z"/>
+                                                    }
+                                                    else
+                                                    {
+                                                        <path fill-rule="evenodd"
+                                                              d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/>
+                                                    }
+                                                </svg>
+                                            }
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="started-col sortable-header">
+                                    <div class="column-header-content">
+                                        <svg class="filter-icon" @onclick="@(() => AddFilterForField("started_time"))"
+                                             @onclick:stopPropagation>
+                                            <use href="#filter-icon"/>
+                                        </svg>
+                                        <span @onclick='() => SortBy("starttime")'>Started</span>
+                                        @if (_sortBy.StartsWith("starttime"))
+                                        {
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                 fill="currentColor"
+                                                 viewBox="0 0 16 16" class="sort-icon"
+                                                 @onclick='() => SortBy("starttime")'>
+                                                @if (_sortBy == "starttime_asc")
+                                                {
+                                                    <path fill-rule="evenodd"
+                                                          d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z"/>
+                                                }
+                                                else
+                                                {
+                                                    <path fill-rule="evenodd"
+                                                          d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/>
+                                                }
+                                            </svg>
+                                        }
+                                    </div>
+                                </th>
+                                <th class="status-col sortable-header">
+                                    <div class="column-header-content">
+                                        <svg class="filter-icon" @onclick="@(() => AddFilterForField("status"))"
+                                             @onclick:stopPropagation>
+                                            <use href="#filter-icon"/>
+                                        </svg>
+                                        <span @onclick='() => SortBy("status")'>Status</span>
+                                        @if (_sortBy.StartsWith("status"))
+                                        {
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                 fill="currentColor"
+                                                 viewBox="0 0 16 16" class="sort-icon"
+                                                 @onclick='() => SortBy("status")'>
+                                                @if (_sortBy == "status_asc")
+                                                {
+                                                    <path fill-rule="evenodd"
+                                                          d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z"/>
+                                                }
+                                                else
+                                                {
+                                                    <path fill-rule="evenodd"
+                                                          d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/>
+                                                }
+                                            </svg>
+                                        }
+                                    </div>
+                                </th>
+                                <th class="number-col">
+                                    <div class="column-header-content">
+                                        <svg class="filter-icon" @onclick="@(() => AddFilterForField("total"))"
+                                             @onclick:stopPropagation>
+                                            <use href="#filter-icon"/>
+                                        </svg>
+                                        <span>Total</span>
+                                    </div>
+                                </th>
+                                <th class="number-col">
+                                    <div class="column-header-content">
+                                        <svg class="filter-icon" @onclick="@(() => AddFilterForField("passed"))"
+                                             @onclick:stopPropagation>
+                                            <use href="#filter-icon"/>
+                                        </svg>
+                                        <span>Passed</span>
+                                    </div>
+                                </th>
+                                <th class="number-col">
+                                    <div class="column-header-content">
+                                        <svg class="filter-icon" @onclick="@(() => AddFilterForField("failed"))"
+                                             @onclick:stopPropagation>
+                                            <use href="#filter-icon"/>
+                                        </svg>
+                                        <span>Failed</span>
+                                    </div>
+                                </th>
+                                <th class="number-col">
+                                    <div class="column-header-content">
+                                        <svg class="filter-icon" @onclick="@(() => AddFilterForField("skipped"))"
+                                             @onclick:stopPropagation>
+                                            <use href="#filter-icon"/>
+                                        </svg>
+                                        <span>Skipped</span>
+                                    </div>
+                                </th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var suite in PagedSuites)
+                            {
+                                <tr class="run-row">
+                                    <td class="run-name-col">
+                                        <div class="run-name-cell">
+                                            <div class="run-name-header">
+                                                <a href="/@(ProjectKey)/launches/@(_launch?.DbId ?? 0)/suites/@(suite?.DbId ?? 0)/tests"
+                                                   class="run-name-link">
+                                                    @(suite?.Name ?? "Unknown Suite")
+                                                </a>
+                                                <span class="run-duration-badge"
+                                                      data-tooltip="@(suite != null ? GetSuiteDurationTooltip(suite) : "")">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                 viewBox="0 0 16 16">
+                                                <path
+                                                    d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"></path>
+                                                <path
+                                                    d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"></path>
+                                            </svg>
+                                            <span>@(suite != null ? FormatDuration(suite.DurationSeconds ?? (suite.FinishTime.HasValue ? (suite.FinishTime.Value - suite.StartTime).TotalSeconds : (DateTimeOffset.UtcNow - suite.StartTime).TotalSeconds)) : "0s")</span>
+                                        </span>
+                                            </div>
+
+                                            @* Attributes *@
+                                            @if (suite?.Attributes?.Any() ?? false)
+                                            {
+                                                <div class="run-metadata-container">
+                                                    <div class="run-metadata-row">
+                                                <span class="metadata-icon" data-tooltip="Attributes">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                         fill="currentColor" viewBox="0 0 16 16">
+                                                        <path
+                                                            d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
+                                                    </svg>
+                                                </span>
+
+                                                        @{
+                                                            var isAttributesExpanded = IsAttributesExpanded(suite.Id);
+                                                            var attributesToShow = isAttributesExpanded ? suite.Attributes : suite.Attributes.Take(3).ToArray();
+                                                        }
+
+                                                        @foreach (var attr in attributesToShow)
+                                                        {
+                                                            var parts = attr.Split(':', 2, StringSplitOptions.TrimEntries);
+                                                            if (parts.Length == 2)
+                                                            {
+                                                                <span class="run-attribute-item clickable-filter"
+                                                                      @onclick="@(() => FilterByAttribute(parts[0], parts[1]))"
+                                                                      @onclick:stopPropagation
+                                                                      data-tooltip="Click to filter by attribute">@parts[0]: @parts[1]</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="run-attribute-tag clickable-filter"
+                                                                      @onclick="@(() => FilterByTag(attr))"
+                                                                      @onclick:stopPropagation
+                                                                      data-tooltip="Click to filter by tag">@attr</span>
+                                                            }
+                                                        }
+
+                                                        @if (suite.Attributes.Length > 3)
+                                                        {
+                                                            <button class="run-attribute-more" type="button"
+                                                                    @onclick="@(() => ToggleAttributes(suite.Id))"
+                                                                    @onclick:stopPropagation>
+                                                                @if (isAttributesExpanded)
+                                                                {
+                                                                    <span>Show less</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span>+@(suite.Attributes.Length - 3) more</span>
+                                                                }
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            @* Description *@
+                                            @if (!string.IsNullOrWhiteSpace(suite?.Description))
+                                            {
+                                                <div class="run-description-container">
+                                                    <div class="run-description">
+                                                        @GetDisplayDescription(suite.Id, suite.Description)
+                                                    </div>
+                                                    @if (ShouldTruncateDescription(suite.Description))
+                                                    {
+                                                        <button class="run-description-toggle"
+                                                                @onclick="() => ToggleDescription(suite.Id)"
+                                                                @onclick:stopPropagation
+                                                                type="button">
+                                                            @if (IsDescriptionExpanded(suite.Id))
+                                                            {
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14"
+                                                                     height="14"
+                                                                     fill="currentColor" viewBox="0 0 16 16">
+                                                                    <path fill-rule="evenodd"
+                                                                          d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                                                </svg>
+                                                                <span>Show less</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="14"
+                                                                     height="14"
+                                                                     fill="currentColor" viewBox="0 0 16 16">
+                                                                    <path fill-rule="evenodd"
+                                                                          d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                                                </svg>
+                                                                <span>Show more</span>
+                                                            }
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="started-col">
+                                        <div>@(suite?.StartTime.ToLocalTime().ToString("MMM dd, HH:mm") ?? "-")</div>
+                                        <div class="time-ago">@(suite != null ? FormatAgo(suite.StartTime) : "-")</div>
+                                    </td>
+                                    <td class="status-col">
+                                        @{
+                                            var rawStatus = (suite?.Status ?? "unknown").ToLowerInvariant();
+                                            var displayStatus = rawStatus switch
+                                            {
+                                                "failed" or "error" or "errored" => "Failed",
+                                                "running" or "inprogress" => "InProgress",
+                                                "stopped" or "autostopped" or "aborted" => "Stopped",
+                                                "passed" or "finished" => "Passed",
+                                                "skipped" => "Skipped",
+                                                "timedout" => "Timedout",
+                                                _ => "Unknown"
+                                            };
+                                            var statusClass = displayStatus.ToLowerInvariant() switch
+                                            {
+                                                "failed" => "failed",
+                                                "inprogress" => "running",
+                                                "stopped" => "stopped",
+                                                "passed" => "finished",
+                                                "skipped" => "skipped",
+                                                "timedout" => "timeout",
+                                                _ => "unknown"
+                                            };
+                                        }
+                                        <span class="status-badge status-@statusClass">
+                                    @displayStatus
+                                </span>
+                                    </td>
+                                    <td class="number-col">
+                                        @if (suite?.TotalTests > 0)
+                                        {
+                                            @RenderDonut(suite.TotalTests, suite.TotalTests, suite.PassedTests, suite.FailedTests, suite.SkippedTests, suite.TimedoutTests, false, "")
+                                        }
+                                        else
+                                        {
+                                            <span class="status-zero">—</span>
+                                        }
+                                    </td>
+                                    <td class="status-col">
+                                        @if (suite?.PassedTests > 0)
+                                        {
+                                            @RenderDonut(suite.PassedTests, suite.TotalTests, suite.PassedTests, 0, 0, 0, true, "passed")
+                                        }
+                                        else
+                                        {
+                                            <span class="status-zero">—</span>
+                                        }
+                                    </td>
+                                    <td class="status-col">
+                                        @if (suite?.FailedTests > 0)
+                                        {
+                                            @RenderDonut(suite.FailedTests, suite.TotalTests, 0, suite.FailedTests, 0, 0, true, "failed")
+                                        }
+                                        else
+                                        {
+                                            <span class="status-zero">—</span>
+                                        }
+                                    </td>
+                                    <td class="status-col">
+                                        @if (suite?.SkippedTests > 0)
+                                        {
+                                            @RenderDonut(suite.SkippedTests, suite.TotalTests, 0, 0, suite.SkippedTests, 0, true, "skipped")
+                                        }
+                                        else
+                                        {
+                                            <span class="status-zero">—</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+
+                        @* Pagination *@
+                        <Dashboard.Shared.Pager
+                            Total="@SortedFilteredSuites.Count()"
+                            Skip="@_skip"
+                            Take="@_take"
+                            TakeChanged="@OnTakeChanged"
+                            OnPrev="@PreviousPage"
+                            OnNext="@NextPage"/>
+                    </div>
+                }
+            </div>
+        }
+        @* End of List View *@
+
+        @* Unique Errors View *@
+        @if (_activeView == "errors")
+        {
+            @if (_uniqueErrors == null || !_uniqueErrors.Any())
+            {
+                <div class="empty-state-container">
+                    <div class="empty-state-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="currentColor"
+                             viewBox="0 0 16 16" class="empty-state-icon text-success">
+                            <path
+                                d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                        </svg>
+                        <h4 class="empty-state-title">No Errors Found</h4>
+                        <p class="empty-state-description">All tests in this launch passed successfully or no error
+                            patterns were detected.</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @* Error Log Header *@
+                <div class="error-log-header">
+                    <div class="error-log-title-section">
+                        <h5 class="error-log-title">ERROR LOG</h5>
+                        <div class="error-stats">
+                        <span class="stat-item">
+                            <span class="stat-label">ALL UNIQUE ERRORS</span>
+                            <span class="stat-value">@_uniqueErrors.Count</span>
+                        </span>
+                            <span class="stat-divider"></span>
+                            <span class="stat-item">
+                            <span class="stat-label">MATCHED TESTS</span>
+                            <span class="stat-value">@_uniqueErrors.Sum(e => e.FailedTestCount)</span>
+                        </span>
+                        </div>
+                    </div>
+                    @if (_isFilteredByError)
+                    {
+                        <button class="clear-filter-btn" @onclick="ClearErrorFilter">
+                            <i class="bi bi-x-circle"></i> Clear Filter
+                        </button>
+                    }
+                </div>
+
+                @* Error Items List *@
+                <div class="error-items-container">
+                    @foreach (var (error, index) in _uniqueErrors.Select((e, i) => (e, i)))
+                    {
+                        <div class="error-item @(IsStackTraceExpanded(index) ? "expanded" : "")">
+                            <div class="error-item-header" @onclick="() => ToggleStackTrace(index)">
+                                <div class="error-expand-icon">
+                                    <i class="bi @(IsStackTraceExpanded(index) ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                                </div>
+                                <div class="error-item-content">
+                                    <div class="error-item-main">
+                                        <div class="error-fingerprint-text">@error.Fingerprint</div>
+                                        <div class="error-item-meta">
+                                        <span class="error-count-badge">
+                                            <i class="bi bi-exclamation-circle"></i> @error.FailedTestCount
+                                        </span>
+                                            <span class="error-meta-text">
+                                            <i class="bi bi-clock"></i> @error.FirstOccurrence.ToString("MMM dd, HH:mm")
+                                        </span>
+                                            <span class="error-meta-text">
+                                            <i class="bi bi-arrow-repeat"></i> @error.OccurrenceCount occurrences
+                                        </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (IsStackTraceExpanded(index))
+                            {
+                                <div class="error-item-details">
+                                    <div class="error-detail-section">
+                                        <div class="error-detail-header">
+                                            <i class="bi bi-code-slash"></i>
+                                            <strong>Stack Trace</strong>
+                                        </div>
+                                        <pre class="error-stack-trace">@error.SampleStackTrace</pre>
+                                    </div>
+
+                                    <div class="error-detail-section">
+                                        <div class="error-detail-header">
+                                            <i class="bi bi-list-check"></i>
+                                            <strong>Affected Tests (@error.TestItemIds.Count)</strong>
+                                        </div>
+                                        @if (_loadedAffectedTests.TryGetValue(index, out var affectedTests))
+                                        {
+                                            // Debug: Show what item types we actually have
+                                            var itemTypeCounts = affectedTests
+                                                .GroupBy(t => t.ItemType ?? "null")
+                                                .Select(g => $"{g.Key}: {g.Count()}")
+                                                .ToList();
+
+                                            var testsBySuite = GroupTestsBySuite(affectedTests);
+
+                                            if (testsBySuite.Any())
+                                            {
+                                                @foreach (var suiteGroup in testsBySuite)
+                                                {
+                                                    <div class="suite-group">
+                                                        <div class="suite-group-header">
+                                                            <i class="bi bi-folder2"></i>
+                                                            <span class="suite-name">@suiteGroup.SuiteName</span>
+                                                            <span
+                                                                class="suite-test-count">@suiteGroup.Tests.Count test@(suiteGroup.Tests.Count != 1 ? "s" : "")</span>
+                                                        </div>
+                                                        <div class="suite-tests-table-wrapper">
+                                                            <table class="suite-tests-table">
+                                                                <thead>
+                                                                <tr>
+                                                                    <th>Name</th>
+                                                                    <th>Status</th>
+                                                                    <th>Started</th>
+                                                                    <th>Browser</th>
+                                                                </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                @foreach (var test in suiteGroup.Tests)
+                                                                {
+                                                                    var isFailedTest = test.ComputedStatus?.Equals("Failed", StringComparison.OrdinalIgnoreCase) == true ||
+                                                                                       test.ComputedStatus?.Equals("Errored", StringComparison.OrdinalIgnoreCase) == true;
+                                                                    var rowClass = isFailedTest ? "test-row-failed" : "";
+                                                                    <tr class="@rowClass">
+                                                                        <td>
+                                                                            @{
+                                                                                // Build hierarchical URL using db_id values (preferred)
+                                                                                string testUrl;
+                                                                                var suiteDbId = suiteGroup.SuiteId.HasValue ? GetSuiteDbId(suiteGroup.SuiteId.Value) : null;
+
+                                                                                if (_launch != null && _launch.DbId > 0 && suiteDbId.HasValue && test.DbId.HasValue)
+                                                                                {
+                                                                                    // Numeric URL (preferred) - matches route: /{projectKey}/launches/{launchId:long}/suites/{suiteId:long}/tests/{dbId:long}/test-item
+                                                                                    testUrl = $"/{ProjectKey}/launches/{_launch.DbId}/suites/{suiteDbId.Value}/tests/{test.DbId.Value}/test-item";
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    // GUID URL (fallback) - matches route: /{projectKey}/test-items/{itemId:guid}
+                                                                                    testUrl = $"/{ProjectKey}/test-items/{test.Id}";
+                                                                                }
+                                                                            }
+                                                                            <a href="@testUrl" class="test-name-link">
+                                                                                @(!string.IsNullOrWhiteSpace(test.Name) ? test.Name : test.Id.ToString().Substring(0, 8))
+                                                                            </a>
+                                                                        </td>
+                                                                        <td>
+                                                                            @{
+                                                                                var computedStatus = test.ComputedStatus ?? "Unknown";
+                                                                                var statusClass = computedStatus.ToLowerInvariant() switch
+                                                                                {
+                                                                                    "passed" => "status-badge status-passed",
+                                                                                    "failed" => "status-badge status-failed",
+                                                                                    "errored" => "status-badge status-errored",
+                                                                                    "skipped" => "status-badge status-skipped",
+                                                                                    "inprogress" => "status-badge status-inprogress",
+                                                                                    _ => "status-badge status-unknown"
+                                                                                };
+                                                                            }
+                                                                            <span
+                                                                                class="@statusClass">@computedStatus</span>
+                                                                        </td>
+                                                                        <td>
+                                                                            <span
+                                                                                class="test-time">@test.StartTime.ToLocalTime().ToString("MMM dd, HH:mm")</span>
+                                                                        </td>
+                                                                        <td>
+                                                                            @if (!string.IsNullOrWhiteSpace(test.BrowserType))
+                                                                            {
+                                                                                <span class="browser-badge">
+                                                                            <i class="@GetBrowserIcon(test.BrowserType)"></i>
+                                                                                    @test.BrowserType
+                                                                        </span>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="text-muted">-</span>
+                                                                            }
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div class="alert alert-info" style="margin: 1rem;">
+                                                    <strong>No parent Test items found.</strong><br/>
+                                                    Processed @error.TestItemIds.Count item(s),
+                                                    found @affectedTests.Count parent Test(s).<br/>
+                                                    <small class="text-muted">When Steps fail, we trace up the hierarchy
+                                                        to find and display the parent Test. If no parent Test is found,
+                                                        it means the items may be orphaned or the hierarchy is
+                                                        incomplete.</small>
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="text-muted p-3">Loading affected tests...</div>
+                                        }
+                                    </div>
+
+                                    <div class="error-timeline">
+                                        <div class="timeline-item">
+                                            <i class="bi bi-clock-history"></i>
+                                            <span class="timeline-label">First seen:</span>
+                                            <span
+                                                class="timeline-value">@error.FirstOccurrence.ToString("MMM dd, yyyy HH:mm:ss")</span>
+                                        </div>
+                                        <div class="timeline-item">
+                                            <i class="bi bi-clock"></i>
+                                            <span class="timeline-label">Last seen:</span>
+                                            <span
+                                                class="timeline-value">@error.LastOccurrence.ToString("MMM dd, yyyy HH:mm:ss")</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        @* History View *@
+        @if (_activeView == "history")
+        {
+            <ItemHistoryMatrix Context="launch"
+                               ProjectKey="@ProjectKey"
+                               LaunchId="@_launch?.Id"
+                               OnItemClickCallback="OnHistoryItemClick"
+                               OnCellClickCallback="OnHistoryCellClick"/>
+        }
+        @* End Views *@
+    }
+</div>
+
+@code {
+    [Parameter] public string? ProjectKey { get; set; }
+    [Parameter] public string? LaunchIdOrNumber { get; set; } // Accepts both GUID and numeric launch number
+
+    private Guid LaunchId { get; set; } // Resolved GUID for API calls
+    private LaunchDto? _launch;
+    private List<SuiteSummaryDto>? _suites;
+    private HubConnection? _hubConnection;
+
+    // Filter state
+    private bool _showFilterPanel;
+    private bool _hidePassedSuites;
+    private readonly List<FilterCriterion> _filterCriteria = [];
+
+    // Unique Errors state
+    private string _activeView = "list"; // Default to list view
+    private List<UniqueErrorDto>? _uniqueErrors;
+    private bool _isFilteredByError;
+    private readonly HashSet<int> _expandedStackTraces = new();
+    private readonly Dictionary<int, List<TestItemDto>> _loadedAffectedTests = new();
+
+    private List<SuiteSummaryDto> FilteredSuites
+    {
+        get
+        {
+            if (_suites == null) return [];
+
+            var filtered = _suites.AsEnumerable();
+
+            // Apply hide passed suites filter
+            if (_hidePassedSuites)
+            {
+                filtered = filtered.Where(s =>
+                {
+                    var status = s.Status?.ToLowerInvariant() ?? string.Empty;
+                    return status != "passed" && status != "finished";
+                });
+            }
+
+            // Apply clause-based filtering
+            if (_filterCriteria.Any())
+            {
+                var firstClause = true;
+                List<SuiteSummaryDto>? currentResults = null;
+
+                foreach (var criterion in _filterCriteria)
+                {
+                    var matchingSuites = filtered.Where(s => MatchesCriterion(s, criterion)).ToList();
+
+                    if (firstClause)
+                    {
+                        currentResults = matchingSuites;
+                        firstClause = false;
+                    }
+                    else if (criterion.LogicalOperator == "AND")
+                    {
+                        currentResults = currentResults!.Intersect(matchingSuites).ToList();
+                    }
+                    else // OR
+                    {
+                        currentResults = currentResults!.Union(matchingSuites).ToList();
+                    }
+                }
+
+                filtered = currentResults ?? Enumerable.Empty<SuiteSummaryDto>();
+            }
+
+            return filtered.ToList();
+        }
+    }
+
+    private static string RenderMarkdown(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var html = text;
+
+        // Escape HTML entities first
+        html = WebUtility.HtmlEncode(html);
+
+        // Bold: **text** or __text__
+        html = Regex.Replace(html, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+        html = Regex.Replace(html, @"__(.+?)__", "<strong>$1</strong>");
+
+        // Italic: *text* or _text_
+        html = Regex.Replace(html, @"\*(.+?)\*", "<em>$1</em>");
+        html = Regex.Replace(html, @"(?<!\w)_(.+?)_(?!\w)", "<em>$1</em>");
+
+        // Strikethrough: ~~text~~
+        html = Regex.Replace(html, @"~~(.+?)~~", "<del>$1</del>");
+
+        // Inline code: `code`
+        html = Regex.Replace(html, @"`(.+?)`", "<code>$1</code>");
+
+        // Links: [text](url)
+        html = Regex.Replace(html, @"\[([^\]]+)\]\(([^\)]+)\)", "<a href=\"$2\" target=\"_blank\" rel=\"noopener noreferrer\">$1</a>");
+
+        // Line breaks
+        html = html.Replace("\r\n", "<br />").Replace("\n", "<br />");
+
+        return html;
+    }
+
+    private class LaunchDto
+    {
+        // Backend returns LaunchDto with Id as Guid
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string[] Attributes { get; set; } = Array.Empty<string>();
+        public int LaunchNumber { get; set; }
+        public long DbId { get; set; } // Globally unique sequential ID
+        public DateTimeOffset StartTime { get; set; }
+        public DateTimeOffset? FinishTime { get; set; }
+        public string Status { get; set; } = "InProgress";
+        public string? OwnerUsername { get; set; }
+        public double? DurationSeconds { get; set; }
+        public int TotalTestRuns { get; set; }
+        public int FinishedTestRuns { get; set; }
+        public int RunningTestRuns { get; set; }
+        public int StoppedTestRuns { get; set; }
+        public int ErroredTestRuns { get; set; }
+
+        // Computed properties for backward compatibility
+        public Guid LaunchId => Id;
+        public string[] AttributesArray => Attributes;
+        public DateTimeOffset StartTimeOffset => StartTime;
+        public long Number => DbId; // Alias for numeric URLs
+    }
+
+    private class ItemAttribute
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve LaunchIdOrNumber to GUID (numeric URL support)
+        if (!await ResolveLaunchIdAsync())
+        {
+            Logger.LogError("Failed to resolve LaunchIdOrNumber={LaunchIdOrNumber}", LaunchIdOrNumber);
+            return;
+        }
+
+        await LoadDataAsync();
+
+        // Restore view state from SessionStorage
+        await RestoreViewStateAsync();
+
+        // TODO: SignalR for suite updates - hub endpoint /hubs/launches doesn't handle suite-specific updates yet
+        // await InitializeSignalRAsync();
+    }
+
+    /// <summary>
+    ///     Resolves LaunchIdOrNumber to a GUID. Supports both GUID and db_id (globally unique sequential ID per project).
+    /// </summary>
+    private async Task<bool> ResolveLaunchIdAsync()
+    {
+        if (string.IsNullOrWhiteSpace(LaunchIdOrNumber))
+        {
+            Logger.LogError("LaunchIdOrNumber is null or empty");
+            return false;
+        }
+
+        // Try parsing as GUID first
+        if (Guid.TryParse(LaunchIdOrNumber, out var guid))
+        {
+            LaunchId = guid;
+            Logger.LogInformation("Resolved LaunchIdOrNumber as GUID: {LaunchId}", LaunchId);
+            return true;
+        }
+
+        // Try parsing as long integer (db_id - globally unique sequential ID per project)
+        if (long.TryParse(LaunchIdOrNumber, out var dbId))
+        {
+            try
+            {
+                var httpClient = HttpFactory.CreateClient(HttpClientNames.Hub);
+                httpClient.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+                Logger.LogInformation("Resolving launch db_id {DbId} to UUID for project {ProjectKey}", dbId, ProjectKey);
+
+                var response = await httpClient.GetAsync($"/api/launches/by-db-id/{ProjectKey}/{dbId}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var launchDto = await response.Content.ReadFromJsonAsync<LaunchDto>();
+                    if (launchDto != null)
+                    {
+                        LaunchId = launchDto.LaunchId;
+                        Logger.LogInformation("Resolved launch db_id {DbId} to UUID {LaunchId}", dbId, LaunchId);
+                        return true;
+                    }
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Logger.LogError("Failed to resolve launch db_id {DbId}: Status={StatusCode}, Error={Error}",
+                        dbId, response.StatusCode, errorContent);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Exception resolving launch db_id {DbId}", dbId);
+            }
+
+            return false;
+        }
+
+        Logger.LogError("LaunchIdOrNumber is neither a valid GUID nor an integer: {LaunchIdOrNumber}", LaunchIdOrNumber);
+        return false;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            var httpClient = HttpFactory.CreateClient(HttpClientNames.Hub);
+            httpClient.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+            Logger.LogInformation("Loading launch details for LaunchId={LaunchId}, ProjectKey={ProjectKey}", LaunchId, ProjectKey);
+
+            // Fetch launch details
+            var launchResponse = await httpClient.GetAsync($"/api/launches/{LaunchId}");
+            Logger.LogInformation("Launch response status: {StatusCode}", launchResponse.StatusCode);
+
+            if (launchResponse.IsSuccessStatusCode)
+            {
+                _launch = await launchResponse.Content.ReadFromJsonAsync<LaunchDto>();
+                Logger.LogInformation("Launch loaded successfully: {LaunchName}", _launch?.Name);
+            }
+            else
+            {
+                var errorContent = await launchResponse.Content.ReadAsStringAsync();
+                Logger.LogError("Failed to load launch: Status={StatusCode}, Error={Error}", launchResponse.StatusCode, errorContent);
+            }
+
+            // Fetch test items for this launch (using new hierarchical model)
+            var testItemsResponse = await httpClient.GetAsync($"/api/launches/{LaunchId}/test-items");
+            Logger.LogInformation("Test items response status: {StatusCode}", testItemsResponse.StatusCode);
+
+            if (testItemsResponse.IsSuccessStatusCode)
+            {
+                var testItems = await testItemsResponse.Content.ReadFromJsonAsync<List<TestItemDto>>();
+                Logger.LogInformation("Loaded {Count} test items", testItems?.Count ?? 0);
+
+                // Log item types for debugging
+                if (testItems != null)
+                {
+                    foreach (var item in testItems)
+                    {
+                        Logger.LogInformation("Test item: Id={Id}, Name={Name}, ItemType={ItemType}, HasParentItemId={HasParentItemId}",
+                            item.Id, item.Name, item.ItemType, item.ParentItemId.HasValue);
+                    }
+                }
+
+                // Filter test items to show only Suite type items
+                _suites = testItems?
+                    .Where(item => item.ItemType == "Suite")
+                    .Select(item => new SuiteSummaryDto
+                    {
+                        Id = item.Id,
+                        LaunchId = LaunchId,
+                        DbId = item.DbId,
+                        SuiteNumber = item.SuiteNumber,
+                        Name = item.Name,
+                        Description = item.Description,
+                        Attributes = item.Attributes ?? Array.Empty<string>(),
+                        Type = item.ItemType ?? "Suite",
+                        StartTime = item.StartTime,
+                        FinishTime = item.FinishTime,
+                        Status = item.ComputedStatus ?? item.SessionStatus ?? "Unknown",
+                        DurationSeconds = item.DurationMs.HasValue ? item.DurationMs.Value / 1000.0 : null,
+                        TotalTests = item.TotalTests,
+                        PassedTests = item.PassedTests,
+                        FailedTests = item.FailedTests,
+                        SkippedTests = item.SkippedTests,
+                        TimedoutTests = item.TimedoutTests
+                    })
+                    .ToList() ?? [];
+
+                Logger.LogInformation("Filtered to {Count} suites", _suites?.Count ?? 0);
+            }
+            else
+            {
+                var errorContent = await testItemsResponse.Content.ReadAsStringAsync();
+                Logger.LogError("Failed to load test items: Status={StatusCode}, Error={Error}", testItemsResponse.StatusCode, errorContent);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading launch suites for LaunchId={LaunchId}, ProjectKey={ProjectKey}", LaunchId, ProjectKey);
+        }
+
+        // Load unique errors for this launch
+        await LoadUniqueErrorsAsync();
+    }
+
+    private async Task LoadUniqueErrorsAsync()
+    {
+        try
+        {
+            var httpClient = HttpFactory.CreateClient(HttpClientNames.Hub);
+            httpClient.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+            Logger.LogInformation("Loading unique errors for LaunchId={LaunchId}", LaunchId);
+
+            var response = await httpClient.GetAsync($"/api/launches/{LaunchId}/unique-errors");
+
+            if (response.IsSuccessStatusCode)
+            {
+                _uniqueErrors = await response.Content.ReadFromJsonAsync<List<UniqueErrorDto>>();
+                Logger.LogInformation("Loaded {Count} unique error patterns", _uniqueErrors?.Count ?? 0);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Logger.LogWarning("Failed to load unique errors: Status={StatusCode}, Error={Error}",
+                    response.StatusCode, errorContent);
+                _uniqueErrors = new List<UniqueErrorDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Error loading unique errors for LaunchId={LaunchId}", LaunchId);
+            _uniqueErrors = new List<UniqueErrorDto>();
+        }
+    }
+
+    private async Task ToggleStackTrace(int errorIndex)
+    {
+        if (_expandedStackTraces.Contains(errorIndex))
+        {
+            _expandedStackTraces.Remove(errorIndex);
+        }
+        else
+        {
+            _expandedStackTraces.Add(errorIndex);
+
+            // Load affected tests asynchronously when expanding
+            if (!_loadedAffectedTests.ContainsKey(errorIndex) && _uniqueErrors != null && errorIndex < _uniqueErrors.Count)
+            {
+                var error = _uniqueErrors[errorIndex];
+                var affectedTests = await GetAffectedTestsAsync(error.TestItemIds);
+                _loadedAffectedTests[errorIndex] = affectedTests;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private bool IsStackTraceExpanded(int errorIndex)
+    {
+        return _expandedStackTraces.Contains(errorIndex);
+    }
+
+    private void FilterByErrorPattern(UniqueErrorDto error)
+    {
+        // Switch to list view and filter by affected test items
+        _activeView = "list";
+        _isFilteredByError = true;
+
+        // Clear existing filters
+        _filterCriteria.Clear();
+
+        // Add filter for test item IDs affected by this error
+        var testIdsString = string.Join(",", error.TestItemIds.Select(id => id.ToString()));
+        _filterCriteria.Add(new FilterCriterion
+        {
+            Field = "id",
+            Operator = "in",
+            Value = testIdsString
+        });
+
+        Logger.LogInformation("Filtering by error pattern: {Fingerprint}, showing {Count} affected tests",
+            error.Fingerprint, error.FailedTestCount);
+
+        StateHasChanged();
+    }
+
+    private void ClearErrorFilter()
+    {
+        _isFilteredByError = false;
+
+        // Remove the ID filter
+        _filterCriteria.RemoveAll(f => f.Field == "id" && f.Operator == "in");
+
+        StateHasChanged();
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadDataAsync();
+        StateHasChanged();
+    }
+
+    private void NavigateBack()
+    {
+        Nav.NavigateTo($"/{ProjectKey}/launches");
+    }
+
+    private void NavigateToSuite(Guid suiteId)
+    {
+        var suite = _suites?.FirstOrDefault(s => s.Id == suiteId);
+        if (suite != null && _launch != null && suite.DbId.HasValue)
+        {
+            // Use db_id for ReportPortal-style numeric URLs
+            Nav.NavigateTo($"/{ProjectKey}/launches/{_launch.DbId}/suites/{suite.DbId}/tests");
+        }
+    }
+
+    private LaunchActionPanel.LaunchInfo GetLaunchInfo()
+    {
+        return new LaunchActionPanel.LaunchInfo
+        {
+            Name = _launch?.Name ?? string.Empty,
+            LaunchNumber = _launch?.LaunchNumber ?? 0,
+            Description = _launch?.Description,
+            Attributes = _launch?.AttributesArray ?? [],
+            OwnerUsername = _launch?.OwnerUsername,
+            StartTime = _launch?.StartTimeOffset ?? DateTimeOffset.UtcNow,
+            FinishTime = _launch?.FinishTime,
+            DurationSeconds = _launch?.DurationSeconds
+        };
+    }
+
+    private List<LaunchActionPanel.BreadcrumbItem> GetBreadcrumbs()
+    {
+        return new List<LaunchActionPanel.BreadcrumbItem>
+        {
+            new() { Text = "All", Url = $"/{ProjectKey}/launches" },
+            new() { Text = $"{_launch?.Name} #{_launch?.LaunchNumber}", Url = null } // Current page
+        };
+    }
+
+    private double CalculateElapsedSeconds(LaunchDto launch)
+    {
+        if (launch.FinishTime.HasValue)
+        {
+            return (launch.FinishTime.Value - launch.StartTime).TotalSeconds;
+        }
+
+        return (DateTimeOffset.UtcNow - launch.StartTime).TotalSeconds;
+    }
+
+    private string GetDurationTooltip(LaunchDto launch)
+    {
+        if (launch.FinishTime.HasValue)
+        {
+            return $"Completed: {launch.FinishTime.Value.ToLocalTime():g}";
+        }
+
+        return "In Progress";
+    }
+
+    private string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        if (ts.TotalMinutes < 1)
+            return $"{ts.TotalSeconds:F0}s";
+        return ts.TotalHours < 1 ? $"{ts.Minutes}m {ts.Seconds}s" : $"{(int)ts.TotalHours}h {ts.Minutes}m";
+    }
+
+    private string FormatAgo(DateTimeOffset time)
+    {
+        var elapsed = DateTimeOffset.UtcNow - time.ToUniversalTime();
+        if (elapsed.TotalMinutes < 1)
+            return "just now";
+        if (elapsed.TotalMinutes < 60)
+            return $"{(int)elapsed.TotalMinutes}m ago";
+        if (elapsed.TotalHours < 24)
+            return $"{(int)elapsed.TotalHours}h ago";
+        return $"{(int)elapsed.TotalDays}d ago";
+    }
+
+    private async Task InitializeSignalRAsync()
+    {
+        try
+        {
+            var hubUrl = Config["HUB_SIGNALR"] ?? "http://hub:5000/ws";
+            var uri = new Uri(hubUrl);
+            var scheme = uri.Scheme switch { "ws" => "http", "wss" => "https", _ => uri.Scheme };
+            var launchesHub = $"{scheme}://{uri.Authority}/hubs/launches";
+
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(launchesHub)
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hubConnection.On("LaunchUpdated", async () =>
+            {
+                await LoadDataAsync();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            _hubConnection.On("SuiteUpdated", async () =>
+            {
+                await LoadDataAsync();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to initialize SignalR connection for SuiteDetails");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    // Helper method for donut chart percentage calculation
+    private static double GetPercentage(int value, int total)
+    {
+        if (total == 0) return 0;
+        return Math.Round((double)value / total * 100, 1);
+    }
+
+    // Filter methods
+    private void ToggleFilterPanel()
+    {
+        _showFilterPanel = !_showFilterPanel;
+
+        // Pre-populate with one Name filter criterion when opening the panel
+        if (_showFilterPanel && _filterCriteria.Count == 0)
+        {
+            _filterCriteria.Add(new FilterCriterion { Field = "name" });
+        }
+
+        StateHasChanged();
+    }
+
+    private void AddFilterCriterion()
+    {
+        _filterCriteria.Add(new FilterCriterion { Field = "name" });
+        StateHasChanged();
+    }
+
+    private void RemoveFilterCriterion(int index)
+    {
+        if (index >= 0 && index < _filterCriteria.Count)
+        {
+            _filterCriteria.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    private void ClearFilters()
+    {
+        _filterCriteria.Clear();
+        StateHasChanged();
+    }
+
+    private void OnFieldChange(FilterCriterion filter)
+    {
+        // Reset operator to appropriate default when field changes
+        filter.Operator = filter.Field switch
+        {
+            "status" => "equals",
+            "started_time" => "range",
+            "duration" or "total" or "passed" or "failed" or "skipped" => "equals",
+            "attribute" => "all",
+            _ => "contains"
+        };
+
+        // Clear value when field changes
+        filter.Value = string.Empty;
+        filter.FromDate = string.Empty;
+        filter.ToDate = string.Empty;
+        filter.DateRangePreset = string.Empty;
+        filter.Attributes.Clear();
+        StateHasChanged();
+    }
+
+    private string GetDateRangeDisplay(FilterCriterion filter)
+    {
+        if (string.IsNullOrEmpty(filter.DateRangePreset))
+            return "Select date range";
+
+        return filter.DateRangePreset switch
+        {
+            "today" => "Today",
+            "last_2_days" => "Last 2 days",
+            "last_7_days" => "Last 7 days",
+            "last_30_days" => "Last 30 days",
+            "custom" => !string.IsNullOrEmpty(filter.FromDate) || !string.IsNullOrEmpty(filter.ToDate)
+                ? $"{filter.FromDate} - {filter.ToDate}"
+                : "Custom range",
+            _ => "Select date range"
+        };
+    }
+
+    private void SetDateRangePreset(FilterCriterion filter, string preset)
+    {
+        filter.DateRangePreset = preset;
+
+        var now = DateTimeOffset.UtcNow;
+        filter.FromDate = string.Empty;
+        filter.ToDate = string.Empty;
+
+        switch (preset)
+        {
+            case "today":
+                filter.FromDate = now.ToString("yyyy-MM-dd");
+                filter.ToDate = now.ToString("yyyy-MM-dd");
+                break;
+            case "last_2_days":
+                filter.FromDate = now.AddDays(-2).ToString("yyyy-MM-dd");
+                filter.ToDate = now.ToString("yyyy-MM-dd");
+                break;
+            case "last_7_days":
+                filter.FromDate = now.AddDays(-7).ToString("yyyy-MM-dd");
+                filter.ToDate = now.ToString("yyyy-MM-dd");
+                break;
+            case "last_30_days":
+                filter.FromDate = now.AddDays(-30).ToString("yyyy-MM-dd");
+                filter.ToDate = now.ToString("yyyy-MM-dd");
+                break;
+            case "custom":
+                // User will set dates manually
+                break;
+        }
+
+        StateHasChanged();
+    }
+
+    private void AddAttribute(FilterCriterion filter)
+    {
+        if (!string.IsNullOrWhiteSpace(filter.TempAttributeKey))
+        {
+            filter.Attributes.Add(new AttributePair
+            {
+                Key = filter.TempAttributeKey.Trim(),
+                Value = filter.TempAttributeValue?.Trim() ?? string.Empty
+            });
+            filter.TempAttributeKey = string.Empty;
+            filter.TempAttributeValue = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveAttribute(FilterCriterion filter, AttributePair attr)
+    {
+        filter.Attributes.Remove(attr);
+        StateHasChanged();
+    }
+
+    // Filter matching logic
+    private bool MatchesCriterion(SuiteSummaryDto suite, FilterCriterion criterion)
+    {
+        if (string.IsNullOrWhiteSpace(criterion.Value) && criterion.Field != "started_time" && criterion.Field != "attribute" && criterion.Field != "id")
+            return true;
+
+        return criterion.Field switch
+        {
+            "id" => ApplyIdFilter(suite.Id, criterion.Operator, criterion.Value),
+            "name" => ApplyStringFilter(suite.Name, criterion.Operator, criterion.Value),
+            "description" => ApplyStringFilter(suite.Description ?? "", criterion.Operator, criterion.Value),
+            "status" => MatchesStatusFilter(suite, criterion.Value),
+            "attribute" => ApplyAttributeFilter(suite.Attributes, criterion.Attributes, criterion.Operator),
+            "started_time" => ApplyDateRangeFilter(suite.StartTime, criterion),
+            "duration" => ApplyNumericFilter(GetDurationSeconds(suite), criterion.Operator, criterion.Value),
+            "total" => ApplyNumericFilter(suite.TotalTests, criterion.Operator, criterion.Value),
+            "passed" => ApplyNumericFilter(suite.PassedTests, criterion.Operator, criterion.Value),
+            "failed" => ApplyNumericFilter(suite.FailedTests, criterion.Operator, criterion.Value),
+            "skipped" => ApplyNumericFilter(suite.SkippedTests, criterion.Operator, criterion.Value),
+            _ => true
+        };
+    }
+
+    private bool ApplyIdFilter(Guid suiteId, string op, string filterValue)
+    {
+        if (op == "in")
+        {
+            // Split comma-separated GUIDs and check if suite ID is in the list
+            var idList = filterValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return idList.Any(id => Guid.TryParse(id, out var guid) && guid == suiteId);
+        }
+
+        return true;
+    }
+
+    private bool ApplyStringFilter(string? value, string op, string filterValue)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        return op switch
+        {
+            "contains" => value.Contains(filterValue, StringComparison.OrdinalIgnoreCase),
+            "not_contains" => !value.Contains(filterValue, StringComparison.OrdinalIgnoreCase),
+            "equals" => string.Equals(value, filterValue, StringComparison.OrdinalIgnoreCase),
+            "not_equals" => !string.Equals(value, filterValue, StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
+
+    private bool ApplyNumericFilter(double value, string op, string filterValue)
+    {
+        if (!double.TryParse(filterValue, out var target)) return true;
+
+        return op switch
+        {
+            "gte" => value >= target,
+            "lte" => value <= target,
+            "equals" => Math.Abs(value - target) < 0.01,
+            _ => true
+        };
+    }
+
+    private bool ApplyDateRangeFilter(DateTimeOffset date, FilterCriterion criterion)
+    {
+        if (string.IsNullOrEmpty(criterion.FromDate) && string.IsNullOrEmpty(criterion.ToDate))
+            return true;
+
+        var fromDate = string.IsNullOrEmpty(criterion.FromDate) ? DateTimeOffset.MinValue : DateTimeOffset.Parse(criterion.FromDate);
+        var toDate = string.IsNullOrEmpty(criterion.ToDate) ? DateTimeOffset.MaxValue : DateTimeOffset.Parse(criterion.ToDate).AddDays(1).AddSeconds(-1);
+
+        return date >= fromDate && date <= toDate;
+    }
+
+    private bool MatchesStatusFilter(SuiteSummaryDto suite, string filterValue)
+    {
+        if (string.IsNullOrWhiteSpace(filterValue)) return true;
+        return string.Equals(suite.Status, filterValue, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool ApplyAttributeFilter(string[]? suiteAttributes, List<AttributePair> filterAttributes, string op)
+    {
+        if (filterAttributes == null || !filterAttributes.Any()) return true;
+        if (suiteAttributes == null || suiteAttributes.Length == 0) return op.StartsWith("without");
+
+        var suiteAttrSet = suiteAttributes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return op switch
+        {
+            "all" => filterAttributes.All(fa => suiteAttrSet.Any(sa => MatchesAttribute(sa, fa))),
+            "without_all" => !filterAttributes.All(fa => suiteAttrSet.Any(sa => MatchesAttribute(sa, fa))),
+            "any" => filterAttributes.Any(fa => suiteAttrSet.Any(sa => MatchesAttribute(sa, fa))),
+            "without_any" => !filterAttributes.Any(fa => suiteAttrSet.Any(sa => MatchesAttribute(sa, fa))),
+            _ => true
+        };
+    }
+
+    private bool MatchesAttribute(string suiteAttr, AttributePair filterAttr)
+    {
+        if (string.IsNullOrWhiteSpace(filterAttr.Value))
+        {
+            // Match just the key
+            return suiteAttr.StartsWith(filterAttr.Key + ":", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(suiteAttr, filterAttr.Key, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Match key:value
+        var expected = $"{filterAttr.Key}:{filterAttr.Value}";
+        return string.Equals(suiteAttr, expected, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private double GetDurationSeconds(SuiteSummaryDto suite)
+    {
+        return suite.DurationSeconds ?? (suite.FinishTime.HasValue
+            ? (suite.FinishTime.Value - suite.StartTime).TotalSeconds
+            : (DateTimeOffset.UtcNow - suite.StartTime).TotalSeconds);
+    }
+
+    // Sorting state
+    private string _sortBy = "starttime_desc"; // Default sort by start time descending (newest first)
+
+    // Pagination state
+    private int _skip;
+    private int _take = 25;
+
+    // Sorting and pagination computed properties
+    private IEnumerable<SuiteSummaryDto> SortedFilteredSuites
+    {
+        get
+        {
+            var filtered = FilteredSuites.AsEnumerable();
+
+            // Apply sorting
+            filtered = _sortBy switch
+            {
+                "name_asc" => filtered.OrderBy(s => s.Name),
+                "name_desc" => filtered.OrderByDescending(s => s.Name),
+                "starttime_asc" => filtered.OrderBy(s => s.StartTime),
+                "starttime_desc" => filtered.OrderByDescending(s => s.StartTime),
+                "status_asc" => filtered.OrderBy(s => s.Status),
+                "status_desc" => filtered.OrderByDescending(s => s.Status),
+                _ => filtered.OrderByDescending(s => s.StartTime) // Default
+            };
+
+            return filtered;
+        }
+    }
+
+    private IEnumerable<SuiteSummaryDto> PagedSuites => SortedFilteredSuites.Skip(_skip).Take(_take);
+
+    // Sorting method
+    private void SortBy(string column)
+    {
+        if (_sortBy.StartsWith(column))
+        {
+            // Toggle direction
+            _sortBy = _sortBy.EndsWith("_asc") ? $"{column}_desc" : $"{column}_asc";
+        }
+        else
+        {
+            // New column, default to ascending (except starttime defaults to desc)
+            _sortBy = column == "starttime" ? $"{column}_desc" : $"{column}_asc";
+        }
+
+        // Reset pagination when sorting changes
+        _skip = 0;
+        StateHasChanged();
+    }
+
+    // Pagination methods
+    private void PreviousPage()
+    {
+        if (_skip > 0)
+        {
+            _skip = Math.Max(0, _skip - _take);
+            StateHasChanged();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_skip + _take < SortedFilteredSuites.Count())
+        {
+            _skip += _take;
+            StateHasChanged();
+        }
+    }
+
+    private void OnTakeChanged(int newTake)
+    {
+        _take = newTake;
+        _skip = 0; // Reset to first page
+        StateHasChanged();
+    }
+
+    // Filter icon click handler
+    private void AddFilterForField(string fieldName)
+    {
+        // Check if a filter for this field already exists
+        var existingFilter = _filterCriteria.FirstOrDefault(f => f.Field == fieldName);
+        if (existingFilter == null)
+        {
+            // Add new filter criterion for this field
+            var newFilter = new FilterCriterion
+            {
+                Field = fieldName,
+                // Set appropriate default operator
+                Operator = fieldName switch
+                {
+                    "status" => "equals",
+                    "started_time" => "range",
+                    "total" or "passed" or "failed" or "skipped" => "equals",
+                    "attribute" => "all",
+                    _ => "contains"
+                }
+            };
+
+            _filterCriteria.Add(newFilter);
+
+            // Show filter panel if it's hidden
+            if (!_showFilterPanel)
+            {
+                _showFilterPanel = true;
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private sealed class FilterCriterion
+    {
+        public string Field { get; set; } = "name";
+        public string Operator { get; set; } = "contains";
+        public string Value { get; set; } = string.Empty;
+        public string LogicalOperator { get; set; } = "AND";
+
+        // Date range properties
+        public string FromDate { get; set; } = string.Empty;
+        public string ToDate { get; set; } = string.Empty;
+        public string DateRangePreset { get; set; } = string.Empty;
+        public bool ShowDateRangePicker { get; set; }
+
+        // Attribute filter properties
+        public List<AttributePair> Attributes { get; set; } = new();
+        public string TempAttributeKey { get; set; } = string.Empty;
+        public string TempAttributeValue { get; set; } = string.Empty;
+    }
+
+    private sealed class AttributePair
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+
+    // Description and attributes expansion tracking
+    private readonly HashSet<Guid> _expandedDescriptions = new();
+    private readonly HashSet<Guid> _expandedAttributes = new();
+    private const int DescriptionPreviewLength = 100;
+
+    private bool IsDescriptionExpanded(Guid suiteId)
+    {
+        return _expandedDescriptions.Contains(suiteId);
+    }
+
+    private bool IsAttributesExpanded(Guid suiteId)
+    {
+        return _expandedAttributes.Contains(suiteId);
+    }
+
+    private void ToggleDescription(Guid suiteId)
+    {
+        if (_expandedDescriptions.Contains(suiteId))
+        {
+            _expandedDescriptions.Remove(suiteId);
+        }
+        else
+        {
+            _expandedDescriptions.Add(suiteId);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ToggleAttributes(Guid suiteId)
+    {
+        if (_expandedAttributes.Contains(suiteId))
+        {
+            _expandedAttributes.Remove(suiteId);
+        }
+        else
+        {
+            _expandedAttributes.Add(suiteId);
+        }
+
+        StateHasChanged();
+    }
+
+    private bool ShouldTruncateDescription(string? description)
+    {
+        return !string.IsNullOrEmpty(description) && description.Length > DescriptionPreviewLength;
+    }
+
+    private string GetDisplayDescription(Guid suiteId, string? description)
+    {
+        if (string.IsNullOrEmpty(description)) return string.Empty;
+
+        if (!ShouldTruncateDescription(description) || IsDescriptionExpanded(suiteId))
+        {
+            return description;
+        }
+
+        return description.Substring(0, DescriptionPreviewLength) + "...";
+    }
+
+    private void FilterByAttribute(string key, string value)
+    {
+        // Add filter for attribute key:value
+        var existingFilter = _filterCriteria.FirstOrDefault(f => f.Field == "attribute");
+        if (existingFilter == null)
+        {
+            var newFilter = new FilterCriterion
+            {
+                Field = "attribute",
+                Operator = "all",
+                Attributes = new List<AttributePair> { new() { Key = key, Value = value } }
+            };
+            _filterCriteria.Add(newFilter);
+        }
+        else
+        {
+            // Add to existing attribute filter if not already present
+            if (!existingFilter.Attributes.Any(a => a.Key == key && a.Value == value))
+            {
+                existingFilter.Attributes.Add(new AttributePair { Key = key, Value = value });
+            }
+        }
+
+        _showFilterPanel = true;
+        StateHasChanged();
+    }
+
+    private void FilterByTag(string tag)
+    {
+        // Add filter for tag (attribute without key)
+        var existingFilter = _filterCriteria.FirstOrDefault(f => f.Field == "attribute");
+        if (existingFilter == null)
+        {
+            var newFilter = new FilterCriterion
+            {
+                Field = "attribute",
+                Operator = "all",
+                Attributes = new List<AttributePair> { new() { Key = tag, Value = string.Empty } }
+            };
+            _filterCriteria.Add(newFilter);
+        }
+        else
+        {
+            // Add to existing attribute filter if not already present
+            if (!existingFilter.Attributes.Any(a => a.Key == tag && string.IsNullOrEmpty(a.Value)))
+            {
+                existingFilter.Attributes.Add(new AttributePair { Key = tag, Value = string.Empty });
+            }
+        }
+
+        _showFilterPanel = true;
+        StateHasChanged();
+    }
+
+    private string GetSuiteDurationTooltip(SuiteSummaryDto suite)
+    {
+        var startLocal = suite.StartTime.ToLocalTime();
+
+        // Check if suite is actually in progress
+        var isRunning = suite.Status?.Equals("InProgress", StringComparison.OrdinalIgnoreCase) == true ||
+                        suite.Status?.Equals("Running", StringComparison.OrdinalIgnoreCase) == true;
+
+        if (suite.FinishTime.HasValue)
+        {
+            var finishLocal = suite.FinishTime.Value.ToLocalTime();
+            var duration = suite.FinishTime.Value - suite.StartTime;
+            var durationText = duration.TotalMinutes < 1
+                ? $"{duration.TotalSeconds:F1}s"
+                : duration.TotalHours < 1
+                    ? $"{duration.Minutes}m {duration.Seconds}s"
+                    : $"{(int)duration.TotalHours}h {duration.Minutes}m";
+            return $"Duration: {durationText}\nFinish time: {finishLocal:yyyy-MM-dd HH:mm:ss} UTC{finishLocal:zzz}";
+        }
+
+        if (isRunning)
+        {
+            return $"Start time: {startLocal:yyyy-MM-dd HH:mm:ss} UTC{startLocal:zzz}\nIn Progress...";
+        }
+
+        // Suite completed but FinishTime not set - show start time only
+        return $"Start time: {startLocal:yyyy-MM-dd HH:mm:ss} UTC{startLocal:zzz}";
+    }
+
+    private RenderFragment RenderDonut(int centerValue, int totalTests, int passed, int failed, int skipped, int timedout, bool showPercentage, string type)
+    {
+        const int size = 50;
+        const double radius = 20.0; // 50 * 0.4
+        const double strokeWidth = 10.0; // 50 * 0.2
+        const double circumference = 2 * Math.PI * radius;
+
+        return __builder =>
+        {
+            <div class="donut-wrapper">
+                <svg class="donut-svg" width="@size" height="@size" viewBox="0 0 @size @size">
+                    @* Background circle *@
+                    <circle cx="@(size / 2)" cy="@(size / 2)" r="@radius"
+                            fill="none" stroke="#E5E7EB" stroke-width="@strokeWidth"/>
+
+                    @* Segments - render passed, failed, skipped *@
+                    @{
+                        double offset = 0;
+
+                        // Green segment (passed)
+                        if (passed > 0)
+                        {
+                            var segmentLength = passed / (double)totalTests * circumference;
+                            <circle cx="@(size / 2)" cy="@(size / 2)" r="@radius"
+                                    fill="none"
+                                    stroke="#10B981"
+                                    stroke-width="@strokeWidth"
+                                    stroke-dasharray="@(segmentLength.ToString(CultureInfo.InvariantCulture)) @(circumference.ToString(CultureInfo.InvariantCulture))"
+                                    stroke-dashoffset="@((-offset).ToString(CultureInfo.InvariantCulture))"
+                                    opacity="0.9"/>
+                            offset += segmentLength;
+                        }
+
+                        // Red segment (failed)
+                        if (failed > 0)
+                        {
+                            var segmentLength = failed / (double)totalTests * circumference;
+                            <circle cx="@(size / 2)" cy="@(size / 2)" r="@radius"
+                                    fill="none"
+                                    stroke="#EF4444"
+                                    stroke-width="@strokeWidth"
+                                    stroke-dasharray="@(segmentLength.ToString(CultureInfo.InvariantCulture)) @(circumference.ToString(CultureInfo.InvariantCulture))"
+                                    stroke-dashoffset="@((-offset).ToString(CultureInfo.InvariantCulture))"
+                                    opacity="0.9"/>
+                            offset += segmentLength;
+                        }
+
+                        // Orange segment (skipped)
+                        if (skipped > 0)
+                        {
+                            var segmentLength = skipped / (double)totalTests * circumference;
+                            <circle cx="@(size / 2)" cy="@(size / 2)" r="@radius"
+                                    fill="none"
+                                    stroke="#F59E0B"
+                                    stroke-width="@strokeWidth"
+                                    stroke-dasharray="@(segmentLength.ToString(CultureInfo.InvariantCulture)) @(circumference.ToString(CultureInfo.InvariantCulture))"
+                                    stroke-dashoffset="@((-offset).ToString(CultureInfo.InvariantCulture))"
+                                    opacity="0.9"/>
+                        }
+                    }
+                </svg>
+                <div class="donut-center">@centerValue</div>
+                @if (showPercentage && centerValue > 0 && totalTests > 0)
+                {
+                    var percentage = (centerValue / (double)totalTests * 100).ToString("F1");
+                    <div class="percentage-badge @type">@percentage%</div>
+                }
+            </div>
+        };
+    }
+
+    // Cache for affected test items to avoid repeated API calls
+    private readonly Dictionary<Guid, TestItemDto> _affectedTestsCache = new();
+
+    private async Task<List<TestItemDto>> GetAffectedTestsAsync(List<Guid> testItemIds)
+    {
+        var result = new List<TestItemDto>();
+        var processedTestIds = new HashSet<Guid>(); // Track unique test items to avoid duplicates
+
+        foreach (var itemId in testItemIds)
+        {
+            // Check cache first
+            if (!_affectedTestsCache.TryGetValue(itemId, out var item))
+            {
+                // Load from API if not cached
+                try
+                {
+                    var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    http.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+                    var response = await http.GetAsync($"/api/test-items/{itemId}");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        item = await response.Content.ReadFromJsonAsync<TestItemDto>();
+                        if (item != null)
+                        {
+                            _affectedTestsCache[itemId] = item;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to load test item {ItemId}", itemId);
+                    continue;
+                }
+            }
+
+            if (item == null) continue;
+
+            // If this is a Step, trace up to find the parent Test/Scenario
+            var testItem = await FindParentTestAsync(item);
+
+            if (testItem != null && !processedTestIds.Contains(testItem.Id))
+            {
+                result.Add(testItem);
+                processedTestIds.Add(testItem.Id);
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<TestItemDto?> FindParentTestAsync(TestItemDto item)
+    {
+        // If this is already a Test or Scenario, return it
+        if (item.ItemType == "Test" || item.ItemType == "Scenario")
+        {
+            return item;
+        }
+
+        // If this is a Step (or other nested type), trace up to find the parent Test
+        var currentItem = item;
+        var maxDepth = 10; // Prevent infinite loops
+        var depth = 0;
+
+        while (currentItem.ParentItemId.HasValue && depth < maxDepth)
+        {
+            var parentId = currentItem.ParentItemId.Value;
+
+            // Check cache first
+            if (!_affectedTestsCache.TryGetValue(parentId, out var parentItem))
+            {
+                // Load parent from API
+                try
+                {
+                    var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    http.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+                    var response = await http.GetAsync($"/api/test-items/{parentId}");
+                    if (response.IsSuccessStatusCode)
+                    {
+                        parentItem = await response.Content.ReadFromJsonAsync<TestItemDto>();
+                        if (parentItem != null)
+                        {
+                            _affectedTestsCache[parentId] = parentItem;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to load parent item {ParentId}", parentId);
+                    break;
+                }
+            }
+
+            if (parentItem == null) break;
+
+            // If we found a Test or Scenario, return it
+            if (parentItem.ItemType == "Test" || parentItem.ItemType == "Scenario")
+            {
+                return parentItem;
+            }
+
+            // Continue traversing up the hierarchy
+            currentItem = parentItem;
+            depth++;
+        }
+
+        // If we couldn't find a Test parent, return null (will be filtered out)
+        return null;
+    }
+
+    private string GetBrowserIcon(string browserType)
+    {
+        return browserType?.ToLowerInvariant() switch
+        {
+            "chromium" => "bi bi-browser-chrome",
+            "firefox" => "bi bi-browser-firefox",
+            "webkit" => "bi bi-browser-safari",
+            _ => "bi bi-browser-edge"
+        };
+    }
+
+    // Helper class for grouping tests by suite
+    private class SuiteTestGroup
+    {
+        public string SuiteName { get; set; } = "Unknown Suite";
+        public Guid? SuiteId { get; set; }
+        public List<TestItemDto> Tests { get; set; } = new();
+    }
+
+    private List<SuiteTestGroup> GroupTestsBySuite(List<TestItemDto> allItems)
+    {
+        // Filter to only Test and Scenario items (not Steps)
+        var testItems = allItems
+            .Where(item => item.ItemType == "Test" || item.ItemType == "Scenario")
+            .ToList();
+
+        // Group by ParentItemId (suite)
+        var groupedBySuite = testItems
+            .GroupBy(test => test.ParentItemId ?? Guid.Empty)
+            .ToList();
+
+        var suiteGroups = new List<SuiteTestGroup>();
+
+        foreach (var group in groupedBySuite)
+        {
+            var suiteId = group.Key != Guid.Empty ? group.Key : (Guid?)null;
+            var suiteName = "Unknown Suite";
+
+            // Try to get suite name from cache
+            if (suiteId.HasValue && _affectedTestsCache.TryGetValue(suiteId.Value, out var suiteItem))
+            {
+                suiteName = suiteItem.Name ?? "Unknown Suite";
+            }
+            else if (suiteId.HasValue)
+            {
+                // Load suite from API
+                try
+                {
+                    var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    http.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+                    var response = http.GetAsync($"/api/test-items/{suiteId.Value}").Result;
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var suite = response.Content.ReadFromJsonAsync<TestItemDto>().Result;
+                        if (suite != null)
+                        {
+                            _affectedTestsCache[suiteId.Value] = suite;
+                            suiteName = suite.Name ?? "Unknown Suite";
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to load suite {SuiteId}", suiteId);
+                }
+            }
+
+            suiteGroups.Add(new SuiteTestGroup
+            {
+                SuiteName = suiteName,
+                SuiteId = suiteId,
+                Tests = group.OrderBy(t => t.StartTime).ToList()
+            });
+        }
+
+        // Sort suite groups by suite name
+        return suiteGroups.OrderBy(g => g.SuiteName).ToList();
+    }
+
+    private long? GetSuiteDbId(Guid suiteId)
+    {
+        // Try to get suite db_id from cache
+        if (_affectedTestsCache.TryGetValue(suiteId, out var suiteItem))
+        {
+            return suiteItem.DbId;
+        }
+
+        // If not in cache, we can't determine db_id - return null to fallback to UUID URL
+        return null;
+    }
+
+    // View state persistence helpers
+    private string GetPageKey()
+    {
+        return $"suite_{ProjectKey}_{LaunchId}";
+    }
+
+    private async Task RestoreViewStateAsync()
+    {
+        try
+        {
+            var pageKey = GetPageKey();
+            var savedView = await JS.InvokeAsync<string>("getTabState", pageKey, "list");
+            _activeView = savedView ?? "list";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to restore view state");
+            _activeView = "list"; // Fallback to default
+        }
+    }
+
+    private async void SwitchView(string viewName)
+    {
+        _activeView = viewName;
+        try
+        {
+            var pageKey = GetPageKey();
+            await JS.InvokeVoidAsync("saveTabState", pageKey, viewName);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to save view state");
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnHistoryItemClick(ItemHistoryMatrix.HistoryMatrixRow row)
+    {
+        // Navigate to suite details - placeholder, would need suite ID lookup
+        Logger.LogInformation("History item clicked: {ItemName}", row.ItemName);
+    }
+
+    private void OnHistoryCellClick((ItemHistoryMatrix.HistoryMatrixRow Row, ItemHistoryMatrix.HistoryMatrixCell Cell) args)
+    {
+        // Navigate to specific suite in launch - placeholder
+        Logger.LogInformation("History cell clicked: {ItemName} in launch {LaunchId}", args.Row.ItemName, args.Cell.LaunchId);
+    }
+
+}
+

@@ -32,11 +32,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "pg.hub.name" . }}-secrets
                   key: hub_node_secret
-            - name: HUB_RUNNER_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "pg.hub.name" . }}-secrets
-                  key: hub_runner_secret
             - name: HUB_BORROW_TRAILING_FALLBACK
               value: {{ .Values.hub.env.borrow.trailingFallback | quote }}
             - name: HUB_BORROW_PREFIX_EXPAND

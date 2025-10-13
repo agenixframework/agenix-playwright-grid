@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -23,6 +23,14 @@ namespace WorkerService.Tests;
 
 public class WorkerOptionsTests
 {
+    [SetUp]
+    public void ClearEnv()
+    {
+        // Ensure a predictable base
+        Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST", null);
+        Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT", null);
+    }
+
     [Test]
     public void FromEnvironment_Defaults_WhenNoEnvVars()
     {
@@ -55,11 +63,11 @@ public class WorkerOptionsTests
     public void FromEnvironment_ParsesPools_AndRegionOverride()
     {
         // Arrange
-        var prevPool = Environment.GetEnvironmentVariable("POOL_CONFIG");
+        var prevPool = Environment.GetEnvironmentVariable("AGENIX_WORKER_POOL_CONFIG");
         var prevRegion = Environment.GetEnvironmentVariable("NODE_REGION");
         try
         {
-            Environment.SetEnvironmentVariable("POOL_CONFIG", "X=5, Y=2, Z=bad, =3, W= 7");
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_POOL_CONFIG", "X=5, Y=2, Z=bad, =3, W= 7");
             Environment.SetEnvironmentVariable("NODE_REGION", "eu");
 
             // Act
@@ -75,7 +83,7 @@ public class WorkerOptionsTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("POOL_CONFIG", prevPool);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_POOL_CONFIG", prevPool);
             Environment.SetEnvironmentVariable("NODE_REGION", prevRegion);
         }
     }

@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -17,7 +17,9 @@
 #endregion
 
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Agenix.PlaywrightGrid.Shared.Logging;
 using WorkerService.Infrastructure;
 
 namespace WorkerService.Services;
@@ -34,14 +36,18 @@ public readonly record struct SidecarStartResult(
     string? browserVersion,
     string browser);
 
-public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
+public sealed class SidecarLauncher(WorkerOptions options, ChunkedLogger<SidecarLauncher>? chunkedLogger = null) : ISidecarLauncher
 {
-    private static readonly Microsoft.Extensions.Logging.ILogger Logger = Microsoft.Extensions.Logging.LoggerFactory
-        .Create(b => b.AddSimpleConsole())
-        .CreateLogger("worker.sidecar");
-
     public async Task<SidecarStartResult> StartAsync(string browserType, CancellationToken ct = default)
     {
+        using var op = chunkedLogger?.BeginOperation("SidecarLaunch", new Dictionary<string, object>
+        {
+            ["BrowserType"] = browserType
+        });
+
+        chunkedLogger?.LogMilestone(EventCodes.Worker.BrowserStartupRequested,
+            "[sidecar] {browser}: browser startup requested", browserType);
+
         var psi = new ProcessStartInfo
         {
             FileName = options.NodeExe,
@@ -52,6 +58,10 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
             CreateNoWindow = true,
             WorkingDirectory = AppContext.BaseDirectory
         };
+
+        // Redact secrets if any in arguments (none currently but good practice)
+        chunkedLogger?.LogInformation(null, "[sidecar] {browser}: starting process {FileName} {Arguments}",
+            browserType, psi.FileName, psi.Arguments);
 
         // Optional: enable Playwright server-side debug logging for the Node sidecar.
         // Set PLAYWRIGHT_SERVER_DEBUG to a DEBUG namespace string. Examples:
@@ -75,6 +85,23 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
                         new[] { psi.Environment["DEBUG"], val }.Where(s => !string.IsNullOrWhiteSpace(s)));
                 }
             }
+
+            // Log relevant environment variables
+            var envOverrides = new Dictionary<string, string>();
+            foreach (string key in psi.Environment.Keys)
+            {
+                if (key.StartsWith("PLAYWRIGHT_", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("DEBUG", StringComparison.OrdinalIgnoreCase))
+                {
+                    envOverrides[key] = psi.Environment[key] ?? "";
+                }
+            }
+
+            if (envOverrides.Count > 0)
+            {
+                chunkedLogger?.LogInformation(null, "[sidecar] {browser}: environment overrides: {env}",
+                    browserType, JsonSerializer.Serialize(envOverrides));
+            }
         }
         catch
         {
@@ -86,14 +113,19 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
         {
             if (!string.IsNullOrEmpty(e.Data))
             {
-                Logger.LogWarning("[sidecar] {browser}: {line}", browserType, e.Data);
+                chunkedLogger?.LogWarning(null, null, "[sidecar] {browser} [stderr]: {line}", browserType, e.Data);
             }
         };
 
         if (!proc.Start())
         {
-            throw new InvalidOperationException("Failed to start Node sidecar process.");
+            var ex = new InvalidOperationException("Failed to start Node sidecar process.");
+            chunkedLogger?.LogError(ex, EventCodes.Worker.BrowserStartupFailed, "[sidecar] {browser}: failed to start process", browserType);
+            op?.Fail(ex, ErrorType.DependencyFailure, DependencyName.Playwright);
+            throw ex;
         }
+
+        chunkedLogger?.LogMilestone(EventCodes.Worker.PlaywrightLaunched, "[sidecar] {browser}: process started (pid={pid})", browserType, proc.Id);
 
         proc.BeginErrorReadLine();
 
@@ -102,19 +134,25 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
         string? payload = null;
         try
         {
+            chunkedLogger?.LogDebug(null, "[sidecar] {browser}: waiting for ready signal...", browserType);
             while (true)
             {
                 var ln = await proc.StandardOutput.ReadLineAsync(cts.Token);
                 if (ln is null)
                 {
                     // Process ended or stdout closed before emitting JSON
-                    throw new TimeoutException("Sidecar exited before providing wsEndpoint.");
+                    var exitCode = proc.HasExited ? proc.ExitCode : -1;
+                    chunkedLogger?.LogWarning(EventCodes.Worker.SidecarExited, "[sidecar] {browser}: stdout closed before ready signal (exitCode={exitCode})", browserType, exitCode);
+                    throw new TimeoutException($"Sidecar exited before providing wsEndpoint (exitCode={exitCode}).");
                 }
 
                 if (string.IsNullOrWhiteSpace(ln))
                 {
+                    chunkedLogger?.LogDebug(null, "[sidecar] {browser}: received empty line", browserType);
                     continue;
                 }
+
+                chunkedLogger?.LogDebug(null, "[sidecar] {browser} [stdout]: {line}", browserType, ln);
 
                 try
                 {
@@ -122,6 +160,7 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
                     if (probe is not null && probe.ContainsKey("wsEndpoint"))
                     {
                         payload = ln;
+                        chunkedLogger?.LogMilestone(EventCodes.Worker.SidecarReady, "[sidecar] {browser}: received ready signal: {payload}", browserType, payload);
                         break;
                     }
                 }
@@ -134,30 +173,50 @@ public sealed class SidecarLauncher(WorkerOptions options) : ISidecarLauncher
         catch (OperationCanceledException)
         {
             TryKill(proc);
-            throw new TimeoutException("Timed out waiting for sidecar wsEndpoint.");
+            var ex = new TimeoutException($"Timed out waiting for sidecar wsEndpoint after {options.SidecarReadyTimeoutSeconds}s.");
+            chunkedLogger?.LogError(ex, EventCodes.Worker.BrowserStartupFailed, "[sidecar] {browser}: startup timed out", browserType);
+            op?.Fail(ex, ErrorType.Timeout, DependencyName.Playwright);
+            throw ex;
+        }
+        catch (Exception ex)
+        {
+            TryKill(proc);
+            chunkedLogger?.LogError(ex, EventCodes.Worker.BrowserStartupFailed, "[sidecar] {browser}: startup failed: {message}", browserType, ex.Message);
+            op?.Fail(ex, ErrorType.DependencyFailure, DependencyName.Playwright);
+            throw;
         }
 
         try
         {
-            var obj = JsonNode.Parse(payload!) as JsonObject;
-            if (obj is null)
+            if (JsonNode.Parse(payload) is not JsonObject obj)
             {
                 throw new InvalidOperationException("Sidecar output was not a JSON object.");
             }
+
             var wsNode = obj["wsEndpoint"];
             if (wsNode is null)
             {
                 throw new InvalidOperationException("Sidecar JSON missing wsEndpoint.");
             }
+
             var wsEndpoint = wsNode.GetValue<string>();
             var pwVersion = obj["playwrightVersion"]?.GetValue<string>();
             var browserVersion = obj["browserVersion"]?.GetValue<string>();
             var browser = obj["browser"]?.GetValue<string>() ?? browserType.ToLowerInvariant();
+
+            chunkedLogger?.LogMilestone(EventCodes.Worker.BrowserConnected,
+                "[sidecar] {browser}: startup completed. ws={ws}, pw={pw}, browserVer={browserVer}",
+                browser, wsEndpoint, pwVersion ?? "unknown", browserVersion ?? "unknown");
+
+            op?.Complete();
+
             return new SidecarStartResult(proc, wsEndpoint, pwVersion, browserVersion, browser);
         }
-        catch
+        catch (Exception ex)
         {
             TryKill(proc);
+            chunkedLogger?.LogError(ex, EventCodes.Worker.BrowserStartupFailed, "[sidecar] {browser}: failed to parse ready signal: {message}", browserType, ex.Message);
+            op?.Fail(ex, ErrorType.DependencyFailure, DependencyName.Playwright);
             throw;
         }
     }

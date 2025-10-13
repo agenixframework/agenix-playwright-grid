@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #endregion
-
-using Microsoft.Extensions.Configuration;
 
 namespace Dashboard;
 
@@ -35,16 +33,20 @@ public sealed class DashboardFeatureFlags
     {
         return new DashboardFeatureFlags
         {
-            FiltersEnabled = GetBool(cfg, "DASHBOARD_FEATURE_FILTERS", defaultValue: true),
-            VirtualizationEnabled = GetBool(cfg, "DASHBOARD_FEATURE_VIRTUALIZATION", defaultValue: true),
-            LiveFeedEnabled = GetBool(cfg, "DASHBOARD_FEATURE_LIVE_FEED", defaultValue: true)
+            FiltersEnabled = GetBool(cfg, "DASHBOARD_FEATURE_FILTERS", true),
+            VirtualizationEnabled = GetBool(cfg, "DASHBOARD_FEATURE_VIRTUALIZATION", true),
+            LiveFeedEnabled = GetBool(cfg, "DASHBOARD_FEATURE_LIVE_FEED", true)
         };
     }
 
     private static bool GetBool(IConfiguration cfg, string key, bool defaultValue)
     {
         var v = cfg[key];
-        if (string.IsNullOrWhiteSpace(v)) return defaultValue;
+        if (string.IsNullOrWhiteSpace(v))
+        {
+            return defaultValue;
+        }
+
         return v.Equals("1", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("true", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("yes", StringComparison.OrdinalIgnoreCase) ||

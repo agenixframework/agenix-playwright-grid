@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -16,6 +16,7 @@
 // limitations under the License.
 #endregion
 
+using PlaywrightHub.Infrastructure;
 using PlaywrightHub.Services;
 
 namespace PlaywrightHub;
@@ -38,7 +39,7 @@ public static class Program
     public static Task Main(string[] args)
     {
         // Load local .env variables for developer convenience (no-op if DISABLE_DOTENV=1)
-        PlaywrightHub.Infrastructure.DotEnv.Load();
+        DotEnv.Load();
         return HubServiceRunner.RunAsync(args);
     }
 }

@@ -1,0 +1,902 @@
+@page "/{ProjectKey}/filters/"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IHttpClientFactory HttpFactory
+@inject AuthenticationStateProvider AuthProvider
+
+<div class="pg-content">
+    <div class="container" style="max-width: 1600px;">
+        <div class="page-header">
+            <div class="header-content">
+                <div class="header-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 17 17" aria-hidden="true">
+                        <path fill="currentColor" transform="matrix(-1 0 0 1 18 0), translate(-18.5, -19)"
+                              fill-rule="evenodd"
+                              d="M20 19c0 1.105.872 3.018 1.948 4.273L26 28v8c.552 0 1.321-.321 1.711-.711L30 33v-5l4.052-4.727C35.128 22.018 36 19.655 36 19H20z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3>Filters</h3>
+                    <div class="subtitle">Manage saved filters for project @ProjectKey</div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @ErrorMessage
+                <button type="button" class="btn-close" @onclick="() => ErrorMessage = string.Empty"></button>
+            </div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-md-6">
+                        <div class="input-group">
+                    <span class="input-group-text">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                        </svg>
+                    </span>
+                            <input type="text" class="form-control" placeholder="Search by name" @bind="SearchQuery"
+                                   @bind:event="oninput"/>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 text-end">
+                        <button class="btn btn-primary btn-sm" @onclick="NavigateToLaunches">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                 viewBox="0 0 16 16" class="me-1">
+                                <path
+                                    d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                            </svg>
+                            Add Filter
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="filters-table-container">
+            <table class="table filters-table">
+                <thead>
+                <tr>
+                    <th class="filter-name-col sortable-header" @onclick='() => SortBy("name")'>
+                    <span class="header-content">
+                        Filter Name
+                        @if (_sortColumn == "name")
+                        {
+                            <span class="sort-indicator">@(_sortAscending ? "▲" : "▼")</span>
+                        }
+                    </span>
+                    </th>
+                    <th class="options-col">Options</th>
+                    <th class="owner-col sortable-header" @onclick='() => SortBy("owner")'>
+                    <span class="header-content">
+                        Owner
+                        @if (_sortColumn == "owner")
+                        {
+                            <span class="sort-indicator">@(_sortAscending ? "▲" : "▼")</span>
+                        }
+                    </span>
+                    </th>
+                    <th class="share-col">Share with team</th>
+                    <th class="display-col">Display on Launches</th>
+                    <th class="delete-col">Delete</th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (FiltersList == null)
+                {
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <div class="mt-3 text-muted">Loading filters...</div>
+                        </td>
+                    </tr>
+                }
+                else if (FilteredFilters.Count == 0)
+                {
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <div class="empty-state-content">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor"
+                                     viewBox="0 0 16 16" class="empty-icon">
+                                    <path
+                                        d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                                </svg>
+                                <h4 class="empty-title">No filters found</h4>
+                                <p class="empty-description">@(string.IsNullOrEmpty(SearchQuery) ? "Create your first filter from the Launches page." : "Try a different search term.")</p>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var filter in GetPaginatedFilters())
+                    {
+                        var isOwner = string.Equals(filter.UserId, CurrentUserId, StringComparison.OrdinalIgnoreCase);
+                        var criteriaText = GetCriteriaText(filter);
+
+                        <tr class="filter-row">
+                            <td class="filter-name-col">
+                                <button class="filter-name-link"
+                                        @onclick="@(() => NavigateToFilteredLaunches(filter.Id.ToString()))"
+                                        type="button">
+                                    @filter.Name
+                                </button>
+                            </td>
+                            <td class="options-col">
+                                <span class="options-text">@criteriaText</span>
+                            </td>
+                            <td class="owner-col">
+                                <span class="owner-text">@filter.UserId</span>
+                            </td>
+                            <td class="share-col">
+                                @if (isOwner)
+                                {
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked="@filter.IsShared"
+                                               @onchange="@(e => ToggleShare(filter.Id, (bool)e.Value!))"/>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="display-col">
+                            <span class="display-badge @(filter.DisplayOnLaunches ? "badge-on" : "badge-off")"
+                                  @onclick="@(() => ToggleDisplay(filter.Id, filter.DisplayOnLaunches))"
+                                  style="cursor: pointer;"
+                                  title="@(isOwner ? "Click to toggle (owner default)" : "Click to toggle (your preference)")">
+                                @(filter.DisplayOnLaunches ? "ON" : "OFF")
+                            </span>
+                            </td>
+                            <td class="delete-col">
+                                @if (isOwner)
+                                {
+                                    <button class="btn btn-link btn-sm text-danger p-0" title="Delete filter"
+                                            @onclick="@(() => DeleteFilter(filter.Id, filter.Name))">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                                             fill="currentColor"
+                                             viewBox="0 0 16 16">
+                                            <path
+                                                d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                            <path fill-rule="evenodd"
+                                                  d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                        </svg>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <Dashboard.Shared.Pager
+            Total="@(FilteredFilters?.Count ?? 0)"
+            Skip="@_skip"
+            Take="@_take"
+            TakeChanged="@OnTakeChanged"
+            OnPrev="@PrevPage"
+            OnNext="@NextPage"/>
+
+        @* Delete Filter Confirmation Modal *@
+        @if (ShowDeleteModal)
+        {
+            <div class="pg-modal-backdrop" @onclick="CancelDelete"></div>
+            <div class="pg-modal delete-filter-modal" role="dialog" aria-modal="true"
+                 aria-labelledby="deleteFilterModalTitle">
+                <div class="pg-modal-header">
+                    <div id="deleteFilterModalTitle" class="pg-modal-title">DELETE FILTER</div>
+                    <button type="button" class="pg-modal-close" title="Close" @onclick="CancelDelete"
+                            aria-label="Close">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="pg-modal-body">
+                    <p class="mb-0">Are you sure you want to delete filter '@PendingDeleteFilterName'? It will no longer
+                        exist.</p>
+                </div>
+
+                <div class="pg-modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        }
+
+        <style>
+            /* Filters card */
+            .filters-table-container {
+                overflow-x: auto;
+                background: var(--surface);
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow);
+            }
+
+            .filters-table {
+                width: 100%;
+                margin-bottom: 0;
+            }
+
+            .filters-table thead {
+                background: var(--surface-alt);
+            }
+
+            .filters-table thead th {
+                padding: 1rem 1.5rem;
+                font-size: 0.75rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: var(--brand-muted);
+                border: none;
+            }
+
+            .filters-table tbody td {
+                padding: 1.25rem 1.5rem;
+                vertical-align: middle;
+                border-top: 1px solid var(--border);
+            }
+
+            .filters-table tbody tr {
+                transition: background-color var(--transition-fast);
+            }
+
+            .filters-table tbody tr:hover {
+                background-color: var(--surface-alt);
+            }
+
+            .filter-name-col {
+                width: 20%;
+                min-width: 200px;
+            }
+
+            .options-col {
+                width: 35%;
+                min-width: 300px;
+            }
+
+            .owner-col {
+                width: 15%;
+                min-width: 120px;
+            }
+
+            .share-col {
+                width: 12%;
+                text-align: center;
+            }
+
+            .display-col {
+                width: 13%;
+                text-align: center;
+            }
+
+            .delete-col {
+                width: 5%;
+                text-align: center;
+            }
+
+            .filter-name-link {
+                color: var(--brand-color);
+                text-decoration: none;
+                font-weight: 500;
+                background: none;
+                border: none;
+                padding: 0;
+                cursor: pointer;
+                font-size: inherit;
+                transition: color var(--transition-fast);
+            }
+
+            .filter-name-link:hover {
+                color: var(--brand-color-hover);
+                text-decoration: underline;
+            }
+
+            .options-text {
+                color: var(--brand-muted);
+                font-size: 0.875rem;
+                line-height: 1.5;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+
+            .owner-text {
+                display: inline-flex;
+                align-items: center;
+                padding: 0.375rem 0.75rem;
+                background: var(--info-light);
+                color: var(--info);
+                border-radius: var(--radius);
+                font-size: 0.875rem;
+                font-weight: 500;
+            }
+
+            /* Toggle switch */
+            .toggle-switch {
+                position: relative;
+                display: inline-block;
+                width: 2.75rem;
+                height: 1.5rem;
+                margin: 0;
+            }
+
+            .toggle-switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+
+            .toggle-slider {
+                position: absolute;
+                cursor: pointer;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: var(--border);
+                transition: 0.3s;
+                border-radius: 1.5rem;
+                border: 2px solid var(--border);
+            }
+
+            .toggle-slider:before {
+                position: absolute;
+                content: "";
+                height: 1rem;
+                width: 1rem;
+                left: 2px;
+                bottom: 2px;
+                background-color: white;
+                transition: 0.3s;
+                border-radius: 50%;
+            }
+
+            .toggle-switch input:checked + .toggle-slider {
+                background-color: var(--success);
+                border-color: var(--success);
+            }
+
+            .toggle-switch input:checked + .toggle-slider:before {
+                transform: translateX(1.25rem);
+            }
+
+            .toggle-switch input:focus + .toggle-slider {
+                box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+            }
+
+            /* Display badge */
+            .display-badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 0.375rem 0.875rem;
+                border-radius: var(--radius);
+                font-size: 0.75rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                transition: all var(--transition-fast);
+            }
+
+            .badge-on {
+                background: var(--success-light);
+                color: var(--success);
+            }
+
+            .badge-off {
+                background: var(--surface-alt);
+                color: var(--brand-muted);
+            }
+
+            .display-badge:hover {
+                transform: scale(1.05);
+            }
+
+            /* Delete button */
+            .btn-link.text-danger {
+                transition: all var(--transition-fast);
+                border-radius: var(--radius);
+            }
+
+            .btn-link.text-danger:hover {
+                background: var(--error-light);
+                transform: scale(1.1);
+            }
+
+            /* Empty state */
+            .empty-state {
+                text-align: center;
+                padding: 4rem 2rem;
+                color: var(--brand-muted);
+            }
+
+            .empty-state-content {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 1rem;
+            }
+
+            .empty-icon {
+                opacity: 0.3;
+            }
+
+            .empty-title {
+                font-size: 1.25rem;
+                font-weight: 600;
+                color: var(--brand-text);
+                margin: 0;
+            }
+
+            .empty-description {
+                font-size: 0.875rem;
+                color: var(--brand-muted);
+                margin: 0;
+            }
+
+            /* Sortable headers */
+            .sortable-header {
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .sortable-header:hover {
+                background: var(--surface-hover) !important;
+            }
+
+            .header-content {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .sort-indicator {
+                font-size: 0.7rem;
+                color: var(--brand-color);
+            }
+        </style>
+
+        @code {
+            [Parameter] public string ProjectKey { get; set; } = string.Empty;
+
+            private List<LaunchFilterDto>? FiltersList { get; set; }
+
+            private List<LaunchFilterDto> FilteredFilters
+            {
+                get
+                {
+                    var filtered = FiltersList?
+                        .Where(f => string.IsNullOrEmpty(SearchQuery) ||
+                                    f.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                        .ToList() ?? new List<LaunchFilterDto>();
+
+                    // Apply sorting
+                    return _sortColumn switch
+                    {
+                        "name" => _sortAscending
+                            ? filtered.OrderBy(f => f.Name).ToList()
+                            : filtered.OrderByDescending(f => f.Name).ToList(),
+                        "owner" => _sortAscending
+                            ? filtered.OrderBy(f => f.UserId).ToList()
+                            : filtered.OrderByDescending(f => f.UserId).ToList(),
+                        "created" => _sortAscending
+                            ? filtered.OrderBy(f => f.CreatedAt).ToList()
+                            : filtered.OrderByDescending(f => f.CreatedAt).ToList(),
+                        _ => filtered.OrderByDescending(f => f.CreatedAt).ToList()
+                    };
+                }
+            }
+
+            private string SearchQuery { get; set; } = string.Empty;
+            private string ErrorMessage { get; set; } = string.Empty;
+            private string CurrentUserId { get; set; } = string.Empty;
+
+            // Sorting state
+            private string _sortColumn = "created";
+            private bool _sortAscending;
+
+            // Delete modal state
+            private bool ShowDeleteModal { get; set; }
+            private Guid PendingDeleteFilterId { get; set; }
+            private string PendingDeleteFilterName { get; set; } = string.Empty;
+
+            // Pagination
+            private int _skip;
+            private int _take = 50;
+
+            private List<LaunchFilterDto> GetPaginatedFilters()
+            {
+                return FilteredFilters.Skip(_skip).Take(_take).ToList();
+            }
+
+            private void OnTakeChanged(int newTake)
+            {
+                _take = newTake;
+                _skip = 0;
+            }
+
+            private void PrevPage()
+            {
+                if (_skip >= _take)
+                {
+                    _skip -= _take;
+                }
+            }
+
+            private void NextPage()
+            {
+                if (_skip + _take < FilteredFilters.Count)
+                {
+                    _skip += _take;
+                }
+            }
+
+            private void SortBy(string column)
+            {
+                if (_sortColumn == column)
+                {
+                    // Toggle sort direction
+                    _sortAscending = !_sortAscending;
+                }
+                else
+                {
+                    // New column, default to ascending
+                    _sortColumn = column;
+                    _sortAscending = true;
+                }
+
+                _skip = 0; // Reset to first page when sorting changes
+            }
+
+            protected override async Task OnInitializedAsync()
+            {
+                if (AuthProvider != null)
+                {
+                    var authState = await AuthProvider.GetAuthenticationStateAsync();
+                    var user = authState.User;
+                    CurrentUserId = user?.FindFirst("preferred_username")?.Value
+                                    ?? user?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                    ?? string.Empty;
+                }
+
+                await LoadFiltersAsync();
+            }
+
+            private async Task LoadFiltersAsync()
+            {
+                try
+                {
+                    ErrorMessage = string.Empty;
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    var response = await client.GetAsync($"/api/launch-filters?projectKey={Uri.EscapeDataString(ProjectKey)}&userId={Uri.EscapeDataString(CurrentUserId)}");
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        FiltersList = await response.Content.ReadFromJsonAsync<List<LaunchFilterDto>>();
+                    }
+                    else
+                    {
+                        ErrorMessage = $"Failed to load filters: {response.StatusCode}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage = $"Error loading filters: {ex.Message}";
+                }
+            }
+
+            private async Task ToggleShare(Guid filterId, bool newIsShared)
+            {
+                try
+                {
+                    var filter = FiltersList?.FirstOrDefault(f => f.Id == filterId);
+                    if (filter == null) return;
+
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    var updateRequest = new SaveLaunchFilterRequest
+                    {
+                        Name = filter.Name,
+                        Description = filter.Description,
+                        ProjectKey = filter.ProjectKey,
+                        Criteria = filter.Criteria,
+                        SortBy = filter.SortBy,
+                        IsShared = newIsShared,
+                        DisplayOnLaunches = filter.DisplayOnLaunches
+                    };
+
+                    var response = await client.PutAsJsonAsync($"/api/launch-filters/{filterId}?userId={Uri.EscapeDataString(CurrentUserId)}", updateRequest);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        await JS.InvokeVoidAsync("showToast", newIsShared ? "Filter shared with team" : "Filter is now private", "success");
+                        await LoadFiltersAsync();
+                    }
+                    else
+                    {
+                        var errorContent = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"[ToggleShare] Failed: Status={response.StatusCode}, Error={errorContent}");
+                        await JS.InvokeVoidAsync("showToast", $"Failed to update filter: {response.StatusCode}", "error");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ToggleShare] Exception: {ex}");
+                    await JS.InvokeVoidAsync("showToast", $"Error: {ex.Message}", "error");
+                }
+            }
+
+            private async Task ToggleDisplay(Guid filterId, bool currentDisplayOnLaunches)
+            {
+                try
+                {
+                    var newValue = !currentDisplayOnLaunches;
+
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    var toggleRequest = new ToggleFilterDisplayRequest
+                    {
+                        DisplayOnLaunches = newValue
+                    };
+
+                    var response = await client.PutAsJsonAsync($"/api/launch-filters/{filterId}/display?userId={Uri.EscapeDataString(CurrentUserId)}", toggleRequest);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        await JS.InvokeVoidAsync("showToast", newValue ? "Filter will appear in launches dropdown" : "Filter hidden from launches dropdown", "success");
+                        await LoadFiltersAsync();
+                    }
+                    else
+                    {
+                        await JS.InvokeVoidAsync("showToast", "Failed to update filter", "error");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await JS.InvokeVoidAsync("showToast", $"Error: {ex.Message}", "error");
+                }
+            }
+
+            private void DeleteFilter(Guid filterId, string filterName)
+            {
+                PendingDeleteFilterId = filterId;
+                PendingDeleteFilterName = filterName;
+                ShowDeleteModal = true;
+            }
+
+            private void CancelDelete()
+            {
+                ShowDeleteModal = false;
+                PendingDeleteFilterId = Guid.Empty;
+                PendingDeleteFilterName = string.Empty;
+            }
+
+            private async Task ConfirmDelete()
+            {
+                ShowDeleteModal = false;
+                var filterId = PendingDeleteFilterId;
+                PendingDeleteFilterId = Guid.Empty;
+                PendingDeleteFilterName = string.Empty;
+
+                try
+                {
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    var response = await client.DeleteAsync($"/api/launch-filters/{filterId}?userId={Uri.EscapeDataString(CurrentUserId)}");
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        await JS.InvokeVoidAsync("showToast", "Filter deleted successfully", "success");
+                        await LoadFiltersAsync();
+                    }
+                    else
+                    {
+                        await JS.InvokeVoidAsync("showToast", "Failed to delete filter", "error");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await JS.InvokeVoidAsync("showToast", $"Error: {ex.Message}", "error");
+                }
+            }
+
+            private void NavigateToLaunches()
+            {
+                Nav.NavigateTo($"/{ProjectKey}/launches/?showFilter=true");
+            }
+
+            private async Task NavigateToFilteredLaunches(string filterId)
+            {
+                try
+                {
+                    // Find the filter
+                    var filter = FiltersList?.FirstOrDefault(f => f.Id.ToString() == filterId);
+                    if (filter == null)
+                    {
+                        Nav.NavigateTo($"/{ProjectKey}/launches/?filterId={filterId}");
+                        return;
+                    }
+
+                    // Check if DisplayOnLaunches is OFF - turn it ON for this user
+                    if (!filter.DisplayOnLaunches)
+                    {
+                        // Update the display preference to turn ON DisplayOnLaunches
+                        var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                        var toggleRequest = new ToggleFilterDisplayRequest
+                        {
+                            DisplayOnLaunches = true // Turn ON
+                        };
+
+                        var response = await client.PutAsJsonAsync($"/api/launch-filters/{filterId}/display?userId={Uri.EscapeDataString(CurrentUserId)}", toggleRequest);
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            await JS.InvokeVoidAsync("showToast", "Filter enabled and applied", "success");
+                            // Refresh the local list to reflect the change
+                            await LoadFiltersAsync();
+                        }
+                        else
+                        {
+                            await JS.InvokeVoidAsync("showToast", "Failed to enable filter", "error");
+                        }
+                    }
+
+                    // Navigate to launches page with filterId
+                    Nav.NavigateTo($"/{ProjectKey}/launches/?filterId={filterId}");
+                }
+                catch (Exception ex)
+                {
+                    await JS.InvokeVoidAsync("showToast", $"Error: {ex.Message}", "error");
+                    Nav.NavigateTo($"/{ProjectKey}/launches/?filterId={filterId}");
+                }
+            }
+
+            private string GetCriteriaText(LaunchFilterDto filter)
+            {
+                if (filter.Criteria == null || !filter.Criteria.Any())
+                {
+                    return "No criteria";
+                }
+
+                var parts = new List<string>();
+                foreach (var criterion in filter.Criteria.Take(2))
+                {
+                    var fieldDisplay = criterion.Field switch
+                    {
+                        "name" => "Launch name",
+                        "owner" => "Owner",
+                        "launch_number" => "Launch number",
+                        "start_time" => "Start time",
+                        "attribute" => "Attribute",
+                        _ => criterion.Field
+                    };
+
+                    var operatorDisplay = criterion.Operator switch
+                    {
+                        "contains" => "contains",
+                        "equals" => "equals",
+                        "gte" => "≥",
+                        "lte" => "≤",
+                        "all" => "has",
+                        _ => criterion.Operator
+                    };
+
+                    var valueDisplay = string.Empty;
+                    if (criterion.Field == "attribute" && criterion.Attributes != null && criterion.Attributes.Any())
+                    {
+                        var attrPairs = criterion.Attributes.Select(a => $"{a.Key}={a.Value}");
+                        valueDisplay = string.Join(", ", attrPairs);
+                    }
+                    else if (criterion.Field == "start_time" && !string.IsNullOrEmpty(criterion.DateRangePreset))
+                    {
+                        valueDisplay = criterion.DateRangePreset;
+                    }
+                    else if (criterion.Field == "start_time" && (!string.IsNullOrEmpty(criterion.FromDate) || !string.IsNullOrEmpty(criterion.ToDate)))
+                    {
+                        if (!string.IsNullOrEmpty(criterion.FromDate) && !string.IsNullOrEmpty(criterion.ToDate))
+                        {
+                            valueDisplay = $"{criterion.FromDate} to {criterion.ToDate}";
+                        }
+                        else if (!string.IsNullOrEmpty(criterion.FromDate))
+                        {
+                            valueDisplay = $"from {criterion.FromDate}";
+                        }
+                        else if (!string.IsNullOrEmpty(criterion.ToDate))
+                        {
+                            valueDisplay = $"until {criterion.ToDate}";
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(criterion.Value))
+                    {
+                        valueDisplay = criterion.Value;
+                    }
+
+                    if (!string.IsNullOrEmpty(valueDisplay))
+                    {
+                        parts.Add($"{fieldDisplay} {operatorDisplay} '{valueDisplay}'");
+                    }
+                    else
+                    {
+                        parts.Add($"{fieldDisplay} {operatorDisplay}");
+                    }
+                }
+
+                var text = string.Join(", ", parts);
+                if (filter.Criteria.Count > 2)
+                {
+                    text += $" +{filter.Criteria.Count - 2} more";
+                }
+
+                text += $" | Sort: {(filter.SortBy == "start_time" ? "Start time" : "Launch name")}";
+                return text;
+            }
+
+            private sealed record LaunchFilterDto
+            {
+                public Guid Id { get; init; }
+                public string Name { get; } = string.Empty;
+                public string? Description { get; init; }
+                public string ProjectKey { get; } = string.Empty;
+                public string UserId { get; } = string.Empty;
+                public List<FilterCriterionDto> Criteria { get; } = new();
+                public string SortBy { get; } = "start_time";
+                public bool IsShared { get; init; }
+                public bool DisplayOnLaunches { get; } = true;
+                public DateTimeOffset CreatedAt { get; init; }
+                public DateTimeOffset UpdatedAt { get; init; }
+            }
+
+            private sealed record FilterCriterionDto
+            {
+                public string Field { get; } = "name";
+                public string Operator { get; } = "contains";
+                public string Value { get; } = string.Empty;
+                public string LogicalOperator { get; init; } = "AND";
+                public string? DateRangePreset { get; init; }
+                public string? FromDate { get; init; }
+                public string? ToDate { get; init; }
+                public List<AttributePairDto>? Attributes { get; init; }
+            }
+
+            private sealed record AttributePairDto
+            {
+                public string Key { get; } = string.Empty;
+                public string Value { get; } = string.Empty;
+            }
+
+            private sealed record SaveLaunchFilterRequest
+            {
+                public string Name { get; init; } = string.Empty;
+                public string? Description { get; init; }
+                public string ProjectKey { get; init; } = string.Empty;
+                public List<FilterCriterionDto> Criteria { get; init; } = new();
+                public string SortBy { get; init; } = "start_time";
+                public bool IsShared { get; init; }
+                public bool DisplayOnLaunches { get; init; } = true;
+            }
+
+        }
+    </div>
+</div>

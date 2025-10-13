@@ -1,31 +1,86 @@
 @page "/diagnostics"
-@using System.Net.Http
-@using System.Net.Http.Json
-@using Dashboard
-@using Dashboard.Application
+@using System.Collections
 @using System.Reflection
+@namespace Dashboard.Pages
 @inject IHttpClientFactory HttpFactory
 @inject IConfiguration Config
 
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                <path
+                    d="M6.646 6.646a.5.5 0 0 1 .708 0L8 7.293l.646-.647a.5.5 0 0 1 .708.708L8.707 8l.647.646a.5.5 0 0 1-.708.708L8 8.707l-.646.647a.5.5 0 0 1-.708-.708L7.293 8l-.647-.646a.5.5 0 0 1 0-.708z"/>
+                <path d="M10 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+            </svg>
+        </div>
+        <div>
+            <h3>Startup Diagnostics</h3>
+            <div class="subtitle">System startup checks and configuration validation</div>
+        </div>
+    </div>
+    <button class="elegant-btn elegant-btn-secondary" @onclick="Load">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+            <path
+                d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+        </svg>
+        Refresh
+    </button>
+</div>
+
 <style>
+    .elegant-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .elegant-btn-secondary {
+        background: white;
+        color: #6b7280;
+        border: 2px solid #e5e7eb;
+    }
+
+    .elegant-btn-secondary:hover {
+        background: #f9fafb;
+        border-color: #d1d5db;
+    }
+
+    .elegant-btn svg {
+        flex-shrink: 0;
+    }
+
     .status-dot {
         display: inline-block;
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
         margin-right: 6px;
     }
 
     .status-online {
-        background-color: #198754;
+        background-color: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
     }
 
     .status-stale {
-        background-color: #ffc107;
+        background-color: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
     }
 
     .status-offline {
-        background-color: #dc3545;
+        background-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
     }
 
     .kv-list div {
@@ -33,11 +88,6 @@
         border-bottom: 1px dashed rgba(0, 0, 0, .05);
     }
 </style>
-
-<div class="d-flex align-items-center my-3">
-    <h3 class="mb-0">Startup Diagnostics</h3>
-    <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Load">Refresh</button>
-</div>
 
 @if (_error is not null)
 {
@@ -152,7 +202,8 @@ else
                     {
                         <div class="alert alert-warning small">
                             No workers are currently registered.
-                            Tip: start worker(s) with POOL_CONFIG set (e.g., <code>AppB:Chromium:UAT=1</code>) and ensure
+                            Tip: start worker(s) with POOL_CONFIG set (e.g., <code>AppB:Chromium:UAT=1</code>) and
+                            ensure
                             <code>NODE_SECRET</code> matches the hub's <code>HUB_NODE_SECRET</code>.
                             If running locally, use <code>docker compose up --build</code> and check worker logs.
                         </div>
@@ -333,9 +384,12 @@ else
             var aiv = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
             var v = aiv?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? string.Empty;
             const int max = 15; // "1.0.1-preview.3".Length
-            return string.IsNullOrEmpty(v) ? string.Empty : (v.Length <= max ? v : v.Substring(0, max));
+            return string.IsNullOrEmpty(v) ? string.Empty : v.Length <= max ? v : v.Substring(0, max);
         }
-        catch { return string.Empty; }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private string GetAggregatedPlaywrightVersion()
@@ -350,13 +404,13 @@ else
         if (versions.Count == 1) return versions[0];
         return "PW mixed";
     }
+
     private HubDiagnosticsDto? _data;
     private string? _error;
 
     private readonly string[] _knownHubKeys = new[]
     {
         "REDIS_URL",
-        "HUB_RUNNER_SECRET",
         "HUB_NODE_SECRET",
         "HUB_BORROW_TRAILING_FALLBACK",
         "HUB_BORROW_PREFIX_EXPAND",
@@ -385,26 +439,25 @@ else
     private readonly string[] _knownDashboardKeys = new[]
     {
         "HUB_SIGNALR",
-        "HUB_RUNNER_SECRET",
         "ASPNETCORE_ENVIRONMENT",
         "ASPNETCORE_DETAILEDERRORS",
         "DOTNET_ENVIRONMENT"
     };
 
     private HashSet<string> _allKnownKeys = new(StringComparer.OrdinalIgnoreCase);
-    private List<KeyValuePair<string, string>> _allEnv = new();
-    private Dictionary<string, string> _envMap = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<KeyValuePair<string, string>> _allEnv = new();
+    private readonly Dictionary<string, string> _envMap = new(StringComparer.OrdinalIgnoreCase);
 
     // Hub env cache
     private Dictionary<string, string>? _hubEnv;
-    private bool _hubEnvLoading = false;
+    private bool _hubEnvLoading;
     private string? _hubEnvError;
 
     // Worker env caches
     private readonly Dictionary<string, Dictionary<string, string>?> _workerEnv = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _loadingWorkerEnv = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _workerEnvErrors = new(StringComparer.OrdinalIgnoreCase);
-    private bool _loadingAllWorkers = false;
+    private bool _loadingAllWorkers;
 
     protected override async Task OnInitializedAsync()
     {
@@ -417,7 +470,7 @@ else
         _allKnownKeys = new HashSet<string>(_knownHubKeys.Concat(_knownWorkerKeys).Concat(_knownDashboardKeys), StringComparer.OrdinalIgnoreCase);
         _allEnv.Clear();
         _envMap.Clear();
-        foreach (System.Collections.DictionaryEntry de in Environment.GetEnvironmentVariables())
+        foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
         {
             var key = de.Key?.ToString() ?? "";
             var val = de.Value?.ToString() ?? "";
@@ -510,7 +563,6 @@ else
             case "HUB_BORROW_WILDCARDS":
                 return _data.HubConfig.BorrowWildcards ? "true" : "false";
             // Secrets are not exposed by hub diagnostics for safety
-            case "HUB_RUNNER_SECRET":
             case "HUB_NODE_SECRET":
                 return null;
             default:
@@ -598,7 +650,7 @@ else
         _error = null;
         try
         {
-            var http = HttpFactory.CreateClient("hub");
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
             var resp = await http.GetAsync("/diagnostics");
             if (!resp.IsSuccessStatusCode)
             {
@@ -633,7 +685,7 @@ else
         _hubEnvLoading = true;
         try
         {
-            var http = HttpFactory.CreateClient("hub");
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
             var resp = await http.GetAsync("/diagnostics/env");
             if (!resp.IsSuccessStatusCode)
             {
@@ -665,7 +717,7 @@ else
         _loadingWorkerEnv.Add(nodeId);
         try
         {
-            var http = HttpFactory.CreateClient("hub");
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
             var resp = await http.GetAsync($"/diagnostics/worker-env/{Uri.EscapeDataString(nodeId)}");
             if (!resp.IsSuccessStatusCode)
             {

@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -19,13 +19,16 @@
 namespace WorkerService.Tests;
 
 /// <summary>
-/// Deterministic time utilities for tests to avoid flakiness due to clock resolution or scheduling.
+///     Deterministic time utilities for tests to avoid flakiness due to clock resolution or scheduling.
 /// </summary>
 public static class TestTime
 {
     /// <summary>
-    /// Returns a UTC DateTime with specified components.
+    ///     Returns a UTC DateTime with specified components.
     /// </summary>
-    public static DateTime FixedUtc(int year = 2025, int month = 1, int day = 1, int hour = 0, int minute = 0, int second = 0, int millisecond = 0)
-        => new DateTime(year, month, day, hour, minute, second, millisecond, DateTimeKind.Utc);
+    public static DateTime FixedUtc(int year = 2025, int month = 1, int day = 1, int hour = 0, int minute = 0,
+        int second = 0, int millisecond = 0)
+    {
+        return new DateTime(year, month, day, hour, minute, second, millisecond, DateTimeKind.Utc);
+    }
 }

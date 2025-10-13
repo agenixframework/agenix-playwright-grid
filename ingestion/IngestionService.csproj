@@ -1,0 +1,216 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="IngestionService.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="6.8.1"/>
+    <PackageReference Include="Npgsql" Version="9.0.2"/>
+    <PackageReference Include="Polly" Version="8.5.0"/>
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3"/>
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0"/>
+    <PackageReference Include="Serilog.Expressions" Version="5.0.0"/>
+    <PackageReference Include="prometheus-net.AspNetCore" Version="8.0.0"/>
+    <PackageReference Include="StackExchange.Redis" Version="2.6.90"/>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0"/>
+    <PackageReference Include="Minio" Version="6.0.3"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj"/>
+    <ProjectReference Include="..\Agenix.PlaywrightGrid.Shared\Agenix.PlaywrightGrid.Shared.csproj"/>
+  </ItemGroup>
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\00a2951c-47f2-4866-934d-425e8602ca00\42bf124b-fc22-4141-96cc-1c9f7f908487\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\01137329-22bb-4449-85f5-d5a52eb67e4d\48345d74-9c20-45f2-a5cc-fdd293083cf3\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\012dc0a0-8d54-4d42-86c1-a5fc0ef23dee\9c33d68a-0602-4805-824e-9eb83eaabb07\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\0714a8a9-251e-40df-9056-b717bcdfc450\f7fab7ae-4b96-4f16-bc65-0f9769b15a3c\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\075dae2f-3f0e-4dc6-9f79-8c6df9757a31\cd7c6b36-27f3-4446-be14-52485b83a72f\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\086438f3-38a8-44a2-94be-6abc0322d95d\e984fbf2-310e-450c-95a9-abe87d0402b5\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\11ce6e08-c30d-4e4b-b8c6-ba9de7829842\e9a7fd65-f98a-4189-937a-3d5e6622d339\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\15ac4949-69cf-4b29-8243-74073f28e2b2\0e09a6ca-8595-4936-a631-325ff5a2ff02\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\1627006f-6a27-4234-8220-fd5f2b4ff2b0\ce0760cf-45bd-4c02-89da-4cc938f83698\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\167e8dd2-9235-4ee6-91b4-0edac4cf3829\36e21414-1e53-4e42-ad14-d639d34b6aad\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\16eaa08d-88ff-47b7-ac1f-1d595771cf5e\353f8415-21f4-4cb5-a806-499db11ea499\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\17deb460-5eff-47ef-b7db-ef779f3fe323\ffede90a-0558-48ae-b826-9454d848ad82\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\18a4814f-3da7-4b14-a1e4-42f761f281b4\c5f8916a-4a50-4fa6-b553-fa009386b138\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\19acc0a6-7940-41f1-ba22-bee2503566b8\b9979e0b-58e7-4ddd-baae-d6f59e2bc07c\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\1caa4209-309f-49d8-bb8b-38bb5e0cd3c2\e973ef7b-0591-4fec-be69-6b930d90d5d4\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\1d940dee-bdfe-47b0-9599-ef70148fabc3\724663b1-7259-4861-981f-b73b04de9ef3\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\1e6f2cf6-0cf8-4ee3-92a2-dc107a456289\0765b1c9-d8c3-4349-8e48-9aa1e09a477c\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\1e9cc406-5ae9-4d5a-9508-538c193de938\5385c484-6946-423c-9152-d37fdad05258\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\1f525881-85a8-40e0-afe3-942f64d149c9\797ab18a-1627-4dc0-922f-3027a6acd45d\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\1f90089d-7f18-49e6-925e-4e5577f9c718\c2906d0e-ffdf-4459-a68e-8f2928668c91\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\21241f6f-c684-4514-9f38-3a30057c637c\a4c40495-a7a1-46dd-bb85-e1a907c8c589\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\21e5b4a0-6826-47a6-9706-5c52409e5172\7b470bba-1047-4923-8c15-6d23a1c48d87\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\236bf2eb-712d-451b-9be7-abc7639556a7\16f9f31c-d81c-4347-b793-169c45786de0\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\24c56606-f8a8-425c-9800-25e8c13c0345\6632324c-e017-4124-a8bf-9072d87ce511\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\29ac1c7f-72c5-40e7-9a37-f28dc3cb9f93\1cefd886-11a1-4cfb-904f-2058dd576744\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\2aa43bfc-58e1-4ee6-91d8-b9ff5fed0b0f\d7b973cf-b2ed-4851-b6e6-269516e2f8bb\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\2c673e2f-17e0-4320-b722-e1e613172b1c\206a20ea-c781-4f52-a962-2a4398333b56\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\2d3cfeca-609d-4359-8fdd-9dc79afc786e\93253fab-01ee-4bfe-97c1-ce2fdaf78925\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\2e9c7138-7810-40f9-a9ee-9e06b51c5a07\c01d6fa1-3c13-4c1f-8430-1eeca3e60488\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\2f529fcb-6f92-42ce-a013-c90921d75713\480a44a0-5d73-4638-bebb-c3cb1765b390\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\2f834f28-8b76-4e29-ab76-6bd60233e659\5cd46f93-a14a-453d-a874-8956fad2ae31\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\303e0df9-c8db-4ff6-8e47-6d46efdf8210\2b85bc1f-79e6-4025-8266-7b478c8ef045\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\32d1f686-b88b-46b3-b7c2-072efc8060f8\8173d386-d98d-4bb8-b6c4-08facf06f0d2\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\36f3276a-8ebd-46f5-826d-2aab9a598733\70505c4e-1029-4173-9295-c2a6232feb75\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\38aa862a-ec99-4d8e-b8db-07fcc6bc61aa\59d4aa1a-0572-495a-a46a-3f822b359d2c\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\391649f4-360f-4226-96e2-1580b51d53dd\abfbc71d-0cb6-4819-86df-ba324490fefa\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\3b8dd31b-80fd-47d6-b423-b898d86ad75b\e11ee773-b599-46a5-a124-afe501334888\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\3ce525ad-994e-415d-afab-398de3f9c99c\dac864b7-f8a9-48eb-94f1-d1d7cbbc9935\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\44b50b25-f061-4e3e-b14f-460f9956eb9d\84068175-9fbd-4805-9ee5-4106dcced098\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\45aac91c-4016-4f6e-9418-0426223f1a79\0eef5111-b2bd-414a-8e5b-14d2a2a466f3\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\46d29531-796b-4321-9914-f762fc521625\fc89f110-28df-4773-8df0-b57bd6727adc\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\49c58327-8b05-4265-9023-66c05babbbd9\9b129050-b8db-499d-9e8c-31d0922b34cd\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\4a0c9e5e-0d93-47f9-9dd6-e6eb489fe55d\fc79ba79-2991-4e53-8cf9-ca29f1290082\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\4b0436f2-4915-4208-bea0-29c5261f7ed1\f422df0f-1e66-4eef-abdc-14c9f572b8ef\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\4d8ecbab-d7a5-4e89-bf08-1c87c87f961f\cdedc6e1-1357-40b2-a6b1-38e82a4fbc11\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\4e135f80-93f1-4ac9-91f0-2fa415b94eb7\67952962-49e0-4109-8b40-008c700982a1\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\4e8f2bb7-ba61-4e39-927f-0ecf5a5260a1\d03aa6c1-35ae-4f90-8a92-7d027df43376\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\4eed98da-a64b-4153-8836-91ccc1ca6165\a3f2935f-23e3-4e27-b0fd-1bcbdb205af4\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\50508c32-fdac-4748-8dab-5145d195bedc\7816d108-89d8-4f37-bbf7-f575d01e3899\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\53c4c793-d1d9-4c01-b121-c5e3028c9cb4\2e34d1f4-c94c-4161-bcb1-bd194a08565e\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\541c6db4-bd09-48db-a754-029a6e864026\bff97676-1b33-4e64-b064-5f6f16ebe438\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\545717af-c804-4a4c-aa3b-8a0119d1ea92\f1a8177b-a708-4eb0-8b81-d9b19bebc9a4\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\54af2d98-5c53-433c-a314-51330aad7de4\fc2e1c97-ca52-45ea-828e-f63f8b1d6d6d\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\5694b527-6e0a-43d1-9200-9faa8d2e6aee\da38b962-003b-452b-9e10-8d3d1f9ca1f5\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\5947ab10-301a-4071-9a43-f0aff9cb8298\e635db31-8892-4bc5-b289-633480c2182b\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\5980396f-9626-4901-93ae-9ee86caf7410\5ab1f7c4-0274-4367-9433-3eae8b30ee56\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\598ed792-fb1d-490c-a5ec-3c58824207e5\c9a8c0ab-18fd-402a-8ecf-a7310972642b\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\5a6b8384-0001-4dbc-9c22-efce7ed67701\eb0b4adb-a457-4992-98c8-9f22642c5017\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\5e002df0-279b-44bb-83de-2909fa140f70\5d0baeed-e3bd-4b63-a068-784ddf89f5aa\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\617c8be9-aa69-4afc-8082-301a743d5a16\258b3cca-74e9-479d-bf30-63f81031e671\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\6194c435-a077-44eb-a567-001a3473f8ae\b5622ddb-c801-4612-bb32-0d13e45a21a8\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\62818092-4b73-4566-8bd9-a5d71cc1a86a\7319244b-bb77-45f0-8ac3-c1de23a44975\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\6398733c-620b-4769-991d-e2f7255f4088\db766f43-c0eb-4050-a071-45e8768ec754\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\65cc0b6d-7ff9-4415-bdce-c7418e1dfb34\e1fb1728-e369-4fa8-b0f8-c455f68543da\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\67af0bbf-a546-40c9-beff-09c39104c2a2\b88fe22f-18dd-45ab-9285-855b5c625aca\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\67b93d17-72b6-41c2-acc1-f68460743018\2a476b1f-0446-4071-b44a-046df2b076f3\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\68a6e98b-ff9e-4854-b235-a31f9746b4a7\0731cfec-a5a6-4008-b896-b9a332891ec8\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\6aa8678a-1df0-419e-8d4d-b2f17e1fa07a\dbd0c5ff-4929-47d6-9323-d0b755e9fa99\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\6d68948c-4c43-4881-aed2-15dc256d1bcf\4fb3c145-bf46-4260-ac9a-2c851f754c3a\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\6d9727f5-e6a9-4e6f-a62b-e0a075d78f78\f230b05a-118c-4bc0-8ae8-24c36ea59d3d\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\6f411cb5-a29c-460a-9b29-c6fbcb7c583e\ad78ce9b-9599-4918-97ad-fa2b1f0cf960\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\71e59e71-b3fc-4fdd-b1a6-e2dfb385b454\6f413b31-3e2e-4bf4-a74a-2426c1ea13b8\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\72fa084f-34de-4b93-9082-8701a55aaa3a\44dac57b-ffff-4584-b54f-3acb439334b7\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\7313811b-f4d0-4a41-8afb-19f8c63851c0\574033d1-4aa7-4857-ad8c-6b35b706e59d\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\732ce967-8fff-4076-80e8-5857f92e909e\11ab6900-a501-44b8-ad1b-1fa65d82b829\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\754e03dd-d822-46fa-94f1-f801412a184c\196dad92-99de-4dd3-81f0-537f0f85a1c8\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\7557e711-a68b-4e08-8185-092d329bdbd5\482820e8-2d2f-4a65-93e3-f5e506f15471\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\7663e338-92f9-44a4-810d-d186473c3b39\c9fe84fd-394b-45a2-823f-351dbd11a453\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\76a58869-4f7b-4cff-b7e3-e5a1981009bc\f9beef7c-3f60-4158-90ed-28ffb7db9e22\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\7a078878-f96a-496e-aa95-f88ece1cd19e\b29e3d9a-bbf0-44c9-a6ae-c5d3dab0e1bc\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\7b951ce2-062f-40bc-a595-7097a0e818c9\fa0e3c67-0182-44c0-a556-b2b1e0bd494c\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\7dd2efe5-c68d-49fb-928d-c2b10c4bbd2f\43fd1b0d-7161-4c9d-a15c-65628b93b993\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\82fc60a5-74eb-4199-bd3e-ab632e6e0a0c\e90de619-966e-4ec6-9583-7a5a5a7f921e\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\856dc468-0e81-4594-8960-82e6999b87bb\ccff9483-e518-45e6-a472-84badb30b90e\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\87423415-48fa-481e-befe-173b9c4b3d6c\59ff5e5e-4626-4f8f-bf92-128f8753c84b\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\8a83ed2c-c2b7-4a7f-b7a8-77d7965c2dcd\5471bc6d-0a82-4934-806e-6a982ee134db\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\8b3b282a-f461-49f0-b585-8a5e7769a1e0\72267905-dbed-46a9-b074-787915782078\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\8c6c68f9-22ee-4e54-af88-5badcdce4e05\9077d0a1-66fe-46cf-81c2-fec1b4f29f75\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\95455ec1-c8ca-4fc8-a0e5-5537b2918af2\861cb6d2-ae01-4340-8f00-d849a0f43e18\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\97816b38-0fbd-4dd9-8d5d-e5c06b89e9ca\07119954-5607-48a1-be7b-2cf37197191d\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\97e0a04d-3e4f-414d-a0e0-9e1ff4273879\4a6d042f-b287-41c7-9ccf-f99e1b108da9\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\9c7fd0f1-86c4-4ef3-a085-75f76efeea09\e1da8c38-12c5-4a5c-b16b-4e9c347e5239\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\9dd178d6-a016-4434-8b26-cb45e99cbe9c\e6b56758-deb0-4a34-9657-09874fa9a478\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\9f6ac875-9a2d-4ec6-96ca-4dba9b43dda0\36f3a4b6-8ca6-4033-b1a7-04c2a6786b74\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\a3a1db95-8ca3-4be7-a232-98c7674a3e89\34f6f528-b1c4-48de-81db-d87b905e574d\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\a508aaf9-1822-4fc8-99c0-3fc17dc2ecb4\e4a0d308-6167-4486-aee6-fc24d95f2b51\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\a625a9da-da99-48a6-ab59-83e6fe0ac0a6\5db1b2c7-1fe3-48b6-aebf-51a37eafd06b\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\a6e0895c-35ab-42c9-aff7-fe79d5a8cc46\2d481eda-d9cc-45a1-83ef-406d879e71d6\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ace10e14-7dd9-4143-8634-6a33267318cd\58a06516-bc18-47f1-9fcf-4831d4f22f9c\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ae2a94a2-faba-41f1-a7cf-fcf4b90e760e\d03533f8-3c4e-4766-94fa-669a36eedab6\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\afb10787-8130-4da5-89d3-431f80212155\2ad69d98-47d9-4149-8f42-38f6cbae5cc4\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\b1bf5e03-140d-4774-8ffa-8a7a4e82ab02\091d27ff-778e-4126-a831-6602e2d0c5ee\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\b26b6b1c-28f9-4cf4-b75b-976f092c6253\4d96ceee-8e16-4ab8-b18a-ef09f8dea37c\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\b3d6d783-0697-4d30-8148-82b4ed8b8cf5\de340e40-bf20-452e-85fe-9ea59bbffab6\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\b6bcbc40-8360-4364-9b3a-28cc01377525\0c628304-8976-4f04-a6ec-18c6255ff8e2\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\bbed4776-9f59-474f-996d-ffa9bfc85822\056fc2e5-be0c-4bc8-a48b-05d152e23bdf\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\bdc51402-d1e8-4fc7-bcd7-e345bc704a87\f6982b7f-d657-4cb3-ab70-7ba8aa83f097\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\bee0cb00-1504-4a57-977c-504fdd7241d2\8bbd60ff-f2b0-4ab9-a79a-ec1609afa8db\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\bf0128e0-a1fd-4c3d-8462-89fd91450aeb\b9e09970-2d64-42ae-88c7-5780b704264b\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\c03e9b30-4586-4082-9823-57ebcb130f48\211a4af9-c596-4e61-a4d5-f8162f7c9d67\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\c1d81caa-41ee-49bc-a9b5-7bbe5cc20c0e\2c022369-e48c-427e-a42d-92cf4fc537b7\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\c51f5d34-adc7-4d57-a40e-862f89b50408\e673eec0-0e77-4194-a46d-7f07e32e5a2b\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\c5b696b8-c42e-467b-89a6-d83ce3da49b3\7d7862b9-255b-408a-81b8-43718b7e40e0\slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\c8029df5-6f50-4642-8181-05213f43e611\600b49a1-3091-41ae-9c99-38c88fc7fd33\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ca38f0a6-5877-4b2d-b5b6-bf73d157b473\09d5417f-5bdd-407c-8a9f-85b6bb0615b6\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ca64439d-e305-47d0-b955-6101b4159afd\015f8175-f252-4552-b5f9-2b91dac6a867\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\cdcf30a3-9e94-40d2-9e61-1b466ccecca0\232923de-b345-4171-a303-e1c86409c6ba\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\d4d2e72c-9a3d-43ab-b852-5addfd0a2780\b2f88cfa-1b4e-4914-8f80-b216ea030813\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\d68314e0-ca52-4125-b98c-c29f34cac257\71b044e1-245d-452e-a1a9-c2f6e8ed12da\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\d68d4590-489e-400c-8207-da8f3159b214\1f2df1ed-c1b1-47db-a71a-b7161168b267\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\dbed87cf-452f-4207-9660-f06bf3853cd9\bc94191a-2713-41de-aa40-c8652ea48d63\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ded88c19-ea46-48eb-ba56-078aafdb6dab\828777d6-3d0b-418b-9de3-9b42ef8f0b13\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\e1bc96d0-6d6c-4aed-bff4-2ce2b7897bff\bb2c4aa0-fe75-42d2-b300-e64c39018c28\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\e3b84726-215f-41a8-a517-acdade1c7763\68b3b925-3bf7-41c4-be04-a1067eb8a463\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\e7a96262-6587-484f-8f98-6b104edf1d6b\f9ca2482-c286-4814-a97a-3f0c96e2a03e\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\e82564f6-6bba-49bd-8e74-6c5ce36c31bb\86d3cef2-90f9-4b21-b1bb-466bd550c6f9\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\e94f1f5c-2102-4d37-8894-332ca7c30a63\e4647e9a-e630-4d2c-a7a7-21d00d7dc37b\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ea417e58-8148-4747-a8b3-a49b28e30507\989d5057-5b5b-4f71-9169-03272934360f\gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ed552a2d-1fcd-42ae-8e48-6ce85fa965f7\147fb26b-9136-4530-a203-e7707d61f798\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\eea4ec64-bb98-40ea-9d72-12cab727a16c\19ac8257-9453-4f7f-af7d-023991b93d0f\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\ef53d63c-0631-4fa5-a855-3d7fdaeb0bb7\e5158077-2008-4bfc-a767-b2540f718649\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\f0ab6789-09de-49b3-a9f2-90e7c29142a2\7cf35c83-bc71-4065-ace1-7db4a76f89a9\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\f229fe62-fe19-46d8-8d72-ce873031da7b\e817959c-2434-439c-96b9-074314680716\merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\f547767f-918a-49f6-857a-4993d18ec8e3\1d33bc55-d36e-4ee6-8a9e-9ba29b6bd786\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\f6832d81-65db-4420-9125-6968373e82a1\cc6eea0f-2579-4848-a123-7049f47f1b45\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\f91ca75d-ab0e-403f-8c6a-f8008b2106ed\5902f3cb-f1b1-4f11-93e0-406974b95f28\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\faee7214-244c-4a3d-b911-d35df87599b0\21f8e90a-8e60-4b71-858c-5bc3c136069b\test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\artifacts\fce7cd1d-8dba-47ec-9b60-a41d3c6078e0\5f272824-f713-47b3-ab08-fdff776f521f\payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\0759a329-e249-4c17-8ea2-cc7afdabafac\a62b3d79-e9ad-4cdc-850c-7881615724e1_slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\1436f540-fed6-4be3-9251-d5f5e3dac8e5\9652ba22-8337-46c6-b72c-ee83b0230ff1_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\1e4bb4dd-da7f-4785-b0d6-d7441cf4e166\28eca2de-4052-454b-beee-e7368ca9791b_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\27952bce-b731-4b5a-b844-5df39e48783b\059390c5-4f15-4b63-aaba-8b245e11dc68_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\2e02232d-7e8c-4f55-946a-df6179196908\2c2d7eea-b7b4-4316-a84c-fc621a578a30_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\354a434f-04ae-4dc4-9da6-27acca6e2e9f\3bb503c2-6184-42ce-be93-6332a40c72b3_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\3689b5c8-20b4-410b-ac31-b498e63bb135\fdf42853-7e0f-4b98-ae06-3c4149ad0f3d_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\47919b25-d779-497e-9776-90f4d233a540\22df766c-331f-4521-9a96-839805602055_slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\54604e8d-0d90-46b7-9475-4057109fa0a7\fdac963b-101b-4012-a339-b56394fd8775_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\570bd2f3-31f7-4a9d-9698-3ee590880c47\c9e5217a-2b16-4a15-9cb2-bf9a32823aac_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\5d46f044-e09a-4c3a-9e30-3b4a1c28580a\f01f041f-5258-4a4c-a373-d3c24c9ff7b1_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\630d53be-f3a2-4043-9a74-f17e25dcf269\37a82b14-0f94-4419-8057-973cfed4153f_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\6deff9f7-a5cb-4814-b4a1-f69cd266e148\87113466-f251-4f28-824c-aa7e563261b5_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\77754e83-8102-4de8-adcb-e5ba0662b68d\5a928cbf-38cc-4049-b63e-70842f13bc6d_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\7ae53698-3ce8-4c69-bd00-2016059e97fd\ad85c202-215a-445f-9774-306832d79f43_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\82b9ba25-a691-42be-a4c6-72e34c145084\e4bcbcff-0d22-4427-8d23-28976ff30609_slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\8dbaad8b-3039-4d9b-a0cf-fa72fd0893e1\29fac881-650f-421b-9e3e-2ca536301790_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\8de9dcfb-e804-401f-b230-b3bc100e535c\81c323ed-5471-41d2-9edf-79a13cf365f0_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\8fa193e4-2016-4c8e-97eb-5c11603fa99f\875edf8a-a153-4da8-bc85-e1ab7c1165db_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\926f97bf-80cc-4e24-9318-046a3b77af9c\68cdbe7f-ee83-42c5-aa9f-6c904bfbe489_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\9897b693-e5f7-4387-8058-5f2042aac764\2bb75442-79c8-4e83-872c-198a8c0b81ec_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\989a4e65-2257-4bfb-adbb-f17cef6d8940\1918bf7e-79bf-4e13-a675-294de7de2fe4_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\9dd5f429-83da-43af-b6c2-482d37185c6c\f1d559e6-85ad-441b-a864-965c39edf7ad_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\a124865c-9337-4d62-a320-eef19ee00c82\bdab5c0c-e6ab-4d03-ac11-fe3d967a47ce_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\a388853d-f7fc-4295-b28b-885fc68d1050\1a42cfe4-5f6a-4494-8589-46f30e26a1ed_slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\b8526e2e-81f7-4a89-abe4-cfc77b4cce6b\80a61ca1-4947-4393-aba1-55dcb74b9df1_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\c1e40930-4931-40ab-bdf5-6330dbf1dad7\d793873f-b1bb-448a-a25e-5313e2d6144d_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\c3aee5af-ca80-4311-a277-5ab647277252\f093d227-0b0b-47cb-ba56-5db188295aa7_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\c9cf9226-7730-41a3-b457-985d9e90762c\b97c6433-416b-46df-b298-d7fd5877b9b3_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\d185f94a-cc32-49f5-b7bb-aea8dd45b74c\ecb8bc04-fb3d-4bbb-b1ad-0f55c9fd376c_slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\d2617ecb-61d7-43d9-afcb-05cafaf99b7c\ca1e9357-9e16-404e-8834-86dbb889b4d9_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\e16a440d-0796-4dcb-aa9a-eb751987112e\41afb091-eac0-44c0-b8f4-1ca85781b160_slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\e952590c-1a8c-45ec-bfd8-1396a8e1f9e1\649e6985-6322-4cda-a91f-b91a07bfc0e4_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\ebeb05a1-89bd-43c6-8ccc-7c4f2388edc3\508865ee-0b67-4684-992f-e396d77e857e_slack-notification-payload.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\f1ca1baa-a651-4a1f-af9c-84295c429404\f8bf0395-62a5-4518-84af-7ed227346891_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\604d4c10-c7d1-409e-8068-8de0ff3e147b\47f386ed-53df-43f9-8e1d-f4c8ac248417_test-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\862a7630-c672-4924-b373-b42ecad0db58\8d178310-63f9-462d-ad7d-c5786e20df4e_payment-request.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\cee19e06-fe34-49c8-ab94-cbec96cff3a5\90171b14-4755-4d65-94c1-56ca4fe875e0_gateway-response-error.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\dfaabdcd-1a91-49ed-94e8-d4cecfea7090\d8f96979-68af-45bb-86f2-3e7a043ac569_merchant-config.json"/>
+    <_ContentIncludedByDefault Remove="data\artifacts\eff25546-09d6-4fe5-9633-b1f11434e1da\a625b9a7-3ded-4383-b9b1-5ffc9137b351_slack-notification-payload.json"/>
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="logs\ingestion-20251218.log"/>
+    <None Remove="logs\ingestion-20251217.log"/>
+    <None Remove="logs\ingestion-20251215.log"/>
+    <None Remove="logs\ingestion-20251212.log"/>
+    <None Remove="logs\ingestion-20251211.log"/>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,104 @@
+/* Table header styling from Profile per request */
+.blockContainer__block-header--bOT4P {
+  background-color: #f5f5f5;
+  box-sizing: border-box;
+  color: #777;
+  font-family: OpenSans-Semibold, sans-serif;
+  font-size: 12px;
+  height: 30px;
+  line-height: 30px;
+  padding: 0 15px;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+/* Row styling per request */
+.assignedProjectsBlock__project-item {
+  border-bottom: 1px solid #e9e9e9;
+  box-sizing: border-box;
+  color: #464547;
+  font-size: 13px;
+  height: 56px;
+  line-height: 56px;
+  padding: 0 15px;
+  text-transform: none; /* Do not uppercase rows per latest request */
+  white-space: nowrap;
+  width: 100%;
+}
+
+/* Headers should be uppercase using the same class when applied to <th> */
+th.assignedProjectsBlock__project-item {
+  text-transform: uppercase;
+}
+
+/* Compact dropdown menu for Users actions */
+.dropdown-menu-sm {
+  padding: .2rem 0;
+  min-width: 0; /* override Bootstrap default 10rem */
+  width: max-content; /* shrink to content */
+  border-radius: .375rem;
+  box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .08);
+}
+
+.dropdown-menu-sm .dropdown-item {
+  padding: .3rem .6rem;
+  font-size: .8125rem; /* smaller text */
+  line-height: 1.1;
+}
+
+/* Ensure dropdown overlays above adjacent rows/elements */
+.dropdown-menu,
+.dropdown-menu-sm {
+  z-index: 2000; /* above default (1000) to avoid being overlapped */
+}
+
+/* Make the Users page filter controls a bit smaller */
+:deep(#usersSearch.form-control) {
+  padding: .25rem .5rem; /* match Bootstrap .form-control-sm */
+  font-size: .875rem;
+  border-radius: .2rem;
+  min-height: calc(1.5em + .5rem + 2px);
+}
+
+/* Hover-only Make Admin badge next to username */
+.user-cell .make-admin-badge {
+  display: none;
+  cursor: pointer;
+}
+
+.user-cell:hover .make-admin-badge {
+  display: inline-block;
+}
+
+/* Container for Projects and Roles - 2 columns grid */
+.projectsAndRolesColumn__container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 5px;
+  max-width: 100%;
+}
+
+/* If only one project, span full width */
+.projectsAndRolesColumn__container:has(.projectsAndRolesColumn__project:only-child) {
+  grid-template-columns: 1fr;
+}
+
+/* If two or more projects, use 2 columns */
+.projectsAndRolesColumn__container:has(.projectsAndRolesColumn__project:nth-child(2)) {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Project badges styling for Projects and Roles column */
+.projectsAndRolesColumn__project {
+  background-color: rgba(26, 156, 176, .1);
+  border-radius: 2px;
+  color: #1a9cb0;
+  cursor: pointer;
+  display: block;
+  line-height: 1.67;
+  padding: 2px 10px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

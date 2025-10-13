@@ -73,3 +73,5 @@ nav:
   - Compatibility Matrix: Compatibility-Matrix.md
   - API Reference: API-Reference.md
   - Improvement Tasks: tasks.md
+  - "Local dev: .env and Compose overrides": local-dev-dotenv-and-compose-overrides.md
+  - Docker build cache: docker-cache.md

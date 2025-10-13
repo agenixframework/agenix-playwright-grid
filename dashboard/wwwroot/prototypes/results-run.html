@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Results Run (Test Details) Prototype</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="../css/test-item-components.css" rel="stylesheet">
+  <link href="../css/site.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f8f9fa;
+    }
+
+    .header-gradient {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+    }
+
+    .content-section {
+      background: white;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .status-badge {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+    }
+
+    .metadata-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+
+    .metadata-item {
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+
+    .metadata-label {
+      font-weight: 600;
+      color: #6c757d;
+      font-size: 0.875rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .metadata-value {
+      font-size: 1rem;
+      color: #212529;
+    }
+  </style>
+</head>
+<body>
+<div class="header-gradient">
+  <div class="container">
+    <div class="d-flex align-items-center mb-3">
+      <button class="btn btn-light me-3">
+        <i class="bi bi-arrow-left"></i> Back
+      </button>
+      <h1 class="mb-0 flex-grow-1">Login with valid credentials</h1>
+      <span class="badge bg-success status-badge">Passed</span>
+    </div>
+    <div class="d-flex gap-2">
+      <span class="badge bg-light text-dark">🧪 Test</span>
+      <span class="badge bg-light text-dark">smoke</span>
+      <span class="badge bg-light text-dark">critical</span>
+    </div>
+  </div>
+</div>
+
+<div class="container mt-4 mb-5">
+  <!-- Test Overview -->
+  <div class="content-section">
+    <h3 class="mb-4">Test Overview</h3>
+    <div class="metadata-grid">
+      <div class="metadata-item">
+        <div class="metadata-label">TEST ID</div>
+        <div class="metadata-value"><code class="small">610b82f6-8144-406c</code></div>
+      </div>
+      <div class="metadata-item">
+        <div class="metadata-label">BROWSER</div>
+        <div class="metadata-value">
+          <span class="badge bg-secondary">Chromium</span> 119.0.6045.105
+        </div>
+      </div>
+      <div class="metadata-item">
+        <div class="metadata-label">WORKER NODE</div>
+        <div class="metadata-value">worker-1 (127.0.0.1:5200)</div>
+      </div>
+      <div class="metadata-item">
+        <div class="metadata-label">DURATION</div>
+        <div class="metadata-value">12.5s</div>
+      </div>
+      <div class="metadata-item">
+        <div class="metadata-label">STARTED</div>
+        <div class="metadata-value">2025-01-28 14:23:15</div>
+      </div>
+      <div class="metadata-item">
+        <div class="metadata-label">FINISHED</div>
+        <div class="metadata-value">2025-01-28 14:23:27</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test File Info -->
+  <div class="content-section">
+    <h3 class="mb-3">Test File</h3>
+    <div class="d-flex align-items-center">
+      <i class="bi bi-file-code me-2"></i>
+      <code>tests/auth/login.spec.ts:42</code>
+      <button class="btn btn-sm btn-outline-secondary ms-3">
+        <i class="bi bi-box-arrow-up-right"></i> Open in Editor
+      </button>
+    </div>
+    <p class="text-muted mt-2 mb-0">Verifies that users can successfully log in with valid username and password</p>
+  </div>
+
+  <!-- View Mode Toggle -->
+  <div class="content-section">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="mb-0">Test Execution Details</h3>
+      <div class="btn-group btn-group-sm" role="group">
+        <button class="btn btn-primary" type="button">
+          <i class="bi bi-list-ul"></i> Legacy View
+        </button>
+        <button class="btn btn-outline-secondary" type="button">
+          <i class="bi bi-diagram-3"></i> Hierarchical View
+        </button>
+      </div>
+    </div>
+
+    <!-- Legacy View: Test Steps -->
+    <div class="test-step-tree">
+      <div class="test-step">
+        <div class="step-header">
+          <button class="step-toggle"><span>▼</span></button>
+          <span class="step-category badge bg-secondary me-2">hook</span>
+          <span class="step-title">Before each hook</span>
+          <span class="step-duration ms-2 text-muted">850ms</span>
+        </div>
+      </div>
+
+      <div class="test-step">
+        <div class="step-header">
+          <button class="step-toggle"><span>▼</span></button>
+          <span class="step-category badge bg-secondary me-2">action</span>
+          <span class="step-title">Navigate to login page</span>
+          <span class="step-duration ms-2 text-muted">2.1s</span>
+        </div>
+      </div>
+
+      <div class="test-step">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">action</span>
+          <span class="step-title">Fill username field</span>
+          <span class="step-duration ms-2 text-muted">420ms</span>
+        </div>
+      </div>
+
+      <div class="test-step">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">action</span>
+          <span class="step-title">Fill password field</span>
+          <span class="step-duration ms-2 text-muted">380ms</span>
+        </div>
+      </div>
+
+      <div class="test-step">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">action</span>
+          <span class="step-title">Click submit button</span>
+          <span class="step-duration ms-2 text-muted">3.2s</span>
+        </div>
+      </div>
+
+      <div class="test-step">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-success me-2">assertion</span>
+          <span class="step-title">Verify dashboard is displayed</span>
+          <span class="step-duration ms-2 text-muted">1.4s</span>
+        </div>
+      </div>
+
+      <div class="test-step">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">hook</span>
+          <span class="step-title">After each hook</span>
+          <span class="step-duration ms-2 text-muted">620ms</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Artifacts -->
+  <div class="content-section">
+    <h3 class="mb-3">Artifacts & Screenshots</h3>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card">
+          <img alt="Screenshot" class="card-img-top" src="https://via.placeholder.com/400x300?text=Screenshot+1">
+          <div class="card-body">
+            <h6 class="card-title">Login Page</h6>
+            <p class="card-text small text-muted">Captured at 2.1s</p>
+            <button class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye"></i> View Full Size
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card">
+          <img alt="Screenshot" class="card-img-top" src="https://via.placeholder.com/400x300?text=Screenshot+2">
+          <div class="card-body">
+            <h6 class="card-title">Dashboard</h6>
+            <p class="card-text small text-muted">Captured at 9.5s</p>
+            <button class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye"></i> View Full Size
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body text-center py-5">
+            <i class="bi bi-film display-4 text-muted"></i>
+            <h6 class="card-title mt-3">Test Video</h6>
+            <p class="card-text small text-muted">12.5s recording</p>
+            <button class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-play-circle"></i> Watch Video
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="content-section">
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary">
+        <i class="bi bi-arrow-clockwise"></i> Retry Test
+      </button>
+      <button class="btn btn-outline-secondary">
+        <i class="bi bi-file-earmark-arrow-down"></i> Export Results
+      </button>
+      <button class="btn btn-outline-danger ms-auto">
+        <i class="bi bi-trash"></i> Delete Test
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

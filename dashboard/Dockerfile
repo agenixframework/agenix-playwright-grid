@@ -30,8 +30,10 @@ ENV ASPNETCORE_URLS=http://+:3001 \
 # Copy published output
 COPY --from=build /app/publish .
 
-# Run as a non-root user
-RUN useradd -u 10001 -r -s /usr/sbin/nologin appuser && chown -R appuser:appuser /app
+# Run as a non-root user and ensure DataProtection directory is writable
+RUN useradd -u 10001 -r -s /usr/sbin/nologin appuser \
+    && mkdir -p /data/protection \
+    && chown -R appuser:appuser /app /data
 USER appuser
 
 EXPOSE 3001

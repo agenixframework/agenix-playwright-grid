@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Status Donuts - Prototype v2</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 40px;
+      font-size: 2.5rem;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .demo-section {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .demo-section h2 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 1.5rem;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      border: 2px solid #e0e0e0;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card.active {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+
+    .donut-container {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 12px;
+      position: relative;
+    }
+
+    .donut-svg {
+      transform: rotate(-90deg);
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    }
+
+    .donut-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .stat-sublabel {
+      font-size: 0.75rem;
+      color: #999;
+    }
+
+    /* Color themes */
+    .stat-card.total {
+      border-color: #9CA3AF;
+    }
+
+    .stat-card.total.active {
+      border-color: #6B7280;
+      background: #F9FAFB;
+    }
+
+    .stat-card.passed {
+      border-color: #10B981;
+    }
+
+    .stat-card.passed.active {
+      border-color: #059669;
+      background: #ECFDF5;
+    }
+
+    .stat-card.failed {
+      border-color: #EF4444;
+    }
+
+    .stat-card.failed.active {
+      border-color: #DC2626;
+      background: #FEF2F2;
+    }
+
+    .stat-card.skipped {
+      border-color: #F59E0B;
+    }
+
+    .stat-card.skipped.active {
+      border-color: #D97706;
+      background: #FFFBEB;
+    }
+
+    .stat-card.timedout {
+      border-color: #8B5CF6;
+    }
+
+    .stat-card.timedout.active {
+      border-color: #7C3AED;
+      background: #F5F3FF;
+    }
+
+    /* Animated donuts */
+    .donut-segment {
+      transition: stroke-dashoffset 0.8s ease, opacity 0.3s ease;
+    }
+
+    .stat-card:hover .donut-segment {
+      opacity: 0.9;
+    }
+
+    /* Size variants */
+    .size-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .size-btn {
+      padding: 8px 16px;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .size-btn:hover, .size-btn.active {
+      background: #667eea;
+      color: white;
+    }
+
+    .stats-grid.compact {
+      gap: 15px;
+    }
+
+    .stats-grid.compact .stat-card {
+      padding: 15px;
+    }
+
+    .stats-grid.compact .donut-container {
+      width: 70px;
+      height: 70px;
+    }
+
+    .stats-grid.compact .donut-center {
+      font-size: 1.3rem;
+    }
+
+    .stats-grid.compact .stat-label {
+      font-size: 0.75rem;
+    }
+
+    .stats-grid.large .stat-card {
+      padding: 30px;
+    }
+
+    .stats-grid.large .donut-container {
+      width: 130px;
+      height: 130px;
+    }
+
+    .stats-grid.large .donut-center {
+      font-size: 2.2rem;
+    }
+
+    .stats-grid.large .stat-label {
+      font-size: 1rem;
+    }
+
+    /* Interactive legend */
+    .legend {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%) translateY(-5px);
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 10;
+    }
+
+    .stat-card:hover .tooltip {
+      opacity: 1;
+    }
+
+    .tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: rgba(0, 0, 0, 0.9);
+    }
+
+    /* Percentage badge */
+    .percentage-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #667eea;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+
+    .stat-card.passed .percentage-badge {
+      background: #10B981;
+    }
+
+    .stat-card.failed .percentage-badge {
+      background: #EF4444;
+    }
+
+    .stat-card.skipped .percentage-badge {
+      background: #F59E0B;
+    }
+
+    .stat-card.timedout .percentage-badge {
+      background: #8B5CF6;
+    }
+
+    /* Theme toggle */
+    .theme-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .theme-btn {
+      padding: 8px 16px;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .theme-btn:hover, .theme-btn.active {
+      background: #667eea;
+      color: white;
+    }
+
+    /* Dark theme */
+    body.dark-theme {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+
+    body.dark-theme .demo-section {
+      background: #2a2a3e;
+    }
+
+    body.dark-theme .demo-section h2 {
+      color: #e0e0e0;
+      border-bottom-color: #667eea;
+    }
+
+    body.dark-theme .stat-card {
+      background: #1a1a2e;
+      border-color: #3a3a4e;
+    }
+
+    body.dark-theme .stat-card:hover {
+      background: #2a2a3e;
+    }
+
+    body.dark-theme .donut-center {
+      color: #e0e0e0;
+    }
+
+    body.dark-theme .stat-label {
+      color: #b0b0b0;
+    }
+
+    body.dark-theme .stat-sublabel {
+      color: #808080;
+    }
+
+    body.dark-theme .legend {
+      background: #1a1a2e;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 1.8rem;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+      }
+
+      .demo-section {
+        padding: 20px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🍩 Test Status Donuts - Interactive Prototype v2</h1>
+
+  <!-- Example 1: Default Size with Percentages -->
+  <div class="demo-section">
+    <h2>Example 1: Default Size with Percentages</h2>
+    <div class="theme-controls">
+      <button class="theme-btn active" onclick="setTheme('light')">☀️ Light</button>
+      <button class="theme-btn" onclick="setTheme('dark')">🌙 Dark</button>
+    </div>
+    <div class="stats-grid" id="statsGrid1">
+      <!-- Generated by JavaScript -->
+    </div>
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color" style="background: #10B981;"></div>
+        <span>Passed</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #EF4444;"></div>
+        <span>Failed</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #F59E0B;"></div>
+        <span>Skipped</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #8B5CF6;"></div>
+        <span>Timed Out</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Example 2: Size Variants -->
+  <div class="demo-section">
+    <h2>Example 2: Size Variants</h2>
+    <div class="size-controls">
+      <button class="size-btn" onclick="setSize('compact')">Compact</button>
+      <button class="size-btn active" onclick="setSize('default')">Default</button>
+      <button class="size-btn" onclick="setSize('large')">Large</button>
+    </div>
+    <div class="stats-grid" id="statsGrid2">
+      <!-- Generated by JavaScript -->
+    </div>
+  </div>
+
+  <!-- Example 3: Different Data Scenarios -->
+  <div class="demo-section">
+    <h2>Example 3: Different Scenarios</h2>
+    <div class="size-controls">
+      <button class="size-btn active" onclick="setScenario('mixed')">Mixed Results</button>
+      <button class="size-btn" onclick="setScenario('allPassed')">All Passed</button>
+      <button class="size-btn" onclick="setScenario('someFailed')">Some Failed</button>
+      <button class="size-btn" onclick="setScenario('manySkipped')">Many Skipped</button>
+    </div>
+    <div class="stats-grid" id="statsGrid3">
+      <!-- Generated by JavaScript -->
+    </div>
+  </div>
+</div>
+
+<script>
+  // Test data scenarios
+  const scenarios = {
+    mixed: {total: 125, passed: 98, failed: 15, skipped: 8, timedout: 4},
+    allPassed: {total: 50, passed: 50, failed: 0, skipped: 0, timedout: 0},
+    someFailed: {total: 80, passed: 60, failed: 18, skipped: 2, timedout: 0},
+    manySkipped: {total: 100, passed: 45, failed: 5, skipped: 48, timedout: 2}
+  };
+
+  let currentScenario = 'mixed';
+
+  function createDonut(passed, failed, skipped, timedout, total) {
+    const radius = 40;
+    const circumference = 2 * Math.PI * radius;
+
+    const passedPercent = (passed / total) * 100;
+    const failedPercent = (failed / total) * 100;
+    const skippedPercent = (skipped / total) * 100;
+    const timedoutPercent = (timedout / total) * 100;
+
+    const passedLength = (passed / total) * circumference;
+    const failedLength = (failed / total) * circumference;
+    const skippedLength = (skipped / total) * circumference;
+    const timedoutLength = (timedout / total) * circumference;
+
+    let offset = 0;
+    const segments = [];
+
+    if (passed > 0) {
+      segments.push(`
+                    <circle class="donut-segment"
+                            cx="50" cy="50" r="${radius}"
+                            fill="none"
+                            stroke="#10B981"
+                            stroke-width="20"
+                            stroke-dasharray="${passedLength} ${circumference}"
+                            stroke-dashoffset="${-offset}"
+                            opacity="0.9" />
+                `);
+      offset += passedLength;
+    }
+
+    if (failed > 0) {
+      segments.push(`
+                    <circle class="donut-segment"
+                            cx="50" cy="50" r="${radius}"
+                            fill="none"
+                            stroke="#EF4444"
+                            stroke-width="20"
+                            stroke-dasharray="${failedLength} ${circumference}"
+                            stroke-dashoffset="${-offset}"
+                            opacity="0.9" />
+                `);
+      offset += failedLength;
+    }
+
+    if (skipped > 0) {
+      segments.push(`
+                    <circle class="donut-segment"
+                            cx="50" cy="50" r="${radius}"
+                            fill="none"
+                            stroke="#F59E0B"
+                            stroke-width="20"
+                            stroke-dasharray="${skippedLength} ${circumference}"
+                            stroke-dashoffset="${-offset}"
+                            opacity="0.9" />
+                `);
+      offset += skippedLength;
+    }
+
+    if (timedout > 0) {
+      segments.push(`
+                    <circle class="donut-segment"
+                            cx="50" cy="50" r="${radius}"
+                            fill="none"
+                            stroke="#8B5CF6"
+                            stroke-width="20"
+                            stroke-dasharray="${timedoutLength} ${circumference}"
+                            stroke-dashoffset="${-offset}"
+                            opacity="0.9" />
+                `);
+    }
+
+    return `
+                <svg class="donut-svg" width="100" height="100" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="${radius}" fill="none" stroke="#E5E7EB" stroke-width="20" />
+                    ${segments.join('')}
+                </svg>
+            `;
+  }
+
+  function renderStats(gridId, data, showPercentages = false) {
+    const grid = document.getElementById(gridId);
+    const {total, passed, failed, skipped, timedout} = data;
+
+    const passedPercent = ((passed / total) * 100).toFixed(1);
+    const failedPercent = ((failed / total) * 100).toFixed(1);
+    const skippedPercent = ((skipped / total) * 100).toFixed(1);
+    const timedoutPercent = ((timedout / total) * 100).toFixed(1);
+
+    grid.innerHTML = `
+                <div class="stat-card total" onclick="toggleActive(this)">
+                    <div class="tooltip">Total Tests Executed</div>
+                    <div class="donut-container">
+                        ${createDonut(passed, failed, skipped, timedout, total)}
+                        <div class="donut-center">${total}</div>
+                    </div>
+                    <div class="stat-label">Total</div>
+                    <div class="stat-sublabel">All Tests</div>
+                </div>
+
+                <div class="stat-card passed" onclick="toggleActive(this)">
+                    <div class="tooltip">Tests Passed Successfully</div>
+                    ${showPercentages ? `<div class="percentage-badge">${passedPercent}%</div>` : ''}
+                    <div class="donut-container">
+                        ${createDonut(passed, 0, 0, 0, total)}
+                        <div class="donut-center">${passed}</div>
+                    </div>
+                    <div class="stat-label">Passed</div>
+                    <div class="stat-sublabel">${passedPercent}% of total</div>
+                </div>
+
+                <div class="stat-card failed" onclick="toggleActive(this)">
+                    <div class="tooltip">Tests Failed with Errors</div>
+                    ${showPercentages ? `<div class="percentage-badge">${failedPercent}%</div>` : ''}
+                    <div class="donut-container">
+                        ${createDonut(0, failed, 0, 0, total)}
+                        <div class="donut-center">${failed}</div>
+                    </div>
+                    <div class="stat-label">Failed</div>
+                    <div class="stat-sublabel">${failedPercent}% of total</div>
+                </div>
+
+                <div class="stat-card skipped" onclick="toggleActive(this)">
+                    <div class="tooltip">Tests Skipped</div>
+                    ${showPercentages ? `<div class="percentage-badge">${skippedPercent}%</div>` : ''}
+                    <div class="donut-container">
+                        ${createDonut(0, 0, skipped, 0, total)}
+                        <div class="donut-center">${skipped}</div>
+                    </div>
+                    <div class="stat-label">Skipped</div>
+                    <div class="stat-sublabel">${skippedPercent}% of total</div>
+                </div>
+
+                <div class="stat-card timedout" onclick="toggleActive(this)">
+                    <div class="tooltip">Tests Timed Out</div>
+                    ${showPercentages ? `<div class="percentage-badge">${timedoutPercent}%</div>` : ''}
+                    <div class="donut-container">
+                        ${createDonut(0, 0, 0, timedout, total)}
+                        <div class="donut-center">${timedout}</div>
+                    </div>
+                    <div class="stat-label">Timed Out</div>
+                    <div class="stat-sublabel">${timedoutPercent}% of total</div>
+                </div>
+            `;
+  }
+
+  function toggleActive(element) {
+    element.classList.toggle('active');
+  }
+
+  function setSize(size) {
+    const grid = document.getElementById('statsGrid2');
+    const buttons = document.querySelectorAll('.size-controls .size-btn');
+
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    grid.className = 'stats-grid';
+    if (size === 'compact') grid.classList.add('compact');
+    if (size === 'large') grid.classList.add('large');
+  }
+
+  function setScenario(scenario) {
+    currentScenario = scenario;
+    const buttons = document.querySelectorAll('#statsGrid3').previousElementSibling.querySelectorAll('.size-btn');
+
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    renderStats('statsGrid3', scenarios[scenario]);
+  }
+
+  function setTheme(theme) {
+    const buttons = document.querySelectorAll('.theme-controls .theme-btn');
+
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    if (theme === 'dark') {
+      document.body.classList.add('dark-theme');
+    } else {
+      document.body.classList.remove('dark-theme');
+    }
+  }
+
+  // Initial render
+  renderStats('statsGrid1', scenarios.mixed, true);
+  renderStats('statsGrid2', scenarios.mixed, false);
+  renderStats('statsGrid3', scenarios.mixed, false);
+</script>
+</body>
+</html>

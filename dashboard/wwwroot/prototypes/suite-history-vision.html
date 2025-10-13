@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Suite History Matrix - Modern Vision</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --success: #10b981;
+      --success-bg: #d1fae5;
+      --danger: #ef4444;
+      --danger-bg: #fee2e2;
+      --warning: #f59e0b;
+      --warning-bg: #fef3c7;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      line-height: 1.6;
+      padding: 1.5rem;
+    }
+
+    .container-fluid {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .page-header {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .page-title i {
+      color: var(--primary);
+      font-size: 1.75rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      background: white;
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .toolbar-label {
+      font-size: 0.813rem;
+      font-weight: 600;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--gray-300);
+    }
+
+    /* Form Controls */
+    .form-control, .form-select {
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      padding: 0.375rem 0.75rem;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      outline: none;
+    }
+
+    .form-select {
+      cursor: pointer;
+      background: white;
+    }
+
+    .search-wrapper {
+      position: relative;
+      min-width: 240px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-400);
+      pointer-events: none;
+    }
+
+    .search-wrapper input {
+      padding-left: 2.25rem;
+    }
+
+    /* Buttons */
+    .btn {
+      border-radius: 6px;
+      padding: 0.375rem 0.875rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--gray-700);
+      border: 1px solid var(--gray-300);
+    }
+
+    .btn-secondary:hover {
+      background: var(--gray-50);
+    }
+
+    /* Matrix Container */
+    .matrix-wrapper {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .matrix-scroll {
+      overflow: auto;
+      max-height: calc(100vh - 280px);
+    }
+
+    .matrix-table {
+      width: auto;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 100%;
+    }
+
+    .matrix-table th,
+    .matrix-table td {
+      min-width: 80px;
+    }
+
+    .matrix-table th:first-child,
+    .matrix-table td:first-child {
+      min-width: 200px;
+    }
+
+    /* Table Header */
+    .matrix-table thead th {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-align: center;
+      padding: 0.75rem 0.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      white-space: nowrap;
+      border-bottom: 2px solid var(--primary-dark);
+    }
+
+    .matrix-table thead th:first-child {
+      text-align: left;
+      position: sticky;
+      left: 0;
+      z-index: 20;
+      min-width: 200px;
+      max-width: 200px;
+    }
+
+    .launch-header {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+      align-items: center;
+    }
+
+    .launch-number {
+      font-size: 0.875rem;
+      font-weight: 700;
+    }
+
+    .launch-time {
+      font-size: 0.688rem;
+      opacity: 0.9;
+      font-weight: 400;
+    }
+
+    /* Table Body */
+    .matrix-table tbody td {
+      padding: 0;
+      border-bottom: 1px solid var(--gray-200);
+      text-align: center;
+      height: 48px;
+      transition: height 0.2s;
+    }
+
+    .matrix-table tbody td:first-child {
+      position: sticky;
+      left: 0;
+      background: white;
+      z-index: 5;
+      border-right: 1px solid var(--gray-200);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    /* View Mode: Comfortable */
+    .matrix-table.view-comfortable tbody td {
+      height: 56px;
+    }
+
+    .matrix-table.view-comfortable thead th {
+      padding: 1rem 0.75rem;
+    }
+
+    .matrix-table.view-comfortable tbody td:first-child {
+      padding: 0.75rem 1rem;
+    }
+
+    .matrix-table.view-comfortable .suite-name {
+      font-size: 0.938rem;
+    }
+
+    /* View Mode: Detailed */
+    .matrix-table.view-detailed tbody td {
+      height: 64px;
+    }
+
+    .matrix-table.view-detailed thead th {
+      padding: 1.25rem 1rem;
+    }
+
+    .matrix-table.view-detailed tbody td:first-child {
+      padding: 1rem 1.25rem;
+    }
+
+    .matrix-table.view-detailed .suite-name {
+      font-size: 1rem;
+    }
+
+    .matrix-table.view-detailed .suite-icon {
+      font-size: 1rem;
+    }
+
+    .matrix-table tbody tr:hover td:first-child {
+      background: var(--gray-50);
+    }
+
+    .matrix-table tbody tr:hover {
+      background: var(--gray-50);
+    }
+
+    /* Suite Name */
+    .suite-name {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--gray-900);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .suite-name:hover {
+      color: var(--primary);
+    }
+
+    .suite-icon {
+      color: var(--gray-400);
+      font-size: 0.875rem;
+    }
+
+    /* Status Cells */
+    .cell {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .cell::before {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+
+    .cell:hover::before {
+      box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Status Colors */
+    .status-passed {
+      background: var(--success-bg);
+    }
+
+    .status-passed:hover {
+      background: #a7f3d0;
+    }
+
+    .status-failed {
+      background: var(--danger-bg);
+    }
+
+    .status-failed:hover {
+      background: #fecaca;
+    }
+
+    .status-mixed {
+      background: var(--warning-bg);
+    }
+
+    .status-mixed:hover {
+      background: #fde68a;
+    }
+
+    .status-empty {
+      background: var(--gray-100);
+    }
+
+    .empty-icon {
+      color: var(--gray-300);
+      font-size: 1rem;
+    }
+
+    /* Status Indicator */
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .indicator-passed {
+      background: var(--success);
+    }
+
+    .indicator-failed {
+      background: var(--danger);
+    }
+
+    .indicator-mixed {
+      background: var(--warning);
+    }
+
+    /* Tooltip */
+    .cell[data-tooltip] {
+      position: relative;
+    }
+
+    .cell[data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--gray-900);
+      color: white;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .cell[data-tooltip]:hover::before {
+      content: '';
+      position: absolute;
+      bottom: calc(100% + 2px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid var(--gray-900);
+      z-index: 1000;
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      padding: 1rem 1.5rem;
+      background: var(--gray-50);
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.813rem;
+      color: var(--gray-600);
+    }
+
+    .legend-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Loading State */
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: var(--gray-500);
+    }
+
+    .spinner {
+      border: 3px solid var(--gray-200);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      body {
+        padding: 1rem;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .toolbar-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .search-wrapper {
+        min-width: 100%;
+      }
+    }
+
+    /* Smooth Scroll */
+    .matrix-scroll {
+      scroll-behavior: smooth;
+    }
+
+    .matrix-scroll::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    .matrix-scroll::-webkit-scrollbar-track {
+      background: var(--gray-100);
+    }
+
+    .matrix-scroll::-webkit-scrollbar-thumb {
+      background: var(--gray-300);
+      border-radius: 4px;
+    }
+
+    .matrix-scroll::-webkit-scrollbar-thumb:hover {
+      background: var(--gray-400);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--gray-500);
+    }
+
+    .empty-state i {
+      font-size: 4rem;
+      color: var(--gray-300);
+      margin-bottom: 1rem;
+    }
+
+    .empty-state h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--gray-700);
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      font-size: 0.938rem;
+      color: var(--gray-500);
+    }
+  </style>
+</head>
+<body>
+<div class="container-fluid">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+
+    <div class="toolbar-group">
+      <span class="toolbar-label">Search</span>
+      <div class="search-wrapper">
+        <i class="bi bi-search search-icon"></i>
+        <input class="form-control" id="searchInput" placeholder="Filter suites..." type="text">
+      </div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-group">
+      <span class="toolbar-label">History</span>
+      <select class="form-select" id="historyDepth" style="width: 80px;">
+        <option value="3">3</option>
+        <option value="5">5</option>
+        <option selected value="10">10</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+        <option value="25">25</option>
+        <option value="30">30</option>
+      </select>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-group">
+      <span class="toolbar-label">Filter</span>
+      <select class="form-select" id="launchFilter" style="width: 200px;">
+        <option selected value="all">All launches</option>
+        <option value="same-name">Same name only</option>
+      </select>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-group">
+      <span class="toolbar-label">View</span>
+      <select class="form-select" id="viewMode" style="width: 140px;">
+        <option selected value="compact">Compact</option>
+        <option value="comfortable">Comfortable</option>
+        <option value="detailed">Detailed</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Matrix -->
+  <div class="matrix-wrapper">
+    <div class="matrix-scroll">
+      <table class="matrix-table">
+        <thead>
+        <tr>
+          <th>Suite Name</th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#125</span>
+              <span class="launch-time">2h ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#124</span>
+              <span class="launch-time">5h ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#123</span>
+              <span class="launch-time">8h ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#122</span>
+              <span class="launch-time">12h ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#121</span>
+              <span class="launch-time">1d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#120</span>
+              <span class="launch-time">1d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#119</span>
+              <span class="launch-time">2d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#118</span>
+              <span class="launch-time">2d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#117</span>
+              <span class="launch-time">3d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#116</span>
+              <span class="launch-time">3d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#115</span>
+              <span class="launch-time">4d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#114</span>
+              <span class="launch-time">4d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#113</span>
+              <span class="launch-time">5d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#112</span>
+              <span class="launch-time">5d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#111</span>
+              <span class="launch-time">6d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#110</span>
+              <span class="launch-time">6d ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#109</span>
+              <span class="launch-time">1w ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#108</span>
+              <span class="launch-time">1w ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#107</span>
+              <span class="launch-time">1w ago</span>
+            </div>
+          </th>
+          <th>
+            <div class="launch-header">
+              <span class="launch-number">#106</span>
+              <span class="launch-time">1w ago</span>
+            </div>
+          </th>
+        </tr>
+        </thead>
+        <tbody>
+        <!-- Suite 1: Authentication Tests -->
+        <tr data-suite="Authentication Tests">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-shield-check suite-icon"></i>
+              Authentication Tests
+            </div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="2 tests failed, 6 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 5 passed, 2 skipped"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="3 tests failed, 5 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 7 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="2 tests failed, 6 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 failed, 6 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="8 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 2: API Integration -->
+        <tr data-suite="API Integration">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-diagram-3 suite-icon"></i>
+              API Integration
+            </div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 failed, 10 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="5 tests failed, 7 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 11 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="3 failed, 9 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="4 tests failed, 8 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 11 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="12 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 3: Database Operations -->
+        <tr data-suite="Database Operations">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-database suite-icon"></i>
+              Database Operations
+            </div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 5 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="2 tests failed, 4 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 5 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="6 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 4: UI Components -->
+        <tr data-suite="UI Components">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-palette suite-icon"></i>
+              UI Components
+            </div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="3 skipped, 12 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="4 tests failed, 11 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 skipped, 13 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="3 tests failed, 12 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 14 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="15 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 5: Performance Tests -->
+        <tr data-suite="Performance Tests">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-speedometer2 suite-icon"></i>
+              Performance Tests
+            </div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="1 test failed, 3 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 timeout, 3 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 timeout, 2 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="2 tests failed, 2 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 timeout, 3 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="4 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="1 test failed, 3 passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 6: Security Checks -->
+        <tr data-suite="Security Checks">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-shield-lock suite-icon"></i>
+              Security Checks
+            </div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="2 tests failed, 8 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 9 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="3 tests failed, 7 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="10 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 7: End-to-End Workflows -->
+        <tr data-suite="End-to-End Workflows">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-arrow-left-right suite-icon"></i>
+              End-to-End Workflows
+            </div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 failed, 18 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="5 tests failed, 15 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 19 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="3 tests failed, 17 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="4 failed, 16 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="6 tests failed, 14 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 failed, 18 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="20 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 8: Notification System -->
+        <tr data-suite="Notification System">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-bell suite-icon"></i>
+              Notification System
+            </div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 6 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 failed, 5 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="3 tests failed, 4 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="7 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 9: Data Export -->
+        <tr data-suite="Data Export">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-download suite-icon"></i>
+              Data Export
+            </div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="2 tests failed, 3 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 skipped, 4 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="1 failed, 4 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="2 tests failed, 3 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="5 tests passed"></div>
+          </td>
+        </tr>
+
+        <!-- Suite 10: Regression Suite -->
+        <tr data-suite="Regression Suite">
+          <td>
+            <div class="suite-name">
+              <i class="bi bi-arrow-clockwise suite-icon"></i>
+              Regression Suite
+            </div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="3 failed, 22 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="6 tests failed, 19 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="2 failed, 23 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-failed" data-tooltip="5 tests failed, 20 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-mixed" data-tooltip="4 failed, 21 passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+          <td>
+            <div class="cell status-passed" data-tooltip="25 tests passed"></div>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-box status-passed">
+          <span class="status-indicator indicator-passed"></span>
+        </div>
+        <span>All Passed</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-box status-failed">
+          <span class="status-indicator indicator-failed"></span>
+        </div>
+        <span>Failed</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-box status-mixed">
+          <span class="status-indicator indicator-mixed"></span>
+        </div>
+        <span>Mixed Results</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-box status-empty">
+          <i class="bi bi-dash-lg empty-icon" style="font-size: 0.875rem;"></i>
+        </div>
+        <span>No Data</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Search functionality
+  document.getElementById('searchInput').addEventListener('input', function (e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll('tbody tr');
+
+    rows.forEach(row => {
+      const suiteName = row.getAttribute('data-suite').toLowerCase();
+      row.style.display = suiteName.includes(searchTerm) ? '' : 'none';
+    });
+  });
+
+  // Suite name click handler
+  document.querySelectorAll('.suite-name').forEach(element => {
+    element.addEventListener('click', function () {
+      const suiteName = this.textContent.trim();
+      console.log('Navigate to suite:', suiteName);
+      // In production: navigate to suite details page
+    });
+  });
+
+  // Cell click handler
+  document.querySelectorAll('.cell[data-tooltip]').forEach(cell => {
+    cell.addEventListener('click', function () {
+      const tooltip = this.getAttribute('data-tooltip');
+      console.log('View test details:', tooltip);
+      // In production: show test details modal or navigate to results
+    });
+  });
+
+  // History depth change
+  document.getElementById('historyDepth').addEventListener('change', function (e) {
+    console.log('History depth changed to:', e.target.value);
+    // In production: fetch new data and re-render table
+  });
+
+  // Launch filter change
+  document.getElementById('launchFilter').addEventListener('change', function (e) {
+    console.log('Launch filter changed to:', e.target.value);
+    // In production: apply filter and re-render table
+  });
+
+  // View mode change
+  document.getElementById('viewMode').addEventListener('change', function (e) {
+    const viewMode = e.target.value;
+    const table = document.querySelector('.matrix-table');
+
+    // Remove all view mode classes
+    table.classList.remove('view-compact', 'view-comfortable', 'view-detailed');
+
+    // Add the selected view mode class
+    if (viewMode !== 'compact') {
+      table.classList.add('view-' + viewMode);
+    }
+
+    console.log('View mode changed to:', viewMode);
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function (e) {
+    // Cmd/Ctrl + K to focus search
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('searchInput').focus();
+    }
+  });
+</script>
+</body>
+</html>

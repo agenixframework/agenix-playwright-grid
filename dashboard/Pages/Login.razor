@@ -1,75 +1,931 @@
 @page "/login"
 @using System.ComponentModel.DataAnnotations
+@using System.Reflection
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.WebUtilities
+@namespace Dashboard.Pages
+@attribute [AllowAnonymous]
 @inject NavigationManager Nav
+@inject IConfiguration Cfg
+@inject IHttpClientFactory Http
+@inject IJSRuntime JS
 
 <div class="login-page d-flex align-items-center justify-content-center">
-    <div class="login-card card shadow-sm">
-        <div class="card-body p-4 p-md-5">
-            <div class="text-center mb-3">
-                <img src="images/logo.svg" alt="Playwright Grid" class="login-logo mb-2"/>
-                <h5 class="mb-0">Sign in to Playwright Grid</h5>
-                <div class="text-muted small">Welcome back! Please enter your details.</div>
-            </div>
-
-            <EditForm Model="model" OnValidSubmit="OnSubmit">
-                <DataAnnotationsValidator/>
-                <ValidationSummary/>
-
-                <div class="mb-3">
-                    <label for="email" class="form-label">Email</label>
-                    <InputText id="email" class="form-control" @bind-Value="model.Email"/>
-                    <ValidationMessage For="() => model.Email"/>
-                </div>
-
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <label for="password" class="form-label mb-0">Password</label>
-                        <a href="#" class="small">Forgot password?</a>
+    <div class="login-container">
+        <div class="login-card card shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <div class="text-center mb-4">
+                    <div class="login-icon-container mb-2">
+                        <img src="images/icon-256.png" alt="Playwright Grid" class="login-icon"/>
+                        <div class="login-icon-overlay">
+                            <img src="images/logo.svg" alt="Agenix Playwright Service" class="login-icon-logo"/>
+                            <p class="login-icon-tagline">Test the Pieces. Verify the Whole.</p>
+                        </div>
                     </div>
-                    <InputText id="password" type="password" class="form-control" @bind-Value="model.Password"/>
-                    <ValidationMessage For="() => model.Password"/>
+                    <h1 class="login-title mb-2">Welcome back</h1>
+                    <p class="login-subtitle text-muted">Sign in to explore, monitor, and debug your Playwright runs—all
+                        from the dashboard.</p>
                 </div>
 
-                <div class="d-flex align-items-center mb-3">
-                    <input id="remember" class="form-check-input me-2" type="checkbox" @bind="model.RememberMe"/>
-                    <label for="remember" class="form-check-label">Remember me</label>
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger" role="alert">@error</div>
+                }
+
+                @* Optional SSO path displayed up front if OIDC is configured *@
+                @if (!string.IsNullOrWhiteSpace(Cfg["OIDC_AUTHORITY"]))
+                {
+                    <button type="button" class="btn btn-outline-primary w-100 mb-3 sso-btn" @onclick="NavigateSso">
+                    <span class="me-2" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path
+                                d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8Z"
+                                fill="currentColor"/><path
+                                d="M12 6a6 6 0 1 0 6 6 6.007 6.007 0 0 0-6-6Zm0 10a4 4 0 1 1 4-4 4.005 4.005 0 0 1-4 4Z"
+                                fill="currentColor"/></svg>
+                    </span>
+                        Continue with Single Sign-On
+                    </button>
+                    <div class="text-center text-muted small mb-3">or use your account</div>
+                }
+
+                <EditForm Model="model" OnValidSubmit="OnSubmit" class="login-form">
+                    <DataAnnotationsValidator/>
+                    <ValidationSummary class="validation-summary"/>
+
+                    <div class="form-group mb-4">
+                        <label for="username" class="form-label">Username</label>
+                        <div class="input-container">
+                        <span class="input-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor"
+                                 viewBox="0 0 16 16">
+                                <path
+                                    d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                            </svg>
+                        </span>
+                            <InputText id="username" class="form-control form-control-enhanced"
+                                       @bind-Value="model.Username" disabled="@signingIn" autofocus
+                                       placeholder="Enter your username"/>
+                        </div>
+                        <ValidationMessage For="() => model.Username"/>
+                    </div>
+
+                    <div class="form-group mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label for="password" class="form-label mb-0">Password</label>
+                            @if (_resetPasswordEnabled)
+                            {
+                                <button type="button" class="btn btn-link p-0 small forgot-password-link"
+                                        @onclick="OpenForgot">
+                                    Forgot password?
+                                </button>
+                            }
+                        </div>
+                        <div class="input-container">
+                        <span class="input-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor"
+                                 viewBox="0 0 16 16">
+                                <path
+                                    d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                            </svg>
+                        </span>
+                            <div style="position: relative; flex: 1; display: flex;">
+                                <InputText id="password" type="@(_showPassword ? "text" : "password")"
+                                           class="form-control form-control-enhanced" @bind-Value="model.Password"
+                                           disabled="@signingIn" placeholder="Enter your password"
+                                           style="padding-right: 45px;"/>
+                                <button type="button" class="btn password-toggle-enhanced"
+                                        aria-label="Toggle password visibility" aria-pressed="@_showPassword"
+                                        title="Show/Hide password" @onclick="TogglePassword">
+                                    @if (_showPassword)
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                                             fill="currentColor" viewBox="0 0 16 16">
+                                            <path
+                                                d="M13.359 11.238l1.147 1.147a.5.5 0 0 1-.708.707l-1.2-1.2A9.681 9.681 0 0 1 8 13.5c-3.592 0-6.54-2.23-7.938-5.5a10.92 10.92 0 0 1 3.122-4.104L.646 1.46a.5.5 0 1 1 .708-.707l13.2 13.2a.5.5 0 0 1-.708.707l-1.487-1.487z"/>
+                                            <path
+                                                d="M11.297 9.176l-1.124-1.124A3 3 0 0 1 7.948 6.53L6.824 5.406a3 3 0 0 0 4.473 3.77z"/>
+                                            <path
+                                                d="M3.35 4.36A9.67 9.67 0 0 1 8 2.5c3.592 0 6.54 2.23 7.938 5.5a10.93 10.93 0 0 1-2.382 3.356l-1.062-1.062A9.066 9.066 0 0 0 15.5 8c-1.273-2.7-3.889-4.5-7.5-4.5a8.17 8.17 0 0 0-3.768.921L3.35 4.36z"/>
+                                        </svg>
+                                    }
+                                    else
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                                             fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8z"/>
+                                            <path d="M8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>
+                                        </svg>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                        <ValidationMessage For="() => model.Password"/>
+                    </div>
+
+                    <div class="form-check d-flex align-items-center mb-4">
+                        <input id="remember" class="form-check-input me-2" type="checkbox" @bind="model.RememberMe"
+                               disabled="@signingIn"/>
+                        <label for="remember" class="form-check-label user-select-none">Remember me</label>
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-primary btn-enhanced w-100 d-flex align-items-center justify-content-center"
+                            disabled="@signingIn" aria-busy="@signingIn">
+                        @if (signingIn)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Signing in…</span>
+                        }
+                        else
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor"
+                                 class="me-2" viewBox="0 0 16 16">
+                                <path fill-rule="evenodd"
+                                      d="M6 3.5a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 0-1 0v2A1.5 1.5 0 0 0 6.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-8A1.5 1.5 0 0 0 5 3.5v2a.5.5 0 0 0 1 0v-2z"/>
+                                <path fill-rule="evenodd"
+                                      d="M11.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L10.293 7.5H1.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
+                            </svg>
+                            <span>Sign in</span>
+                        }
+                    </button>
+
+                </EditForm>
+
+                <div class="text-muted small text-center mt-3 version-text">
+                <span class="info-icon" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle
+                            cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path
+                            d="M12 7.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm-1 4.5h2v5h-2v-5Z" fill="currentColor"/></svg>
+                </span>
+                    <span class="visually-hidden">Information:</span>
+                    Current Version: hub: @HubVersionDisplay; dashboard: @DashboardVersion
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100">Sign in</button>
-
-                <div class="text-center text-muted small mt-3">or</div>
-
-                <button type="button" class="btn btn-outline-secondary w-100 mt-2" @onclick="DemoFill">
-                    Continue as Viewer
-                </button>
-
-            </EditForm>
+                @if (showForgot)
+                {
+                    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5);" role="dialog"
+                         aria-modal="true" aria-labelledby="forgotTitle">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 id="forgotTitle" class="modal-title">Forgot password?</h5>
+                                    <button type="button" class="btn-close" aria-label="Close"
+                                            @onclick="CancelForgot"></button>
+                                </div>
+                                @if (resetEmailSent)
+                                {
+                                    <div class="modal-body text-center py-5">
+                                        <div class="success-icon mb-3">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"
+                                                 fill="currentColor" viewBox="0 0 16 16" style="color: #10b981;">
+                                                <path
+                                                    d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                                            </svg>
+                                        </div>
+                                        <h4 class="mb-3">Check your email</h4>
+                                        <p class="text-muted mb-0">If an account exists with this email, you will
+                                            receive a password reset link shortly.</p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-primary w-100" @onclick="CancelForgot">
+                                            Close
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <EditForm Model="forgot" OnValidSubmit="OnForgotSubmit">
+                                        <DataAnnotationsValidator/>
+                                        <div class="modal-body">
+                                            @if (!string.IsNullOrEmpty(forgotError))
+                                            {
+                                                <div class="alert alert-danger" role="alert">@forgotError</div>
+                                            }
+                                            <div class="text-muted mb-3">Enter your email address and we'll send you a
+                                                link to reset your password.
+                                            </div>
+                                            <div class="mb-2">
+                                                <label for="forgotEmail" class="form-label">Email</label>
+                                                <InputText id="forgotEmail" class="form-control"
+                                                           @bind-Value="forgot.Email" placeholder="Enter your email"
+                                                           disabled="@sendingReset"/>
+                                                <ValidationMessage For="() => forgot.Email"/>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" @onclick="CancelForgot"
+                                                    disabled="@sendingReset">Cancel
+                                            </button>
+                                            <button type="submit" class="btn btn-primary d-flex align-items-center"
+                                                    disabled="@sendingReset" aria-busy="@sendingReset">
+                                                @if (sendingReset)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-2" role="status"
+                                                          aria-hidden="true"></span>
+                                                    <span>Sending…</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>Send Reset Link</span>
+                                                }
+                                            </button>
+                                        </div>
+                                    </EditForm>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-backdrop fade show"></div>
+                }
+            </div>
         </div>
     </div>
 </div>
 
-@code {
-    private LoginModel model = new();
-
-    private void DemoFill()
-    {
-        model.Email = "demo@example.com";
-        model.Password = "password";
+<style>
+    :root {
+        --login-bg: linear-gradient(135deg, var(--surface-alt) 0%, #f1f5f9 100%);
+        --login-card-bg: var(--surface);
+        --login-shadow: var(--shadow-xl);
+        --input-focus-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
     }
 
-    private void OnSubmit()
+    .login-page {
+        min-height: 100vh;
+        padding: 24px;
+        background: var(--login-bg);
+        position: relative;
+    }
+
+    .login-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 440px;
+        width: 100%;
+    }
+
+    .login-card {
+        width: 100%;
+        max-width: 440px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background: var(--login-card-bg);
+        box-shadow: var(--login-shadow);
+        backdrop-filter: blur(8px);
+        transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+        position: relative;
+        z-index: 1;
+    }
+
+    .login-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 32px 64px -12px rgba(0, 0, 0, 0.12);
+    }
+
+    .login-icon-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 200px;
+        height: 200px;
+        margin: 0 auto;
+        cursor: pointer;
+    }
+
+    .login-icon {
+        width: 200px;
+        height: 200px;
+        object-fit: contain;
+        animation: fadeInDown 0.6s ease-out;
+        transition: all 0.3s ease;
+    }
+
+    .login-icon-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: var(--radius-xl);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .login-icon-container:hover .login-icon-overlay {
+        opacity: 1;
+    }
+
+    .login-icon-container:hover .login-icon {
+        transform: scale(1.05);
+    }
+
+    .login-icon-logo {
+        width: 180px;
+        height: auto;
+        margin-bottom: 0.5rem;
+    }
+
+    .login-icon-tagline {
+        font-size: 0.85rem;
+        color: var(--brand-color);
+        font-weight: 500;
+        margin: 0;
+        text-align: center;
+    }
+
+    @@keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .login-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .login-subtitle {
+        font-size: 1rem;
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    .login-form {
+        position: relative;
+    }
+
+    .form-group {
+        position: relative;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: var(--brand-text);
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .input-container {
+        display: flex;
+        align-items: stretch;
+        width: 100%;
+        gap: 0;
+        position: relative;
+    }
+
+    .input-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 50px;
+        width: 50px;
+        color: var(--brand-muted);
+        background: var(--surface-alt);
+        border: 2px solid var(--border);
+        border-right: none;
+        border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+        transition: all var(--transition-fast);
+        flex-shrink: 0;
+    }
+
+    .form-control-enhanced {
+        flex: 1;
+        padding: 14px 16px;
+        border: 2px solid var(--border);
+        border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+        font-size: 1rem;
+        transition: all var(--transition-fast);
+        background: var(--surface);
+        border-left: none;
+    }
+
+    .form-control-enhanced:focus {
+        border-color: var(--brand-color);
+        outline: none;
+    }
+
+    .input-container:focus-within {
+        box-shadow: var(--input-focus-shadow);
+        border-radius: var(--radius-lg);
+    }
+
+    .input-container:focus-within .input-icon {
+        color: var(--brand-color);
+        border-color: var(--brand-color);
+        background: var(--brand-color-light);
+    }
+
+    .input-container:focus-within .form-control-enhanced {
+        border-color: var(--brand-color);
+    }
+
+    .password-toggle-enhanced {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: transparent;
+        border: none;
+        color: var(--brand-muted);
+        padding: 6px 8px;
+        border-radius: var(--radius);
+        transition: all var(--transition-fast);
+        z-index: 10;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .password-toggle-enhanced:hover {
+        background: var(--surface-alt);
+        color: var(--brand-color);
+        transform: translateY(-50%) scale(1.05);
+    }
+
+    .password-toggle-enhanced:focus {
+        outline: 2px solid var(--brand-color);
+        outline-offset: 2px;
+    }
+
+    .btn-enhanced {
+        padding: 16px 24px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        border-radius: var(--radius-lg);
+        position: relative;
+        overflow: hidden;
+        transition: all var(--transition-normal);
+    }
+
+    .btn-enhanced::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left var(--transition-slow);
+    }
+
+    .btn-enhanced:hover::before {
+        left: 100%;
+    }
+
+    .btn-enhanced:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .btn-enhanced:active {
+        transform: translateY(0);
+    }
+
+    .forgot-password-link {
+        color: var(--brand-color) !important;
+        text-decoration: none;
+        font-weight: 500;
+        transition: all var(--transition-fast);
+    }
+
+    .forgot-password-link:hover {
+        color: var(--brand-color-hover) !important;
+        text-decoration: underline;
+    }
+
+    .validation-message, .validation-errors, .validation-summary-errors {
+        color: var(--error);
+        font-size: .875rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .validation-message::before {
+        content: '⚠';
+        color: var(--error);
+        font-weight: bold;
+    }
+
+    .validation-summary {
+        background: var(--error-light);
+        border: 1px solid var(--error);
+        border-radius: var(--radius);
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-check-input:checked {
+        background-color: var(--brand-color);
+        border-color: var(--brand-color);
+    }
+
+    .form-check-label {
+        font-size: 0.9rem;
+        color: var(--brand-muted);
+        cursor: pointer;
+    }
+
+    .sso-btn {
+        padding: 14px 24px;
+        border-radius: var(--radius-lg);
+        font-weight: 500;
+        transition: all var(--transition-fast);
+    }
+
+    .sso-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow);
+    }
+
+    .version-text {
+        font-size: .75rem;
+        opacity: 0.7;
+        transition: opacity var(--transition-fast);
+    }
+
+    .version-text:hover {
+        opacity: 1;
+    }
+
+    .version-text .info-icon {
+        margin-right: .35rem;
+        opacity: .7;
+    }
+
+    @@media (max-width: 992px) {
+        .login-icon-container {
+            width: 150px;
+            height: 150px;
+        }
+
+        .login-icon {
+            width: 150px;
+            height: 150px;
+        }
+
+        .login-icon-logo {
+            width: 120px;
+        }
+
+        .login-icon-tagline {
+            font-size: 0.75rem;
+        }
+    }
+
+    @@media (max-width: 576px) {
+        .login-card {
+            border-radius: var(--radius-lg);
+            margin: 0;
+            max-width: none;
+        }
+
+        .login-icon-container {
+            width: 120px;
+            height: 120px;
+        }
+
+        .login-icon {
+            width: 120px;
+            height: 120px;
+        }
+
+        .login-icon-logo {
+            width: 100px;
+        }
+
+        .login-icon-tagline {
+            font-size: 0.7rem;
+        }
+
+        .login-title {
+            font-size: 1.5rem;
+        }
+
+        .form-control-enhanced {
+            padding: 12px 14px;
+            font-size: 0.95rem;
+        }
+
+        .input-icon {
+            min-width: 44px;
+            width: 44px;
+        }
+
+        .btn-enhanced {
+            padding: 14px 20px;
+            font-size: 1rem;
+        }
+    }
+
+    @@keyframes shake {
+        0%, 100% {
+            transform: translateX(0);
+        }
+        10%, 30%, 50%, 70%, 90% {
+            transform: translateX(-2px);
+        }
+        20%, 40%, 60%, 80% {
+            transform: translateX(2px);
+        }
+    }
+
+    .form-control-enhanced.is-invalid,
+    .form-control-enhanced:invalid {
+        animation: shake 0.3s ease-in-out;
+        border-color: var(--error);
+    }
+
+    .btn-enhanced[disabled] {
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+</style>
+
+@code {
+    private LoginModel model = new();
+    private bool signingIn;
+    private string returnUrl = string.Empty;
+    private string? error;
+    private string CurrentUsername { get; set; } = string.Empty;
+    private string? ForgotPasswordUrl => Cfg["OIDC_FORGOT_PASSWORD_URL"];
+
+    private string? _dashboardVersion;
+    private string DashboardVersion => _dashboardVersion ??= GetDashboardVersion();
+
+    private static string GetDashboardVersion()
     {
-        // Mock submission: simply navigate to dashboard home
-        Nav.NavigateTo("/");
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            var aiv = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+            var v = aiv?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? string.Empty;
+            const int max = 15; // keep it short
+            return string.IsNullOrEmpty(v) ? string.Empty : v.Length <= max ? v : v.Substring(0, max);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    // Hub version (loaded from hub /diagnostics)
+    private string? _hubVersion;
+    private string HubVersionDisplay => string.IsNullOrEmpty(_hubVersion) ? "-" : _hubVersion;
+
+    // Feature flags
+    private bool _resetPasswordEnabled; // Default to disabled
+
+    // Forgot password modal state
+    private bool showForgot;
+    private bool sendingReset;
+    private bool resetEmailSent;
+    private string? forgotError;
+    private ForgotModel forgot = new();
+
+    // UI state
+    private bool _showPassword;
+
+    private void TogglePassword()
+    {
+        _showPassword = !_showPassword;
+    }
+
+    private void NavigateSso()
+    {
+        var target = $"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}&rememberMe={(model.RememberMe ? "true" : "false")}";
+        Nav.NavigateTo(target, true);
+    }
+
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Parse returnUrl and potential error messages from query string
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("returnUrl", out var ru) && !string.IsNullOrWhiteSpace(ru))
+        {
+            returnUrl = ru!;
+        }
+
+        // Don't set a default returnUrl here - let server handle it using username from credentials
+        if (query.TryGetValue("error", out var er) && !string.IsNullOrWhiteSpace(er))
+        {
+            error = er!;
+        }
+
+        // Attempt to read hub version via named HttpClient (adds x-hub-secret)
+        try
+        {
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync("/diagnostics");
+            if (resp.IsSuccessStatusCode)
+            {
+                var dto = await resp.Content.ReadFromJsonAsync<HubDiagnosticsDto>();
+                _hubVersion = dto?.HubConfig?.Version ?? string.Empty;
+            }
+        }
+        catch
+        {
+            _hubVersion = string.Empty;
+        }
+
+        // Load feature flags
+        try
+        {
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync("/admin/features");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("resetPasswordEnabled", out var resetEl))
+                {
+                    _resetPasswordEnabled = resetEl.GetBoolean();
+                }
+            }
+        }
+        catch
+        {
+            _resetPasswordEnabled = false; // Default to disabled on error
+        }
+
+        // If user is already authenticated, skip login screen
+        try
+        {
+            if (AuthenticationStateTask is not null)
+            {
+                var auth = await AuthenticationStateTask;
+                if (auth?.User?.Identity?.IsAuthenticated == true)
+                {
+                    // Get username for redirect
+                    CurrentUsername = auth.User?.FindFirst("preferred_username")?.Value ?? string.Empty;
+                    var defaultRedirect = string.IsNullOrEmpty(CurrentUsername) ? "/" : $"/{CurrentUsername}_default/launches/";
+                    Nav.NavigateTo(string.IsNullOrWhiteSpace(returnUrl) ? defaultRedirect : returnUrl, true);
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task OnSubmit()
+    {
+        signingIn = true;
+        StateHasChanged();
+        try
+        {
+            var oidcAuthority = Cfg["OIDC_AUTHORITY"];
+            if (!string.IsNullOrWhiteSpace(oidcAuthority))
+            {
+                var target = $"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}&rememberMe={(model.RememberMe ? "true" : "false")}";
+                Nav.NavigateTo(target, true);
+                return;
+            }
+
+            // Local login: perform browser-originated POST so auth cookie is set on the client
+            var payload = new { username = model.Username, password = model.Password, rememberMe = model.RememberMe, returnUrl };
+            var result = await JS.InvokeAsync<LoginResult>("dashboardLocalLogin", payload);
+            if (result is not null && !result.Ok)
+            {
+                if (result.Status == 401 || result.Status == 403)
+                {
+                    error = "Bad credentials. Please check your username and password.";
+                }
+                else
+                {
+                    error = "Failed to sign in. Please try again.";
+                }
+            }
+        }
+        catch
+        {
+            error = "Failed to start sign-in. Please try again.";
+        }
+        finally
+        {
+            signingIn = false;
+        }
+    }
+
+    private void OpenForgot()
+    {
+        forgot.Email = null;
+        forgotError = null;
+        resetEmailSent = false;
+        showForgot = true;
+    }
+
+    private void CancelForgot()
+    {
+        showForgot = false;
+        sendingReset = false;
+        resetEmailSent = false;
+        forgotError = null;
+    }
+
+    private async Task OnForgotSubmit()
+    {
+        // Check if external OIDC forgot password URL is configured
+        if (!string.IsNullOrEmpty(ForgotPasswordUrl))
+        {
+            sendingReset = true;
+            var url = BuildForgotUrl(ForgotPasswordUrl!, forgot.Email);
+            Nav.NavigateTo(url, true);
+            return;
+        }
+
+        // Use internal password reset flow
+        sendingReset = true;
+        forgotError = null;
+        StateHasChanged();
+
+        try
+        {
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            var request = new ForgotPasswordRequest { Email = forgot.Email ?? string.Empty };
+            var response = await client.PostAsJsonAsync("/admin/auth/forgot-password", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                resetEmailSent = true;
+            }
+            else
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                forgotError = "Failed to send reset email. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            forgotError = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            sendingReset = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string BuildForgotUrl(string baseUrl, string? email)
+    {
+        var url = baseUrl;
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var enc = Uri.EscapeDataString(email);
+            if (baseUrl.Contains("{email}", StringComparison.OrdinalIgnoreCase))
+            {
+                url = baseUrl.Replace("{email}", enc, StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                var sep = baseUrl.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+                url = $"{baseUrl}{sep}email={enc}";
+            }
+        }
+
+        return url;
     }
 
     public class LoginModel
     {
-        [Required][EmailAddress] public string? Email { get; set; }
-
-        [Required][MinLength(4)] public string? Password { get; set; }
-
+        [Required] public string? Username { get; set; }
+        [Required] [MinLength(4)] public string? Password { get; set; }
         public bool RememberMe { get; set; }
+    }
+
+    public class ForgotModel
+    {
+        [Required] [EmailAddress] public string? Email { get; set; }
+    }
+
+    private class LoginResult
+    {
+        public bool Ok { get; set; }
+        public int? Status { get; set; }
+        public string? Error { get; set; }
     }
 
 }

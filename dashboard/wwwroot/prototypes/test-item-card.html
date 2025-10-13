@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Item Card Prototype</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="../css/test-item-components.css" rel="stylesheet">
+  <style>
+    body {
+      padding: 2rem;
+      background: #f8f9fa;
+    }
+
+    .container {
+      max-width: 1400px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .card-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1 class="mb-4">Test Item Card Component</h1>
+  <p class="text-muted">Card-based layout for individual test item display</p>
+
+  <hr class="my-4">
+
+  <div class="card-grid">
+    <!-- Card 1: Passed Test -->
+    <div class="test-item-card status-passed border-success">
+      <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+        <div class="d-flex align-items-center">
+          <span class="item-type-icon me-2">🧪</span>
+          <span class="badge bg-primary me-2">Test</span>
+          <h6 class="mb-0 flex-grow-1 text-white">Login with valid credentials</h6>
+          <span class="badge bg-success me-2">Passed</span>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <p class="card-text text-muted mb-2">Verifies that users can successfully log in with valid username and
+          password</p>
+
+        <div class="item-timing mb-2">
+          <small class="text-muted">
+            <i class="bi bi-clock-history"></i>
+            Started: 2025-01-28 14:23:15
+            <span class="ms-2">| Finished: 2025-01-28 14:23:27</span>
+            <span class="ms-2 fw-bold">| Duration: 12.5s</span>
+          </small>
+        </div>
+
+        <div class="item-attributes mb-2">
+          <span class="badge bg-light text-dark me-1 mb-1">smoke</span>
+          <span class="badge bg-light text-dark me-1 mb-1">critical</span>
+        </div>
+
+        <div class="item-tags mb-2">
+          <span class="badge bg-info me-1 mb-1"><i class="bi bi-tag"></i> login</span>
+          <span class="badge bg-info me-1 mb-1"><i class="bi bi-tag"></i> auth</span>
+        </div>
+
+        <div class="browser-info mb-2">
+          <small>
+            <span class="badge bg-secondary me-1">Chromium</span>
+            <span class="text-muted">on worker-1</span>
+          </small>
+        </div>
+
+        <div class="code-info mb-2">
+          <small class="text-muted">
+            <i class="bi bi-code-slash"></i>
+            <code>tests/auth/login.spec.ts:42</code>
+          </small>
+        </div>
+      </div>
+
+      <div class="card-footer bg-light">
+        <div class="d-flex justify-content-between">
+          <button class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye"></i> View Details
+          </button>
+          <button class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-diagram-3"></i> View Children
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Failed Test with Error -->
+    <div class="test-item-card status-failed border-danger">
+      <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">
+        <div class="d-flex align-items-center">
+          <span class="item-type-icon me-2">🧪</span>
+          <span class="badge bg-primary me-2">Test</span>
+          <h6 class="mb-0 flex-grow-1 text-white">Checkout with invalid payment</h6>
+          <span class="badge bg-danger me-2">Failed</span>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <p class="card-text text-muted mb-2">Tests error handling when invalid payment information is provided</p>
+
+        <div class="item-timing mb-2">
+          <small class="text-muted">
+            <i class="bi bi-clock-history"></i>
+            Started: 2025-01-28 14:25:33
+            <span class="ms-2">| Finished: 2025-01-28 14:25:48</span>
+            <span class="ms-2 fw-bold">| Duration: 15.2s</span>
+          </small>
+        </div>
+
+        <div class="alert alert-danger mb-2">
+          <strong><i class="bi bi-exclamation-triangle"></i> Error:</strong>
+          <p class="mb-0 mt-1">Expected error message 'Invalid card number' but got 'Payment processing failed'</p>
+        </div>
+
+        <div class="item-attributes mb-2">
+          <span class="badge bg-light text-dark me-1 mb-1">regression</span>
+          <span class="badge bg-light text-dark me-1 mb-1">payment</span>
+        </div>
+
+        <div class="browser-info mb-2">
+          <small>
+            <span class="badge bg-secondary me-1">Firefox</span>
+            <span class="text-muted">on worker-3</span>
+          </small>
+        </div>
+
+        <div class="code-info mb-2">
+          <small class="text-muted">
+            <i class="bi bi-code-slash"></i>
+            <code>tests/checkout/payment.spec.ts:128</code>
+          </small>
+        </div>
+      </div>
+
+      <div class="card-footer bg-light">
+        <div class="d-flex justify-content-between">
+          <button class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-eye"></i> View Details
+          </button>
+          <button class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-clockwise"></i> Retry Test
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: Suite with Aggregations -->
+    <div class="test-item-card item-type-suite border-primary">
+      <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="d-flex align-items-center">
+          <span class="item-type-icon me-2">📁</span>
+          <span class="badge bg-dark me-2">Suite</span>
+          <h6 class="mb-0 flex-grow-1 text-white">E2E Shopping Cart Tests</h6>
+          <span class="badge bg-light text-dark" title="5 child items">
+                            <i class="bi bi-diagram-3"></i> 5
+                        </span>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <p class="card-text text-muted mb-2">Complete test suite for shopping cart functionality including add, remove,
+          and checkout flows</p>
+
+        <div class="item-timing mb-2">
+          <small class="text-muted">
+            <i class="bi bi-clock-history"></i>
+            Started: 2025-01-28 14:20:00
+            <span class="ms-2">| Finished: 2025-01-28 14:23:45</span>
+            <span class="ms-2 fw-bold">| Duration: 3.8m</span>
+          </small>
+        </div>
+
+        <div class="test-stats mb-2">
+          <div class="progress" style="height: 24px;">
+            <div class="progress-bar bg-success" style="width: 60%" title="3 passed">
+              <span>3 ✓</span>
+            </div>
+            <div class="progress-bar bg-danger" style="width: 20%" title="1 failed">
+              <span>1 ✗</span>
+            </div>
+            <div class="progress-bar bg-warning" style="width: 20%" title="1 skipped">
+              <span class="text-dark">1 ⊝</span>
+            </div>
+          </div>
+          <small class="text-muted mt-1 d-block">
+            Total: 5 tests (3 passed, 1 failed, 1 skipped, 0 timed out)
+          </small>
+        </div>
+
+        <div class="item-attributes mb-2">
+          <span class="badge bg-light text-dark me-1 mb-1">e2e</span>
+          <span class="badge bg-light text-dark me-1 mb-1">cart</span>
+          <span class="badge bg-light text-dark me-1 mb-1">shopping</span>
+        </div>
+
+        <div class="parameters-info mb-2">
+          <small class="text-muted">
+            <strong>Parameters:</strong>
+            <code class="small me-2">env=staging</code>
+            <code class="small me-2">browser=chromium</code>
+          </small>
+        </div>
+      </div>
+
+      <div class="card-footer bg-light">
+        <div class="d-flex justify-content-between">
+          <button class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-diagram-3"></i> View Test Tree
+          </button>
+          <button class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-file-earmark-arrow-down"></i> Export Results
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: Scenario (BDD Style) -->
+    <div class="test-item-card item-type-scenario status-passed border-info">
+      <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+        <div class="d-flex align-items-center">
+          <span class="item-type-icon me-2">📋</span>
+          <span class="badge bg-info me-2">Scenario</span>
+          <h6 class="mb-0 flex-grow-1 text-white">User searches for product</h6>
+          <span class="badge bg-success me-2">Passed</span>
+          <span class="badge bg-light text-dark" title="3 steps">
+                            <i class="bi bi-list-ol"></i> 3
+                        </span>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <p class="card-text text-muted mb-2">BDD scenario: Given user is on homepage, When user searches for "laptop",
+          Then results are displayed</p>
+
+        <div class="item-timing mb-2">
+          <small class="text-muted">
+            <i class="bi bi-clock-history"></i>
+            Started: 2025-01-28 14:18:22
+            <span class="ms-2">| Finished: 2025-01-28 14:18:38</span>
+            <span class="ms-2 fw-bold">| Duration: 16.3s</span>
+          </small>
+        </div>
+
+        <div class="steps-preview mb-2">
+          <div class="list-group list-group-flush">
+            <div class="list-group-item d-flex align-items-center py-2">
+              <span class="badge bg-secondary me-2">→</span>
+              <small class="flex-grow-1">Given user is on homepage</small>
+              <span class="badge bg-success">✓</span>
+            </div>
+            <div class="list-group-item d-flex align-items-center py-2">
+              <span class="badge bg-secondary me-2">→</span>
+              <small class="flex-grow-1">When user searches for "laptop"</small>
+              <span class="badge bg-success">✓</span>
+            </div>
+            <div class="list-group-item d-flex align-items-center py-2">
+              <span class="badge bg-secondary me-2">→</span>
+              <small class="flex-grow-1">Then results are displayed</small>
+              <span class="badge bg-success">✓</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="item-tags mb-2">
+          <span class="badge bg-info me-1 mb-1"><i class="bi bi-tag"></i> search</span>
+          <span class="badge bg-info me-1 mb-1"><i class="bi bi-tag"></i> bdd</span>
+        </div>
+
+        <div class="browser-info mb-2">
+          <small>
+            <span class="badge bg-secondary me-1">WebKit</span>
+            <span class="text-muted">on worker-3</span>
+          </small>
+        </div>
+      </div>
+
+      <div class="card-footer bg-light">
+        <div class="d-flex justify-content-between">
+          <button class="btn btn-sm btn-outline-info">
+            <i class="bi bi-eye"></i> View Scenario
+          </button>
+          <button class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-list-check"></i> View Steps
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

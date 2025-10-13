@@ -1,0 +1,1379 @@
+@page "/admin/projects"
+@using System.ComponentModel.DataAnnotations
+@using System.Diagnostics
+@using System.Security.Claims
+@using System.Text.Json
+@using Agenix.PlaywrightGrid.Domain
+@attribute [Authorize]
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ToastService Toasts
+@inject IHttpContextAccessor Accessor
+
+<Dashboard.Shared.AdminTabs/>
+
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 19 20" aria-hidden="true">
+                <path transform="translate(0, 2)" fill-rule="evenodd"
+                      d="M4 12v4H1.01C.451 16 0 15.557 0 14.99V12h4zm15 0v2.99c0 .558-.447 1.01-.999 1.01H6v-4h13zM4 6v4H0V6h4zm15 0v4H6V6h13zM4 0v4H0V1.01C0 .451.443 0 1.01 0H4zm14.001 0c.552 0 .999.443.999 1.01V4H6V0h12.001z"/>
+            </svg>
+        </div>
+        <div>
+            <h3>All Projects</h3>
+            <div class="subtitle">Manage your projects and their configurations</div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-center">
+            <div class="col-12 col-md-6">
+                <Dashboard.Shared.SearchBox Id="projectsSearch" Placeholder="Search by key or name…"
+                                            AriaLabel="Search projects" Value="@Search"
+                                            ValueChanged="@((string? v) => Search = v ?? string.Empty)"
+                                            OnSearch="@LoadAsync"/>
+            </div>
+            <div class="col-12 col-md-6 ms-md-auto text-end">
+                <button class="btn btn-primary" @onclick="ShowCreate">New Project</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <Dashboard.Shared.ValidationPanel Error="@Error" AriaLive="assertive"/>
+}
+
+@if (CreateOpen)
+{
+    <div class="modal-backdrop fade show" @onclick="() => CreateOpen = false"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+         aria-labelledby="createProjectTitle">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content elegant-modal">
+                <div class="elegant-modal-header">
+                    <div class="modal-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M1.5 1A1.5 1.5 0 0 0 0 2.5v11A1.5 1.5 0 0 0 1.5 15h13a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 14.5 4H9.793l-.854-.854A.5.5 0 0 0 8.586 3H1.5z"/>
+                        </svg>
+                    </div>
+                    <h5 class="modal-title" id="createProjectTitle">New Project</h5>
+                    <button type="button" class="elegant-close" aria-label="Close" @onclick="() => CreateOpen = false">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                        </svg>
+                    </button>
+                </div>
+                <EditForm Model="CreateModel" OnValidSubmit="CreateProjectAsync" OnInvalidSubmit="InvalidSubmitFocus">
+                    <div class="modal-body elegant-modal-body">
+                        <DataAnnotationsValidator/>
+                        <ValidationSummary class="elegant-validation-summary"/>
+
+                        <div class="elegant-form-group">
+                            <label for="createKey" class="elegant-label">
+                                Project Key
+                                <span class="label-required">*</span>
+                            </label>
+                            <InputText id="createKey" class="elegant-input" @bind-Value="CreateModel.Key"
+                                       placeholder="e.g., my-project"/>
+                            <ValidationMessage For="() => CreateModel.Key" class="elegant-validation"/>
+                            <small class="elegant-hint">Unique identifier for your project (letters, numbers, hyphens,
+                                dots)</small>
+                        </div>
+
+                        <div class="elegant-form-group">
+                            <label for="createName" class="elegant-label">
+                                Project Name
+                                <span class="label-required">*</span>
+                            </label>
+                            <InputText id="createName" class="elegant-input" @bind-Value="CreateModel.Name"
+                                       placeholder="e.g., My Awesome Project"/>
+                            <ValidationMessage For="() => CreateModel.Name" class="elegant-validation"/>
+                            <small class="elegant-hint">Display name for your project</small>
+                        </div>
+
+                        <Dashboard.Shared.ValidationPanel Error="@CreateError"/>
+                    </div>
+                    <div class="elegant-modal-footer">
+                        <button type="button" class="elegant-btn elegant-btn-secondary"
+                                @onclick="() => CreateOpen = false">Cancel
+                        </button>
+                        <button type="submit" class="elegant-btn elegant-btn-primary" disabled="@_busy">
+                            @if (_busy)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"
+                                      aria-hidden="true"></span>
+                                <span>Creating...</span>
+                            }
+                            else
+                            {
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                     viewBox="0 0 16 16" class="me-2">
+                                    <path
+                                        d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                                </svg>
+                                <span>Create Project</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@if (EditOpen)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+         aria-labelledby="editProjectTitle" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editProjectTitle">Edit Project</h5>
+                    <button type="button" class="btn-close" aria-label="Close"
+                            @onclick="() => EditOpen = false"></button>
+                </div>
+                <EditForm Model="EditModel" OnValidSubmit="SaveEditAsync" OnInvalidSubmit="InvalidSubmitFocus">
+                    <div class="modal-body">
+                        <DataAnnotationsValidator/>
+                        <ValidationSummary/>
+
+                        <div class="mb-3">
+                            <label for="editKey" class="form-label">Project Key</label>
+                            <InputText id="editKey" class="form-control" @bind-Value="EditModel.Key" disabled readonly/>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="editName" class="form-label">Project Name</label>
+                            <InputText id="editName" class="form-control" @bind-Value="EditModel.Name"
+                                       placeholder="Enter project name"/>
+                            <ValidationMessage For="() => EditModel.Name"/>
+                        </div>
+
+                        <Dashboard.Shared.ValidationPanel Error="@EditError"/>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="() => EditOpen = false">Cancel
+                        </button>
+                        <button type="submit" class="btn btn-success" disabled="@_busy">
+                            @if (_busy)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"
+                                      aria-hidden="true"></span>
+                                <span>Save</span>
+                            }
+                            else
+                            {
+                                <span>Save</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="projects-table-container">
+    <table class="table projects-table">
+        <caption class="visually-hidden">All Projects</caption>
+        <thead>
+        <tr>
+            @SortableHeader("Key", "key")
+            @SortableHeader("Name", "name")
+            @SortableHeader("Members", "members", true)
+            <th class="text-end">Launches</th>
+            <th class="text-end">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        @if (Items is null)
+        {
+            <tr>
+                <td colspan="5" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="mt-3 text-muted">Loading projects...</div>
+                </td>
+            </tr>
+        }
+        else if (Items.Length == 0)
+        {
+            <tr>
+                <td colspan="5" class="empty-state">
+                    <div class="empty-state-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor"
+                             viewBox="0 0 16 16" class="empty-icon">
+                            <path
+                                d="M1.5 1A1.5 1.5 0 0 0 0 2.5v11A1.5 1.5 0 0 0 1.5 15h13a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 14.5 4H9.793l-.854-.854A.5.5 0 0 0 8.586 3H1.5z"/>
+                        </svg>
+                        <h4 class="empty-title">No projects found</h4>
+                        <p class="empty-description">There are no projects to display yet.</p>
+                    </div>
+                </td>
+            </tr>
+        }
+        else
+        {
+            @foreach (var p in Items)
+            {
+                <tr class="project-row">
+                    <td class="project-key">
+                        <a href="/@Uri.EscapeDataString(p.Key)/launches/" title="View project launches">@p.Key</a>
+                    </td>
+                    <td class="project-name">@p.Name</td>
+                    <td class="text-end">
+                        <span class="count-badge">@p.MembersCount</span>
+                    </td>
+                    <td class="text-end">
+                        <span class="count-badge">@p.RunsCount</span>
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <div class="dropdown d-inline">
+                            <button class="btn-actions" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                    title="Project actions">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                     viewBox="0 0 16 16">
+                                    <path
+                                        d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                                </svg>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <button class="dropdown-item" @onclick="() => NavigateToMembers(p.Key)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                             fill="currentColor" viewBox="0 0 16 16">
+                                            <path
+                                                d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                                            <path fill-rule="evenodd"
+                                                  d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+                                            <path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                                        </svg>
+                                        Members
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" @onclick="() => NavigateToMonitoring(p.Key)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                             fill="currentColor" viewBox="0 0 16 16">
+                                            <path
+                                                d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                            <path
+                                                d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+                                        </svg>
+                                        Monitoring
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" @onclick="() => NavigateToSettings(p.Key)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                             fill="currentColor" viewBox="0 0 16 16">
+                                            <path fill-rule="evenodd"
+                                                  d="M14.107 8.78c.033-.256.058-.516.058-.78s-.025-.524-.058-.78l1.74-1.324a.392.392 0 0 0 .098-.512L14.3 2.612c-.102-.172-.316-.244-.501-.172l-2.048.804a6.282 6.282 0 0 0-1.39-.788l-.307-2.12A.42.42 0 0 0 9.642 0H6.353a.412.412 0 0 0-.407.336l-.308 2.12a6.126 6.126 0 0 0-1.39.788L2.202 2.44a.417.417 0 0 0-.501.172L.055 5.384a.393.393 0 0 0 .099.512L1.889 7.22A6.113 6.113 0 0 0 1.83 8c0 .264.025.524.058.78L.154 10.104a.392.392 0 0 0-.099.512L1.7 13.388a.412.412 0 0 0 .501.172l2.048-.804c.423.316.888.584 1.39.788l.307 2.12a.412.412 0 0 0 .407.336h3.29a.412.412 0 0 0 .406-.336l.309-2.12a6.126 6.126 0 0 0 1.39-.788l2.047.804c.185.068.398 0 .501-.172l1.645-2.772a.393.393 0 0 0-.099-.512L14.107 8.78zm-6.11 2.02C6.408 10.8 5.12 9.548 5.12 8c0-1.548 1.287-2.8 2.878-2.8 1.591 0 2.878 1.252 2.878 2.8 0 1.548-1.287 2.8-2.878 2.8z"/>
+                                        </svg>
+                                        Settings
+                                    </button>
+                                </li>
+                                @if (IsUserAssignedToProject(p.Key))
+                                {
+                                    <li>
+                                        <button class="dropdown-item" disabled="@IsPersonalProject(p.Key)"
+                                                @onclick="() => UnassignFromProjectAsync(p.Key, p.Name)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                 fill="currentColor" viewBox="0 0 16 16">
+                                                <path
+                                                    d="M11 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm.256 7a4.474 4.474 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10c.26 0 .507.009.74.025.226-.341.496-.65.804-.918C9.077 9.038 8.564 9 8 9c-5 0-6 3-6 4s1 1 1 1h5.256Z"/>
+                                                <path
+                                                    d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm-4.854-1.354a.5.5 0 0 0 0 .708l.647.646-.647.646a.5.5 0 0 0 .708.708l.646-.647.646.647a.5.5 0 0 0 .708-.708l-.647-.646.647-.646a.5.5 0 0 0-.708-.708l-.646.647-.646-.647a.5.5 0 0 0-.708 0Z"/>
+                                            </svg>
+                                            @(IsPersonalProject(p.Key) ? "Personal Project" : "Unassign")
+                                        </button>
+                                    </li>
+                                }
+                                else
+                                {
+                                    <li>
+                                        <button class="dropdown-item"
+                                                @onclick="() => AssignToProjectAsync(p.Key, p.Name)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                 fill="currentColor" viewBox="0 0 16 16">
+                                                <path
+                                                    d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 0 1-1 0v-1h-1a.5.5 0 0 1 0-1h1v-1a.5.5 0 0 1 1 0Zm-2-6a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+                                                <path
+                                                    d="M8.256 14a4.474 4.474 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10c.26 0 .507.009.740.025.226-.341.496-.65.804-.918C9.077 9.038 8.564 9 8 9c-5 0-6 3-6 4s1 1 1 1h5.256Z"/>
+                                            </svg>
+                                            Assign
+                                        </button>
+                                    </li>
+                                }
+                                <li>
+                                    <hr class="dropdown-divider"/>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item text-danger"
+                                            @onclick="() => DeleteProjectAsync(p.Key, p.Name)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                             fill="currentColor" viewBox="0 0 16 16">
+                                            <path
+                                                d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                            <path fill-rule="evenodd"
+                                                  d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                        </svg>
+                                        Delete
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            }
+        }
+        </tbody>
+    </table>
+</div>
+
+<style>
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2rem 0 1.5rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .header-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .page-header h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .subtitle {
+        color: var(--brand-muted);
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+
+    .projects-table-container {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        overflow: visible;
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* Add responsive scroll wrapper inside if needed */
+    @@media (max-width: 1200px) {
+        .projects-table-container {
+            overflow-x: auto;
+        }
+    }
+
+    .projects-table {
+        margin: 0;
+        width: 100%;
+        min-width: 800px;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: auto;
+    }
+
+    .projects-table thead {
+        background: var(--surface-alt);
+    }
+
+    .projects-table thead th {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--brand-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .projects-table thead th button {
+        background: transparent;
+        border: 0;
+        color: var(--brand-muted);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        padding: 0;
+        transition: color var(--transition-fast);
+    }
+
+    .projects-table thead th button:hover {
+        color: var(--brand-color);
+    }
+
+    /* Sortable header styles */
+    .projects-table thead th.sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .projects-table thead th .th-content {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        justify-content: flex-start;
+    }
+
+    .projects-table thead th.text-end .th-content {
+        justify-content: flex-end;
+    }
+
+    .projects-table thead th .sort-icon {
+        flex-shrink: 0;
+        opacity: 0.5;
+        transition: opacity var(--transition-fast);
+    }
+
+    .projects-table thead th.sort-active .sort-icon {
+        opacity: 1;
+    }
+
+    .projects-table tbody td {
+        padding: 1rem 1.25rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 0.9rem;
+    }
+
+    /* Column-specific widths for proper alignment */
+    .projects-table thead th:nth-child(1),
+    .projects-table tbody td:nth-child(1) {
+        width: 25%;
+    }
+
+    .projects-table thead th:nth-child(2),
+    .projects-table tbody td:nth-child(2) {
+        width: 30%;
+    }
+
+    .projects-table thead th:nth-child(3),
+    .projects-table tbody td:nth-child(3) {
+        width: 15%;
+        text-align: right;
+    }
+
+    .projects-table thead th:nth-child(4),
+    .projects-table tbody td:nth-child(4) {
+        width: 15%;
+        text-align: right;
+    }
+
+    .projects-table thead th:nth-child(5),
+    .projects-table tbody td:nth-child(5) {
+        width: 15%;
+        text-align: right;
+    }
+
+    .project-row {
+        transition: background var(--transition-fast);
+    }
+
+    .project-row:hover {
+        background-color: #f8f9fa;
+    }
+
+    .project-row:last-child td {
+        border-bottom: none;
+    }
+
+    .project-key a {
+        color: var(--brand-color);
+        text-decoration: none;
+        font-weight: 600;
+        transition: color var(--transition-fast);
+    }
+
+    .project-key a:hover {
+        color: var(--brand-color-hover);
+        text-decoration: underline;
+    }
+
+    .project-name {
+        color: var(--brand-text);
+    }
+
+    .count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--surface-alt);
+        color: var(--brand-text);
+        font-weight: 600;
+        font-size: 0.85rem;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+    }
+
+    .btn-actions {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.375rem 0.5rem;
+        color: var(--brand-muted);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-actions:hover {
+        background: var(--surface-alt);
+        border-color: var(--brand-color);
+        color: var(--brand-color);
+    }
+
+    .dropdown-menu {
+        border-radius: var(--radius-lg);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, .12), 0 2px 8px rgba(0, 0, 0, .08);
+        border: 1px solid #e5e7eb;
+        padding: 0.5rem;
+        z-index: 1050;
+        min-width: 200px;
+    }
+
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.625rem 0.875rem;
+        border-radius: var(--radius);
+        font-size: 0.875rem;
+        transition: all var(--transition-fast);
+    }
+
+    .dropdown-item svg {
+        opacity: 0.7;
+        flex-shrink: 0;
+    }
+
+    .dropdown-item:hover svg {
+        opacity: 1;
+    }
+
+    .dropdown-item:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem !important;
+    }
+
+    .empty-state-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .empty-icon {
+        color: var(--brand-muted);
+        opacity: 0.3;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .empty-description {
+        font-size: 0.95rem;
+        color: var(--brand-muted);
+        margin: 0;
+    }
+
+    /* Elegant Modal Styles */
+    .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.5);
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1040;
+    }
+
+    .elegant-modal {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+        overflow: hidden;
+    }
+
+    .elegant-modal-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.5rem 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-bottom: none;
+    }
+
+    .modal-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        background: rgba(255, 255, 255, .2);
+        border-radius: 12px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .elegant-modal-header .modal-title {
+        color: white;
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0;
+        flex-grow: 1;
+    }
+
+    .elegant-close {
+        background: rgba(255, 255, 255, .2);
+        border: none;
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .elegant-close:hover {
+        background: rgba(255, 255, 255, .3);
+        transform: rotate(90deg);
+    }
+
+    .elegant-modal-body {
+        padding: 2rem;
+    }
+
+    .elegant-form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .elegant-form-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .elegant-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .label-required {
+        color: #ef4444;
+        margin-left: 0.25rem;
+    }
+
+    .elegant-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-size: 0.95rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        background: white;
+    }
+
+    .elegant-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .elegant-input::placeholder {
+        color: #9ca3af;
+    }
+
+    .elegant-hint {
+        display: block;
+        margin-top: 0.375rem;
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
+
+    .elegant-validation {
+        display: block;
+        margin-top: 0.375rem;
+        font-size: 0.8rem;
+        color: #ef4444;
+    }
+
+    .elegant-validation-summary {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        color: #dc2626;
+        font-size: 0.875rem;
+    }
+
+    .elegant-validation-summary ul {
+        margin: 0;
+        padding-left: 1.25rem;
+    }
+
+    .elegant-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1.5rem 2rem;
+        background: #f9fafb;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .elegant-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .elegant-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .elegant-btn-secondary {
+        background: white;
+        color: #6b7280;
+        border: 2px solid #e5e7eb;
+    }
+
+    .elegant-btn-secondary:hover:not(:disabled) {
+        background: #f9fafb;
+        border-color: #d1d5db;
+    }
+
+    .elegant-btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .elegant-btn-primary:hover:not(:disabled) {
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        transform: translateY(-1px);
+    }
+
+    .elegant-btn svg {
+        flex-shrink: 0;
+    }
+</style>
+
+<Dashboard.Shared.Pager Total="@Total" Skip="@_skip" Take="@_take" OnPrev="@PrevPage" OnNext="@NextPage"/>
+
+<Dashboard.Shared.ConfirmDialog @ref="Confirm"/>
+
+@code {
+
+    private sealed class ProjectForm
+    {
+        [Required]
+        [RegularExpression("^[A-Za-z0-9._-]{1,128}$", ErrorMessage = "Project key may contain only Latin, numeric characters, hyphen, underscore, dot (from 1 to 128 symbols)")]
+        public string Key { get; set; } = string.Empty;
+
+        [Required]
+        [RegularExpression("^[A-Za-z0-9 ._\\-]{3,256}$", ErrorMessage = "Project name may contain only Latin, numeric characters, hyphen, underscore, dot (from 3 to 256 symbols)")]
+        public string Name { get; set; } = string.Empty;
+
+        [RegularExpression("^[A-Za-z0-9._-]{1,64}$", ErrorMessage = "Owner id allows letters/digits/._- up to 64")]
+        public string? OwnerUserId { get; set; }
+    }
+
+    private sealed class CreateProjectRequest
+    {
+        public string key { get; set; } = string.Empty;
+        public string name { get; set; } = string.Empty;
+        public string? ownerUserId { get; set; }
+    }
+
+    private record ListResponse(int total, Project[] items);
+
+    private string? Search
+    {
+        get => _search;
+        set
+        {
+            _search = value ?? string.Empty;
+            _skip = 0;
+            _ = LoadAsync();
+        }
+    }
+
+    private string _search = string.Empty;
+
+    private string _sort = "key";
+    private string _order = "asc";
+    private int _skip;
+    private readonly int _take = 20;
+
+    private int Total { get; set; }
+    private Project[]? Items { get; set; }
+    private string? Error { get; set; }
+
+    private bool CreateOpen { get; set; }
+    private ProjectForm CreateModel { get; set; } = new();
+    private string? CreateError { get; set; }
+
+    private bool EditOpen { get; set; }
+    private string EditKey { get; set; } = string.Empty;
+    private ProjectForm EditModel { get; set; } = new();
+    private string? EditError { get; set; }
+
+    private bool _busy;
+    private ConfirmDialog? Confirm;
+
+    // Current user tracking
+    private string? CurrentUserId;
+    private readonly HashSet<string> UserProjectAssignments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Get current user ID
+        try
+        {
+            var principal = Accessor?.HttpContext?.User;
+            var name = principal?.Identity?.Name;
+            var id = principal?.FindFirst("preferred_username")?.Value
+                     ?? principal?.FindFirst(ClaimTypes.Email)?.Value
+                     ?? name
+                     ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            CurrentUserId = id;
+        }
+        catch
+        {
+        }
+
+        await LoadAsync();
+        await LoadUserProjectAssignmentsAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            Error = null;
+            Items = null;
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var url = $"/admin/projects?skip={_skip}&take={_take}&sort={Uri.EscapeDataString(_sort)}&order={Uri.EscapeDataString(_order)}";
+            if (!string.IsNullOrWhiteSpace(_search)) url += $"&q={Uri.EscapeDataString(_search)}";
+            var resp = await client.GetAsync(url);
+            var json = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+            {
+                Error = $"Failed to load projects: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                Items = Array.Empty<Project>();
+                Total = 0;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            var data = JsonSerializer.Deserialize<ListResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            Total = data?.total ?? 0;
+            Items = data?.items ?? Array.Empty<Project>();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            Items = Array.Empty<Project>();
+            Total = 0;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private RenderFragment SortableHeader(string title, string field, bool alignEnd = false)
+    {
+        return builder =>
+        {
+            var isActive = string.Equals(_sort, field, StringComparison.OrdinalIgnoreCase);
+            var thClass = "sortable " + (isActive ? "sort-active " : "") + (alignEnd ? "text-end" : "text-start");
+
+            builder.OpenElement(0, "th");
+            builder.AddAttribute(1, "class", thClass);
+            builder.AddAttribute(2, "style", "cursor: pointer;");
+            builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => ToggleSort(field)));
+            builder.AddAttribute(4, "title", $"Sort by {title}");
+
+            // th-content wrapper
+            builder.OpenElement(5, "div");
+            builder.AddAttribute(6, "class", "th-content");
+
+            // Title span
+            builder.OpenElement(7, "span");
+            builder.AddContent(8, title);
+            builder.CloseElement();
+
+            // Sort icon
+            builder.OpenElement(9, "svg");
+            builder.AddAttribute(10, "class", "sort-icon");
+            builder.AddAttribute(11, "xmlns", "http://www.w3.org/2000/svg");
+            builder.AddAttribute(12, "width", "14");
+            builder.AddAttribute(13, "height", "14");
+            builder.AddAttribute(14, "fill", "currentColor");
+            builder.AddAttribute(15, "viewBox", "0 0 16 16");
+
+            if (isActive && _order == "asc")
+            {
+                // Up arrow
+                builder.OpenElement(16, "path");
+                builder.AddAttribute(17, "fill-rule", "evenodd");
+                builder.AddAttribute(18, "d", "M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z");
+                builder.CloseElement();
+            }
+            else
+            {
+                // Down arrow (default)
+                builder.OpenElement(16, "path");
+                builder.AddAttribute(17, "fill-rule", "evenodd");
+                builder.AddAttribute(18, "d", "M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z");
+                builder.CloseElement();
+            }
+
+            builder.CloseElement(); // svg
+            builder.CloseElement(); // th-content div
+            builder.CloseElement(); // th
+        };
+    }
+
+    private void ToggleSort(string field)
+    {
+        if (string.Equals(_sort, field, StringComparison.OrdinalIgnoreCase))
+        {
+            _order = _order == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            _sort = field;
+            _order = "asc";
+        }
+
+        _skip = 0;
+        _ = LoadAsync();
+    }
+
+    private void NextPage()
+    {
+        _skip += _take;
+        _ = LoadAsync();
+    }
+
+    private void PrevPage()
+    {
+        _skip = Math.Max(0, _skip - _take);
+        _ = LoadAsync();
+    }
+
+    private void ShowCreate()
+    {
+        CreateError = null;
+        CreateModel = new ProjectForm();
+        CreateOpen = true;
+    }
+
+    private async Task CreateProjectAsync()
+    {
+        if (_busy) return;
+        CreateError = null;
+        if (string.IsNullOrWhiteSpace(CreateModel.Key) || string.IsNullOrWhiteSpace(CreateModel.Name))
+        {
+            CreateError = "Key and Name are required.";
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new CreateProjectRequest
+            {
+                key = CreateModel.Key.Trim(),
+                name = CreateModel.Name.Trim(),
+                ownerUserId = null
+            };
+            using var resp = await client.PostAsJsonAsync("/admin/projects", payload);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                var errorMsg = ParseErrorMessage(text);
+
+                // Check for duplicate project key error
+                if (errorMsg != null && (errorMsg.Contains("already exists") || errorMsg.Contains("duplicate")))
+                {
+                    CreateError = $"Project with key '{CreateModel.Key}' already exists.";
+                }
+                else
+                {
+                    CreateError = errorMsg ?? $"Create failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                }
+
+                return;
+            }
+
+            // Success - assign current user to the project
+            var projectKey = CreateModel.Key.Trim();
+
+            if (!string.IsNullOrWhiteSpace(CurrentUserId))
+            {
+                try
+                {
+                    // Assign current user as ProjectLead to the new project
+                    var assignPayload = new { projectRole = ProjectRole.ProjectLead };
+                    var assignResp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(projectKey)}/members/{Uri.EscapeDataString(CurrentUserId)}", assignPayload);
+
+                    if (!assignResp.IsSuccessStatusCode)
+                    {
+                        // Log but don't fail the creation
+                        var assignError = await assignResp.Content.ReadAsStringAsync();
+                        Debug.WriteLine($"Failed to assign user to project: {assignError}");
+                    }
+                }
+                catch (Exception assignEx)
+                {
+                    // Log but don't fail the creation
+                    Debug.WriteLine($"Error assigning user to project: {assignEx.Message}");
+                }
+            }
+
+            // Success - close modal and redirect to members page
+            Toasts.Success($"The project {CreateModel.Name} has been successfully created.");
+            CreateOpen = false;
+            Nav.NavigateTo($"/admin/projects/{Uri.EscapeDataString(projectKey)}/members");
+        }
+        catch (Exception ex)
+        {
+            CreateError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OpenEdit(Project p)
+    {
+        EditError = null;
+        EditKey = p.Key;
+        EditModel = new ProjectForm { Key = p.Key, Name = p.Name, OwnerUserId = p.OwnerUserId };
+        EditOpen = true;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_busy) return;
+        EditError = null;
+        if (string.IsNullOrWhiteSpace(EditModel.Name))
+        {
+            EditError = "Project Name is required.";
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var patch = new Dictionary<string, object?>
+            {
+                ["name"] = EditModel.Name.Trim()
+            };
+            using var resp = await client.PatchAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(EditKey)}", patch);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                EditError = ParseErrorMessage(text) ?? $"Save failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            // Success - show toast and close modal
+            Toasts.Success("The project has been updated.");
+            EditOpen = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            EditError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DeleteProjectAsync(string key, string name)
+    {
+        if (Confirm != null)
+        {
+            var ok = await Confirm.Show($"Are you sure you want to delete the project '{key}'?", "Confirm Delete", "Delete", "Cancel");
+            if (!ok) return;
+        }
+
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.DeleteAsync($"/admin/projects/{Uri.EscapeDataString(key)}");
+
+            if (resp.IsSuccessStatusCode)
+            {
+                Toasts.Success($"Project '{key}' deleted successfully");
+                await LoadAsync();
+            }
+            else
+            {
+                var errorText = await resp.Content.ReadAsStringAsync();
+                var errorMsg = ParseErrorMessage(errorText) ?? $"Failed to delete project: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                Toasts.Error(errorMsg);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Error deleting project: {ex.Message}");
+        }
+    }
+
+    private async Task LoadUserProjectAssignmentsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentUserId)) return;
+
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(CurrentUserId)}/projects");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("items", out var items))
+                {
+                    UserProjectAssignments.Clear();
+                    foreach (var el in items.EnumerateArray())
+                    {
+                        var pk = el.TryGetProperty("projectKey", out var pkEl) || el.TryGetProperty("ProjectKey", out pkEl)
+                            ? pkEl.GetString() ?? string.Empty
+                            : string.Empty;
+                        if (!string.IsNullOrWhiteSpace(pk))
+                        {
+                            UserProjectAssignments.Add(pk);
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private bool IsUserAssignedToProject(string projectKey)
+    {
+        return UserProjectAssignments.Contains(projectKey);
+    }
+
+    private bool IsPersonalProject(string projectKey)
+    {
+        if (string.IsNullOrWhiteSpace(CurrentUserId) || string.IsNullOrWhiteSpace(projectKey))
+            return false;
+
+        return projectKey.StartsWith($"{CurrentUserId}_", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task AssignToProjectAsync(string key, string name)
+    {
+        if (string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            Toasts.Error("Unable to determine current user");
+            return;
+        }
+
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new { role = (int)ProjectRole.Member };
+            using var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(key)}/members/{Uri.EscapeDataString(CurrentUserId)}", payload);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                UserProjectAssignments.Add(key);
+                Toasts.Success($"You have been assigned to project '{name}'");
+                await LoadAsync(); // Refresh to update member count
+                await LoadUserProjectAssignmentsAsync(); // Refresh user's project assignments
+            }
+            else
+            {
+                var errorText = await resp.Content.ReadAsStringAsync();
+                var errorMsg = ParseErrorMessage(errorText) ?? $"Failed to assign to project: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                Toasts.Error(errorMsg);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Error assigning to project: {ex.Message}");
+        }
+    }
+
+    private async Task UnassignFromProjectAsync(string key, string name)
+    {
+        if (string.IsNullOrWhiteSpace(CurrentUserId))
+        {
+            Toasts.Error("Unable to determine current user");
+            return;
+        }
+
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.DeleteAsync($"/admin/projects/{Uri.EscapeDataString(key)}/members/{Uri.EscapeDataString(CurrentUserId)}");
+
+            if (resp.IsSuccessStatusCode)
+            {
+                UserProjectAssignments.Remove(key);
+                Toasts.Success($"You have been unassigned from project '{name}'");
+                await LoadAsync(); // Refresh to update member count
+                await LoadUserProjectAssignmentsAsync(); // Refresh user's project assignments
+            }
+            else
+            {
+                var errorText = await resp.Content.ReadAsStringAsync();
+                var errorMsg = ParseErrorMessage(errorText) ?? $"Failed to unassign from project: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                Toasts.Error(errorMsg);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Error unassigning from project: {ex.Message}");
+        }
+    }
+
+    private void NavigateToMembers(string projectKey)
+    {
+        Nav.NavigateTo($"/admin/projects/{Uri.EscapeDataString(projectKey)}/members");
+    }
+
+    private void NavigateToMonitoring(string projectKey)
+    {
+        Nav.NavigateTo($"/admin/projects/{Uri.EscapeDataString(projectKey)}/monitoring");
+    }
+
+    private void NavigateToSettings(string projectKey)
+    {
+        Nav.NavigateTo($"/{Uri.EscapeDataString(projectKey)}/settings/");
+    }
+
+    private static MarkupString StatusBadge(ProjectStatus status)
+    {
+        var (cls, text) = status switch
+        {
+            ProjectStatus.Active => ("bg-success", "Active"),
+            ProjectStatus.Archived => ("bg-warning text-dark", "Archived"),
+            ProjectStatus.Disabled => ("bg-secondary", "Disabled"),
+            _ => ("bg-light text-dark", status.ToString())
+        };
+        return (MarkupString)$"<span class='badge {cls}'>{text}</span>";
+    }
+
+    private static string FormatAgo(DateTime dt)
+    {
+        var utc = dt.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : dt.ToUniversalTime();
+        var span = DateTime.UtcNow - utc;
+        if (span.TotalSeconds < 0) span = TimeSpan.Zero;
+        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s ago";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
+    }
+
+    private static string? ParseErrorMessage(string text)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.String)
+                return err.GetString();
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
+
+    private async Task InvalidSubmitFocus(EditContext _)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("focusFirstInvalid");
+        }
+        catch
+        {
+        }
+    }
+
+}

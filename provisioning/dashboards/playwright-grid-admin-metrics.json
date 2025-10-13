@@ -1,0 +1,72 @@
+{
+  "annotations": {"list": [{"builtIn":1,"datasource":{"type":"grafana","uid":"-- Grafana --"},"enable":true,"hide":true,"iconColor":"rgba(0, 211, 255, 1)","name":"Annotations & Alerts","type":"dashboard"}]},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Active projects",
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "refId": "A", "expr": "hub_admin_active_projects"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "type": "stat",
+      "title": "Active users",
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "refId": "A", "expr": "hub_admin_active_users"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "type": "timeseries",
+      "title": "Membership changes rate by action",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "refId": "A", "expr": "sum by (action) (rate(hub_admin_membership_changes_total[5m]))", "legendFormat": "{{action}}"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Membership changes (cumulative)",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 5},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "refId": "A", "expr": "sum by (action) (increase(hub_admin_membership_changes_total[1h]))", "legendFormat": "{{action}} (1h)"}
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Admin traces",
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 14},
+      "options": {
+        "content": "Admin operations are traced via OpenTelemetry (ActivitySource 'playwright-hub.admin'). To view traces, configure an OTLP exporter and a tracing backend (e.g., Tempo).",
+        "mode": "markdown"
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["playwright", "grid", "admin"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Playwright Grid – Admin Metrics",
+  "uid": "pw-grid-admin-metrics",
+  "version": 1,
+  "weekStart": ""
+}

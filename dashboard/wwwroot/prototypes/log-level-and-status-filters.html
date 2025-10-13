@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Log Level & Status Filters Example</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+
+    .filters-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 600px;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .filter-label-inline {
+      font-weight: 500;
+      min-width: 80px;
+    }
+
+    .segmented-control {
+      border: 1px solid #ccc;
+      border-radius: 999px;
+      padding: 2px;
+      display: inline-flex;
+      gap: 2px;
+      background: #fff;
+    }
+
+    .segment {
+      position: relative;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .segment input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .segment span {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      line-height: 1.2;
+      white-space: nowrap;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    /* Unselected */
+    .segment input:not(:checked) + span {
+      background: transparent;
+      color: #333;
+    }
+
+    /* Selected */
+    .segment input:checked + span {
+      background: #007bff;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+<h1>Log Filters</h1>
+<div class="filters-container">
+
+  <!-- Log Level filter -->
+  <div class="filter-group log-level-filter">
+    <span class="filter-label-inline">Log level:</span>
+
+    <fieldset aria-label="Log level" class="segmented-control">
+      <label class="segment">
+        <input checked name="logLevel" type="radio" value=""/>
+        <span>All</span>
+      </label>
+      <label class="segment">
+        <input name="logLevel" type="radio" value="fatal"/>
+        <span>Fatal</span>
+      </label>
+      <label class="segment">
+        <input name="logLevel" type="radio" value="error"/>
+        <span>Error</span>
+      </label>
+      <label class="segment">
+        <input name="logLevel" type="radio" value="warn"/>
+        <span>Warn+</span>
+      </label>
+      <label class="segment">
+        <input name="logLevel" type="radio" value="info"/>
+        <span>Info+</span>
+      </label>
+    </fieldset>
+  </div>
+
+  <!-- Status filter -->
+  <div class="filter-group status-filter">
+    <span class="filter-label-inline">Status:</span>
+
+    <fieldset aria-label="Status" class="segmented-control">
+      <label class="segment">
+        <input checked name="status" type="radio" value=""/>
+        <span>All</span>
+      </label>
+      <label class="segment">
+        <input name="status" type="radio" value="open"/>
+        <span>Open</span>
+      </label>
+      <label class="segment">
+        <input name="status" type="radio" value="in_progress"/>
+        <span>In&nbsp;Progress</span>
+      </label>
+      <label class="segment">
+        <input name="status" type="radio" value="resolved"/>
+        <span>Resolved</span>
+      </label>
+      <label class="segment">
+        <input name="status" type="radio" value="failed"/>
+        <span>Failed</span>
+      </label>
+    </fieldset>
+  </div>
+
+</div>
+</body>
+</html>

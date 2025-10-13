@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -25,19 +25,31 @@ namespace WorkerService.Infrastructure;
 /// </summary>
 public static class CleanupPlanner
 {
-    public static IEnumerable<FileInfo> PlanDeletions(IEnumerable<string> targetDirs, TimeSpan minAge, long maxDeleteBytes, DateTime utcNow)
+    public static IEnumerable<FileInfo> PlanDeletions(IEnumerable<string> targetDirs, TimeSpan minAge,
+        long maxDeleteBytes, DateTime utcNow)
     {
-        if (maxDeleteBytes <= 0) yield break;
+        if (maxDeleteBytes <= 0)
+        {
+            yield break;
+        }
 
         var minTime = utcNow - minAge;
         var files = new List<FileInfo>();
         foreach (var dir in targetDirs)
         {
-            if (string.IsNullOrWhiteSpace(dir)) continue;
+            if (string.IsNullOrWhiteSpace(dir))
+            {
+                continue;
+            }
+
             try
             {
                 var di = new DirectoryInfo(dir);
-                if (!di.Exists) continue;
+                if (!di.Exists)
+                {
+                    continue;
+                }
+
                 foreach (var fi in di.EnumerateFiles("*", SearchOption.AllDirectories))
                 {
                     try
@@ -63,8 +75,16 @@ public static class CleanupPlanner
         foreach (var fi in files.OrderBy(f => f.LastWriteTimeUtc))
         {
             var len = SafeLength(fi);
-            if (len <= 0) continue;
-            if (acc + len > maxDeleteBytes) yield break;
+            if (len <= 0)
+            {
+                continue;
+            }
+
+            if (acc + len > maxDeleteBytes)
+            {
+                yield break;
+            }
+
             acc += len;
             yield return fi;
         }

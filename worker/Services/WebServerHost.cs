@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -18,17 +18,19 @@
 
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Agenix.PlaywrightGrid.Domain;
-using Microsoft.Extensions.Logging;
+using Agenix.PlaywrightGrid.Shared.Logging;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Prometheus;
+using Serilog;
 using StackExchange.Redis;
 using WorkerService.Application.Ports;
 using WorkerService.Infrastructure;
@@ -37,33 +39,101 @@ namespace WorkerService.Services;
 
 public sealed class WebServerHost
 {
-    private readonly record struct Frame(byte[] Data, WebSocketMessageType MessageType, bool EndOfMessage);
     private static readonly Counter WsLogDroppedCounter = Metrics.CreateCounter(
         "worker_ws_log_dropped_messages_total",
         "Dropped Playwright WS log messages due to backpressure",
         "node", "direction", "policy", "reason");
+
     private static readonly Counter WsProxyDroppedCounter = Metrics.CreateCounter(
         "worker_ws_proxy_dropped_frames_total",
         "Dropped WebSocket frames in proxy due to backpressure",
         "node", "direction", "policy", "reason");
+
+    // New: per-worker WS concurrency metrics
+    private static readonly Gauge WsConnectionsCurrentGauge = Metrics.CreateGauge(
+        "worker_ws_connections_current",
+        "Current number of client WebSocket connections handled by this worker",
+        "node");
+
+    private static readonly Gauge WsConnectionsLimitGauge = Metrics.CreateGauge(
+        "worker_ws_connections_limit",
+        "Configured maximum concurrent client WebSocket connections for this worker (0 = unlimited)",
+        "node");
+
+    private static readonly Gauge WsConnectionsHeadroomGauge = Metrics.CreateGauge(
+        "worker_ws_connections_headroom",
+        "Headroom: (limit - current). If unlimited, set to -1",
+        "node");
+
+    private static readonly Gauge WsSaturationGauge = Metrics.CreateGauge(
+        "worker_ws_saturation",
+        "WS saturation ratio current/limit in [0,1]. For unlimited limit, set to 0",
+        "node");
+
+    private static readonly Counter WsConnectionsRejectedCounter = Metrics.CreateCounter(
+        "worker_ws_connections_rejected_total",
+        "Rejected client WebSocket connections due to per-worker max cap",
+        "node", "reason");
+
     private readonly IDatabase _db;
     private readonly IMetricsPort _metrics;
     private readonly WorkerOptions _options;
     private readonly PoolManager _pool;
+    private readonly PidRedisManager? _pidRedisManager;
+    private readonly ChunkedLogger<WebServerHost>? _chunkedLogger;
     private volatile bool _acceptingBorrows = true;
     private volatile bool _shuttingDown;
 
-    public WebServerHost(WorkerOptions options, IMetricsPort metrics, PoolManager pool, IDatabase db)
+    // Tracks current WS connections for per-worker cap enforcement
+    private long _wsCurrentConnections;
+
+    public WebServerHost(WorkerOptions options, IMetricsPort metrics, PoolManager pool, IDatabase db, PidRedisManager? pidRedisManager = null, ChunkedLogger<WebServerHost>? chunkedLogger = null)
     {
         _options = options;
         _metrics = metrics;
         _pool = pool;
         _db = db;
+        _pidRedisManager = pidRedisManager;
+        _chunkedLogger = chunkedLogger;
+    }
+
+    private void UpdateWsGauges()
+    {
+        try
+        {
+            var node = _options.NodeId;
+            var current = Interlocked.Read(ref _wsCurrentConnections);
+            var limit = _options.WebSocketMaxConnections;
+            var headroom = limit > 0 ? Math.Max(0, limit - (int)current) : -1;
+            var saturation = limit > 0 && limit >= current && limit > 0 ? current / (double)limit : 0.0;
+
+            WsConnectionsCurrentGauge.WithLabels(node).Set(current);
+            WsConnectionsLimitGauge.WithLabels(node).Set(limit);
+            WsConnectionsHeadroomGauge.WithLabels(node).Set(headroom);
+            WsSaturationGauge.WithLabels(node).Set(saturation);
+        }
+        catch
+        {
+            /* metrics failures should not impact data path */
+        }
     }
 
     public async Task RunAsync(string[] args, CancellationTokenSource appCts)
     {
+        using var op = _chunkedLogger?.BeginOperation("WebServerLifecycle", new Dictionary<string, object>
+        {
+            ["NodeId"] = _options.NodeId
+        });
+        _chunkedLogger?.LogMilestone(EventCodes.WebServer.ServerStarting, "Web server starting for node {NodeId}", _options.NodeId);
+
         var builder = WebApplication.CreateBuilder(args);
+
+        // Ensure only Serilog is used for logging to prevent duplication and interleaving
+        builder.Logging.ClearProviders();
+        builder.Host.UseSerilog((context, services, configuration) => configuration
+            .ReadFrom.Configuration(context.Configuration)
+            .ReadFrom.Services(services));
+
         // Suppress verbose framework logs like OkObjectResult JSON writing and EndpointMiddleware exec logs
         builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
@@ -71,7 +141,7 @@ public sealed class WebServerHost
         LoggingConfigurator.ApplyFromEnvironment(builder.Logging, builder.Configuration);
 
         // OpenTelemetry setup (env-driven exporters)
-        var workerServiceName = "playwright-worker";
+        const string workerServiceName = "playwright-worker";
         var workerServiceVersion = typeof(WebServerHost).Assembly.GetName().Version?.ToString() ?? "0.0.0";
         var enableOtlp = string.Equals(builder.Configuration["ENABLE_OTLP"], "1", StringComparison.OrdinalIgnoreCase);
         var enablePromOtel = string.Equals(builder.Configuration["ENABLE_PROMETHEUS_OTEL"], "1",
@@ -123,35 +193,74 @@ public sealed class WebServerHost
         var app = builder.Build();
         var logger = app.Logger;
 
+        // Log configuration dump
+        try
+        {
+            var configData = new Dictionary<string, object>
+            {
+                ["NodeId"] = _options.NodeId,
+                ["HubUrl"] = _options.HubUrl,
+                ["RedisUrl"] = _options.RedisUrl,
+                ["PublicWsHost"] = _options.PublicWsHost ?? "(auto)",
+                ["PublicWsPort"] = _options.PublicWsPort ?? "0",
+                ["Labels"] = _options.Labels,
+                ["PoolConfig"] = _options.PoolConfig
+            };
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.ConfigurationDumped, "Effective worker configuration");
+            _chunkedLogger?.LogInformation(null, "Configuration details: {Config}", JsonSerializer.Serialize(configData));
+        }
+        catch (Exception ex)
+        {
+            _chunkedLogger?.LogWarning(ex, null, "Failed to log configuration dump: {Message}", ex.Message);
+        }
+
         app.UseMetricServer();
         app.UseHttpMetrics();
 
-        app.Lifetime.ApplicationStopping.Register(() =>
+        // Initialize WS limit/headroom gauges at startup
+        UpdateWsGauges();
+
+        _chunkedLogger?.LogMilestone(EventCodes.WebServer.EndpointsRegistered, "API endpoints registered");
+
+        app.Lifetime.ApplicationStarted.Register(() =>
         {
+            var addresses = string.Join(", ", app.Urls);
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.ListeningAddresses, "Web server listening on: {Addresses}", addresses);
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.ServerStarted, "Web server started for node {NodeId}", _options.NodeId);
+        });
+
+        app.Lifetime.ApplicationStopping.Register(async () =>
+        {
+            using var shutdownOp = _chunkedLogger?.BeginOperation("WebServerShutdown");
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.ServerStopping, "ApplicationStopping: initiating graceful drain");
             _shuttingDown = true;
             _acceptingBorrows = false;
-            try { logger.LogInformation("[worker] ApplicationStopping: initiating graceful drain"); } catch { }
 
             // Proactively drop TTL keys for any active sessions so Hub sweeper can reclaim
             try
             {
                 foreach (var bid in _pool.GetActiveBrowserIds())
                 {
-                    try { _db.KeyDelete(RedisKeys.BorrowTtl(bid)); } catch { }
-                    try { _db.KeyDelete($"borrow_idle:{bid}"); } catch { }
+                    try { await _db.KeyDeleteAsync(RedisKeys.BorrowTtl(bid)); }
+                    catch { }
+
+                    try { await _db.KeyDeleteAsync($"borrow_idle:{bid}"); }
+                    catch { }
                 }
             }
             catch { }
 
-            try { appCts.Cancel(); } catch { }
+            try { await appCts.CancelAsync(); }
+            catch { }
 
             // Drain active WebSocket sessions up to a timeout
-            int drainSeconds = 0;
+            var drainSeconds = 0;
             try
             {
-                drainSeconds = int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s)
-                    ? Math.Max(0, s)
-                    : 30; // default 30s
+                drainSeconds =
+                    int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s)
+                        ? Math.Max(0, s)
+                        : 30; // default 30s
             }
             catch { drainSeconds = 30; }
 
@@ -164,18 +273,39 @@ public sealed class WebServerHost
                     {
                         break;
                     }
+
                     Thread.Sleep(250);
                 }
             }
             catch { }
 
-            try { _pool.CleanupAllAsync().GetAwaiter().GetResult(); } catch { }
+            try { _pool.CleanupAllAsync().GetAwaiter().GetResult(); }
+            catch { }
 
-            // If sessions are still active after timeout, force-kill sidecars
-            if (_poolHasAnyActiveConnections())
+            // Always kill all sidecar processes to prevent orphans
+            // (regardless of whether active connections remain)
+            try
             {
-                try { logger.LogWarning("[worker] Drain timeout reached; forcing sidecar shutdown"); } catch { }
-                try { _pool.KillAll(); } catch { }
+                if (_poolHasAnyActiveConnections())
+                {
+                    _chunkedLogger?.LogWarning(null, "Drain timeout reached; forcing sidecar shutdown");
+                }
+                else
+                {
+                    _chunkedLogger?.LogMilestone(EventCodes.WebServer.ServerStopped, "Graceful drain complete; killing all sidecars");
+                }
+
+                _pool.KillAll();
+
+                // Layer 3: Cleanup Redis PID tracking after killing all sidecars
+                if (_pidRedisManager != null)
+                {
+                    await _pidRedisManager.CleanupAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[worker] Failed to kill sidecars during shutdown");
             }
         });
 
@@ -187,14 +317,24 @@ public sealed class WebServerHost
 
         app.MapPost("/borrow/{labelKey}", async (string labelKey, HttpRequest req) =>
         {
+            using var op = _chunkedLogger?.BeginOperation("BorrowRequest", new Dictionary<string, object>
+            {
+                ["LabelKey"] = labelKey
+            });
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.RequestReceived, "Borrow requested for label {LabelKey}", labelKey);
+
             if (!req.Headers.TryGetValue("x-node-secret", out var s) || s.FirstOrDefault() != _options.NodeNodeSecret)
             {
+                _chunkedLogger?.LogWarning(EventCodes.WebServer.RequestFailed, "Unauthorized borrow request for label {LabelKey}", labelKey);
                 return Results.Unauthorized();
             }
 
             if (!_acceptingBorrows)
             {
-                try { req.HttpContext.Response.Headers.Append("Retry-After", "30"); } catch { }
+                try { req.HttpContext.Response.Headers.Append("Retry-After", "30"); }
+                catch { }
+
+                _chunkedLogger?.LogWarning(EventCodes.WebServer.RequestFailed, "Borrow rejected (node not accepting borrows) for label {LabelKey}", labelKey);
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
 
@@ -203,6 +343,7 @@ public sealed class WebServerHost
             {
                 if (_db.KeyExists(RedisKeys.MaintenanceFlag(labelKey)))
                 {
+                    _chunkedLogger?.LogWarning(EventCodes.WebServer.RequestFailed, "Borrow rejected (maintenance mode) for label {LabelKey}", labelKey);
                     return Results.StatusCode(503);
                 }
             }
@@ -210,6 +351,7 @@ public sealed class WebServerHost
 
             if (!_pool.TryGetFirstSlot(labelKey, out var browserId, out var slot))
             {
+                _chunkedLogger?.LogWarning(EventCodes.WebServer.RequestFailed, "Borrow failed (no slots available) for label {LabelKey}", labelKey);
                 return Results.StatusCode(503);
             }
 
@@ -225,14 +367,21 @@ public sealed class WebServerHost
                 browserType = slot.BrowserType,
                 labels = _options.Labels.ToDictionary(k => k.Key, v => v.Value)
             };
+
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.RequestProcessed, "Borrow successful for label {LabelKey}, browser {BrowserId}", labelKey, browserId);
+            op?.Complete();
             return Results.Ok(respObj);
         });
 
         // Admin: orchestrate a safe sidecar upgrade on this node (graceful drain + restart)
         app.MapPost("/admin/sidecar/upgrade", async (HttpRequest req) =>
         {
+            using var op = _chunkedLogger?.BeginOperation("SidecarUpgrade");
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.RequestReceived, "Sidecar upgrade requested");
+
             if (!req.Headers.TryGetValue("x-node-secret", out var s) || s.FirstOrDefault() != _options.NodeNodeSecret)
             {
+                _chunkedLogger?.LogWarning(EventCodes.WebServer.RequestFailed, "Unauthorized sidecar upgrade request");
                 return Results.Unauthorized();
             }
 
@@ -242,6 +391,9 @@ public sealed class WebServerHost
             var started = DateTime.UtcNow;
             var removed = 0;
             var scheduledRecycle = 0;
+
+            _chunkedLogger?.LogMilestone(EventCodes.WebServer.RequestProcessed, "Sidecar upgrade initiated: withdrawing from Redis and scheduling recycle");
+            op?.Complete();
 
             // 1) Withdraw local availability from Redis so Hub won't assign new sessions to this node
             foreach (var labelKey in _options.PoolConfig.Keys)
@@ -285,8 +437,10 @@ public sealed class WebServerHost
             int drainSeconds;
             try
             {
-                drainSeconds = int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s2)
-                    ? Math.Max(0, s2) : 30;
+                drainSeconds =
+                    int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s2)
+                        ? Math.Max(0, s2)
+                        : 30;
             }
             catch { drainSeconds = 30; }
 
@@ -295,7 +449,11 @@ public sealed class WebServerHost
             {
                 while (DateTime.UtcNow < until)
                 {
-                    if (!_pool.HasAnyActiveConnections()) break;
+                    if (!_pool.HasAnyActiveConnections())
+                    {
+                        break;
+                    }
+
                     await Task.Delay(250);
                 }
             }
@@ -304,20 +462,15 @@ public sealed class WebServerHost
             // 4) If still active after timeout, force-kill sidecars (as in shutdown path)
             if (_pool.HasAnyActiveConnections())
             {
-                try { _pool.KillAll(); } catch { }
+                try { _pool.KillAll(); }
+                catch { }
             }
 
             // 5) Warm pools again (fresh sidecars; repopulate availability)
             await _pool.InitializeAsync();
 
             var elapsedMs = (int)(DateTime.UtcNow - started).TotalMilliseconds;
-            return Results.Ok(new
-            {
-                status = "ok",
-                removed,
-                scheduledRecycle,
-                elapsedMs
-            });
+            return Results.Ok(new { status = "ok", removed, scheduledRecycle, elapsedMs });
         });
 
         app.MapPost("/return/{labelKey}", async (string labelKey, HttpRequest req) =>
@@ -340,31 +493,42 @@ public sealed class WebServerHost
             return Results.Ok(new { ok = true });
         });
 
-        app.MapGet("/health", () => Results.Ok(new { node = _options.NodeId, pools = _pool.Pools.Keys.ToArray() }));
+        app.MapGet("/health", () =>
+        {
+            _chunkedLogger?.LogDebug(EventCodes.WebServer.RequestReceived, "Health check requested");
+            return Results.Ok(new { node = _options.NodeId, pools = _pool.Pools.Keys.ToArray() });
+        });
+
         app.MapGet("/health/ready", async () =>
         {
+            _chunkedLogger?.LogDebug(EventCodes.WebServer.RequestReceived, "Readiness check requested");
             if (_shuttingDown)
             {
+                _chunkedLogger?.LogWarning(EventCodes.WebServer.RequestFailed, "Readiness check failed: shutting down");
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
+
             try
             {
                 var timeoutMs = int.TryParse(Environment.GetEnvironmentVariable("REDIS_HEALTH_TIMEOUT_MS"), out var ms)
                     ? Math.Max(100, ms)
                     : 1000;
-                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var sw = Stopwatch.StartNew();
                 var pingTask = _db.PingAsync();
                 var completed = await Task.WhenAny(pingTask, Task.Delay(timeoutMs));
                 if (completed != pingTask)
                 {
+                    _chunkedLogger?.LogWarning(EventCodes.WebServer.RequestFailed, "Readiness check failed: Redis ping timeout");
                     return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
                 }
+
                 await pingTask; // propagate any errors
                 sw.Stop();
                 return Results.Ok(new { status = "ready", redis = new { pingMs = sw.ElapsedMilliseconds } });
             }
-            catch
+            catch (Exception ex)
             {
+                _chunkedLogger?.LogError(ex, EventCodes.WebServer.RequestFailed, "Readiness check failed: {Message}", ex.Message);
                 return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
         });
@@ -385,8 +549,12 @@ public sealed class WebServerHost
                     var slot = kv.Value;
                     bool alive;
                     int pid;
-                    try { alive = !slot.Proc.HasExited; } catch { alive = false; }
-                    try { pid = slot.Proc.Id; } catch { pid = 0; }
+                    try { alive = !slot.Proc.HasExited; }
+                    catch { alive = false; }
+
+                    try { pid = slot.Proc.Id; }
+                    catch { pid = 0; }
+
                     var uptime = now - slot.StartedAt;
                     arr.Add(new
                     {
@@ -406,8 +574,8 @@ public sealed class WebServerHost
                 {
                     backoffObj = new
                     {
-                        failures = bo.failures,
-                        lastFailureUtc = bo.lastFailureUtc,
+                        bo.failures,
+                        bo.lastFailureUtc,
                         nextDelaySeconds = (int)bo.nextDelay.TotalSeconds
                     };
                 }
@@ -453,6 +621,45 @@ public sealed class WebServerHost
             return Results.Ok(payload);
         });
 
+        // Internal: Kill orphaned PID (called by hub's WorkerOrphanDetector)
+        app.MapPost("/api/worker/internal/kill-pid/{pid:int}", async (int pid, HttpRequest req) =>
+        {
+            // Require hub secret or node-node secret for security
+            var ok = (req.Headers.TryGetValue("x-hub-secret", out var hs) && hs.FirstOrDefault() == _options.NodeSecret)
+                     || (req.Headers.TryGetValue("x-node-secret", out var ns) &&
+                         ns.FirstOrDefault() == _options.NodeNodeSecret);
+            if (!ok)
+            {
+                return Results.Unauthorized();
+            }
+
+            try
+            {
+                var process = System.Diagnostics.Process.GetProcessById(pid);
+                process.Kill(entireProcessTree: true);
+                logger.LogInformation("[KillPid] Killed PID {Pid}", pid);
+
+                // Untrack from Redis if PidRedisManager is available
+                if (_pidRedisManager != null)
+                {
+                    await _pidRedisManager.UntrackPidAsync(pid);
+                }
+
+                return Results.Ok(new { pid, killed = true });
+            }
+            catch (ArgumentException)
+            {
+                // Process doesn't exist - already dead
+                logger.LogDebug("[KillPid] PID {Pid} not found (already dead)", pid);
+                return Results.Ok(new { pid, killed = false, reason = "not_found" });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[KillPid] Failed to kill PID {Pid}", pid);
+                return Results.Problem($"Failed to kill PID {pid}: {ex.Message}");
+            }
+        });
+
         app.UseWebSockets(new WebSocketOptions
         {
             KeepAliveInterval = TimeSpan.FromSeconds(_options.WebSocketPingIntervalSeconds)
@@ -466,8 +673,12 @@ public sealed class WebServerHost
         // Playwright protocol without modifying Playwright itself.
         app.Map("/ws/{browserId}", async (HttpContext ctx, string browserId) =>
         {
-            using var _scopeWs = WorkerService.Infrastructure.LoggingScopes.Begin(logger, browserId: browserId);
+            using var scopeWs = LoggingScopes.Begin(logger, browserId: browserId);
             logger.LogInformation("WS connect start {BrowserId}", browserId);
+
+            // Track and enforce the per-worker WS connection cap
+            var reservedWsSlot = false;
+
             if (!ctx.WebSockets.IsWebSocketRequest)
             {
                 ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -481,6 +692,25 @@ public sealed class WebServerHost
                 await ctx.Response.WriteAsync("Unknown browserId");
                 return;
             }
+
+            // Reserve a connection slot and enforce per-worker cap
+            var limit = _options.WebSocketMaxConnections;
+            var currentAfterInc = Interlocked.Increment(ref _wsCurrentConnections);
+            reservedWsSlot = true;
+            if (limit > 0 && currentAfterInc > limit)
+            {
+                Interlocked.Decrement(ref _wsCurrentConnections);
+                reservedWsSlot = false;
+                try { WsConnectionsRejectedCounter.WithLabels(_options.NodeId, "saturated").Inc(); }
+                catch { }
+
+                UpdateWsGauges();
+                ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                await ctx.Response.WriteAsync("WebSocket capacity exhausted on worker");
+                return;
+            }
+
+            UpdateWsGauges();
 
             // Try to resolve runId for this browser from Redis mapping to propagate correlation
             string? runId = null;
@@ -512,8 +742,15 @@ public sealed class WebServerHost
             // Best-effort: include run context for the sidecar
             try
             {
-                if (!string.IsNullOrWhiteSpace(runId)) upstream.Options.SetRequestHeader("x-run-id", runId!);
-                if (!string.IsNullOrWhiteSpace(runName)) upstream.Options.SetRequestHeader("x-run-name", runName!);
+                if (!string.IsNullOrWhiteSpace(runId))
+                {
+                    upstream.Options.SetRequestHeader("x-run-id", runId);
+                }
+
+                if (!string.IsNullOrWhiteSpace(runName))
+                {
+                    upstream.Options.SetRequestHeader("x-run-name", runName);
+                }
             }
             catch { }
 
@@ -523,13 +760,40 @@ public sealed class WebServerHost
             }
             catch (Exception ex)
             {
+                // Release reserved slot on upstream failure
+                if (reservedWsSlot)
+                {
+                    Interlocked.Decrement(ref _wsCurrentConnections);
+                    UpdateWsGauges();
+                    reservedWsSlot = false;
+                }
+
                 ctx.Response.StatusCode = StatusCodes.Status502BadGateway;
                 await ctx.Response.WriteAsync($"Upstream connect failed: {ex.Message}");
                 return;
             }
 
-            var wsAccept = new WebSocketAcceptContext { DangerousEnableCompression = _options.WebSocketCompressionEnabled };
-            using var downstream = await ctx.WebSockets.AcceptWebSocketAsync(wsAccept);
+            var wsAccept =
+                new WebSocketAcceptContext { DangerousEnableCompression = _options.WebSocketCompressionEnabled };
+            WebSocket? downstream;
+            try
+            {
+                downstream = await ctx.WebSockets.AcceptWebSocketAsync(wsAccept);
+            }
+            catch (Exception ex)
+            {
+                // Release reserved slot on accept failure
+                if (reservedWsSlot)
+                {
+                    Interlocked.Decrement(ref _wsCurrentConnections);
+                    UpdateWsGauges();
+                    reservedWsSlot = false;
+                }
+
+                ctx.Response.StatusCode = StatusCodes.Status502BadGateway;
+                await ctx.Response.WriteAsync($"WebSocket accept failed: {ex.Message}");
+                return;
+            }
 
             // Mark active connection for this browserId to prevent mid-session recycle
             _pool.MarkConnectionStart(browserId);
@@ -537,26 +801,33 @@ public sealed class WebServerHost
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
 
             // Enrich logs with run context once available
-            using var _scopeRunCtx = WorkerService.Infrastructure.LoggingScopes.Begin(logger, runId: runId, browserId: browserId, runName: runName);
+            using var scopeRunCtx = LoggingScopes.Begin(logger, runId, browserId, runName);
 
             try
             {
                 // WS log backpressure: bounded channel + drop policy, single consumer HTTP poster
-                var logChannel = Channel.CreateBounded<(string direction, string text)>(new BoundedChannelOptions(_options.WebSocketLogChannelCapacity)
-                {
-                    SingleReader = true,
-                    SingleWriter = false,
-                    FullMode = BoundedChannelFullMode.Wait // we manage drops explicitly
-                });
-                var hubBase = _options.HubUrl?.TrimEnd('/') ?? "";
+                var logChannel = Channel.CreateBounded<(string direction, string text)>(
+                    new BoundedChannelOptions(_options.WebSocketLogChannelCapacity)
+                    {
+                        SingleReader = true,
+                        SingleWriter = false,
+                        FullMode = BoundedChannelFullMode.Wait // we manage drops explicitly
+                    });
+                var hubBase = _options.HubUrl.TrimEnd('/') ?? "";
                 var postUrl = string.IsNullOrEmpty(hubBase) ? null : $"{hubBase}/results/browser/{browserId}/commands";
-                var dropPolicyLabel = _options.WebSocketLogDropPolicy == WorkerOptions.WsDropPolicy.DropOldest ? "DropOldest" : "DropNewest";
+                var dropPolicyLabel = _options.WebSocketLogDropPolicy == WorkerOptions.WsDropPolicy.DropOldest
+                    ? "DropOldest"
+                    : "DropNewest";
 
                 void EnqueueLog(string direction, string message)
                 {
                     try
                     {
-                        if (postUrl is null) return;
+                        if (postUrl is null)
+                        {
+                            return;
+                        }
+
                         var item = (direction, message);
                         if (!logChannel.Writer.TryWrite(item))
                         {
@@ -564,16 +835,20 @@ public sealed class WebServerHost
                             {
                                 if (logChannel.Reader.TryRead(out _))
                                 {
-                                    WsLogDroppedCounter.WithLabels(_options.NodeId, direction, dropPolicyLabel, "full").Inc();
+                                    WsLogDroppedCounter.WithLabels(_options.NodeId, direction, dropPolicyLabel, "full")
+                                        .Inc();
                                 }
+
                                 if (!logChannel.Writer.TryWrite(item))
                                 {
-                                    WsLogDroppedCounter.WithLabels(_options.NodeId, direction, dropPolicyLabel, "full").Inc();
+                                    WsLogDroppedCounter.WithLabels(_options.NodeId, direction, dropPolicyLabel, "full")
+                                        .Inc();
                                 }
                             }
                             else
                             {
-                                WsLogDroppedCounter.WithLabels(_options.NodeId, direction, dropPolicyLabel, "full").Inc();
+                                WsLogDroppedCounter.WithLabels(_options.NodeId, direction, dropPolicyLabel, "full")
+                                    .Inc();
                             }
                         }
                     }
@@ -585,7 +860,11 @@ public sealed class WebServerHost
 
                 var logConsumer = Task.Run(async () =>
                 {
-                    if (postUrl is null) return;
+                    if (postUrl is null)
+                    {
+                        return;
+                    }
+
                     try
                     {
                         using var handler = new HttpClientHandler { AllowAutoRedirect = false };
@@ -599,6 +878,7 @@ public sealed class WebServerHost
                             client.DefaultRequestHeaders.Remove("x-run-id");
                             client.DefaultRequestHeaders.TryAddWithoutValidation("x-run-id", runId!);
                         }
+
                         if (!string.IsNullOrWhiteSpace(runName))
                         {
                             client.DefaultRequestHeaders.Remove("x-run-name");
@@ -611,7 +891,7 @@ public sealed class WebServerHost
                             {
                                 try
                                 {
-                                    var payload = new { text = item.text, direction = item.direction, ts = DateTime.UtcNow.ToString("O") };
+                                    var payload = new { item.text, item.direction, ts = DateTime.UtcNow.ToString("O") };
                                     var json = JsonSerializer.Serialize(payload);
                                     using var content = new StringContent(json, Encoding.UTF8, "application/json");
                                     await client.PostAsync(postUrl, content, cts.Token);
@@ -619,8 +899,9 @@ public sealed class WebServerHost
                                 catch (OperationCanceledException) { throw; }
                                 catch
                                 {
-                                    // on post failure, drop silently
-                                    WsLogDroppedCounter.WithLabels(_options.NodeId, item.direction, dropPolicyLabel, "canceled").Inc();
+                                    // on post-failure, drop silently
+                                    WsLogDroppedCounter.WithLabels(_options.NodeId, item.direction, dropPolicyLabel,
+                                        "canceled").Inc();
                                 }
                             }
                         }
@@ -636,53 +917,70 @@ public sealed class WebServerHost
                 }, cts.Token);
 
                 var lastActivity = DateTime.UtcNow;
-                void Touch() { try { lastActivity = DateTime.UtcNow; } catch { } }
+
+                void Touch()
+                {
+                    try { lastActivity = DateTime.UtcNow; }
+                    catch { }
+                }
 
                 var idleTimeout = TimeSpan.FromSeconds(_options.WebSocketIdleTimeoutSeconds);
 
                 // WS proxy backpressure: bounded channels for both directions
-                var proxyDropPolicyLabel = _options.WebSocketProxyDropPolicy == WorkerOptions.WsDropPolicy.DropOldest ? "DropOldest" : "DropNewest";
-                var c2sChannel = Channel.CreateBounded<Frame>(new BoundedChannelOptions(_options.WebSocketProxyChannelCapacity)
-                {
-                    SingleReader = true,
-                    SingleWriter = true,
-                    FullMode = BoundedChannelFullMode.Wait // we handle drops explicitly
-                });
-                var s2cChannel = Channel.CreateBounded<Frame>(new BoundedChannelOptions(_options.WebSocketProxyChannelCapacity)
-                {
-                    SingleReader = true,
-                    SingleWriter = true,
-                    FullMode = BoundedChannelFullMode.Wait
-                });
+                var proxyDropPolicyLabel = _options.WebSocketProxyDropPolicy == WorkerOptions.WsDropPolicy.DropOldest
+                    ? "DropOldest"
+                    : "DropNewest";
+                var c2sChannel = Channel.CreateBounded<Frame>(
+                    new BoundedChannelOptions(_options.WebSocketProxyChannelCapacity)
+                    {
+                        SingleReader = true,
+                        SingleWriter = true,
+                        FullMode = BoundedChannelFullMode.Wait // we handle drops explicitly
+                    });
+                var s2cChannel = Channel.CreateBounded<Frame>(
+                    new BoundedChannelOptions(_options.WebSocketProxyChannelCapacity)
+                    {
+                        SingleReader = true,
+                        SingleWriter = true,
+                        FullMode = BoundedChannelFullMode.Wait
+                    });
 
                 var dropOldestPolicy = _options.WebSocketProxyDropPolicy == WorkerOptions.WsDropPolicy.DropOldest;
 
                 bool TryEnqueue(string direction, Channel<Frame> ch, Frame item)
                 {
-                    if (ch.Writer.TryWrite(item)) return true;
+                    if (ch.Writer.TryWrite(item))
+                    {
+                        return true;
+                    }
+
                     if (dropOldestPolicy)
                     {
                         if (ch.Reader.TryRead(out _))
                         {
-                            WsProxyDroppedCounter.WithLabels(_options.NodeId, direction, proxyDropPolicyLabel, "full").Inc();
+                            WsProxyDroppedCounter.WithLabels(_options.NodeId, direction, proxyDropPolicyLabel, "full")
+                                .Inc();
                         }
+
                         if (!ch.Writer.TryWrite(item))
                         {
-                            WsProxyDroppedCounter.WithLabels(_options.NodeId, direction, proxyDropPolicyLabel, "full").Inc();
+                            WsProxyDroppedCounter.WithLabels(_options.NodeId, direction, proxyDropPolicyLabel, "full")
+                                .Inc();
                             return false;
                         }
+
                         return true;
                     }
-                    else
-                    {
-                        WsProxyDroppedCounter.WithLabels(_options.NodeId, direction, proxyDropPolicyLabel, "full").Inc();
-                        return false;
-                    }
+
+                    WsProxyDroppedCounter.WithLabels(_options.NodeId, direction, proxyDropPolicyLabel, "full").Inc();
+                    return false;
                 }
 
                 // Start readers (assemble frames, enforce limits, log text), writers forward frames
-                var t1 = PumpRead(downstream, upstream, c2sChannel, "c2s", cts.Token, msg => EnqueueLog("c2s", msg), _options.WebSocketMaxMessageBytes, Touch, TryEnqueue);
-                var t2 = PumpRead(upstream, downstream, s2cChannel, "s2c", cts.Token, msg => EnqueueLog("s2c", msg), _options.WebSocketMaxMessageBytes, Touch, TryEnqueue);
+                var t1 = PumpRead(downstream, upstream, c2sChannel, "c2s", cts.Token, msg => EnqueueLog("c2s", msg),
+                    _options.WebSocketMaxMessageBytes, Touch, TryEnqueue);
+                var t2 = PumpRead(upstream, downstream, s2cChannel, "s2c", cts.Token, msg => EnqueueLog("s2c", msg),
+                    _options.WebSocketMaxMessageBytes, Touch, TryEnqueue);
                 var w1 = ForwardWriter(c2sChannel, upstream, cts.Token);
                 var w2 = ForwardWriter(s2cChannel, downstream, cts.Token);
 
@@ -694,20 +992,37 @@ public sealed class WebServerHost
                     {
                         while (!cts.IsCancellationRequested)
                         {
-                            try { await Task.Delay(TimeSpan.FromSeconds(1), cts.Token); } catch { }
+                            try { await Task.Delay(TimeSpan.FromSeconds(1), cts.Token); }
+                            catch { }
 
                             // Refresh borrow_idle TTL at most once per second while connection active
                             if ((DateTime.UtcNow - lastIdleRefresh).TotalSeconds >= 1)
                             {
-                                try { await _db.KeyExpireAsync($"borrow_idle:{browserId}", borrowIdleTtl); } catch { }
+                                try { await _db.KeyExpireAsync($"borrow_idle:{browserId}", borrowIdleTtl); }
+                                catch { }
+
                                 lastIdleRefresh = DateTime.UtcNow;
                             }
 
                             if (DateTime.UtcNow - lastActivity > idleTimeout)
                             {
-                                try { await downstream.CloseAsync(WebSocketCloseStatus.NormalClosure, "Idle timeout", CancellationToken.None); } catch { }
-                                try { await upstream.CloseAsync(WebSocketCloseStatus.NormalClosure, "Idle timeout", CancellationToken.None); } catch { }
-                                try { await cts.CancelAsync(); } catch { }
+                                try
+                                {
+                                    await downstream.CloseAsync(WebSocketCloseStatus.NormalClosure, "Idle timeout",
+                                        CancellationToken.None);
+                                }
+                                catch { }
+
+                                try
+                                {
+                                    await upstream.CloseAsync(WebSocketCloseStatus.NormalClosure, "Idle timeout",
+                                        CancellationToken.None);
+                                }
+                                catch { }
+
+                                try { await cts.CancelAsync(); }
+                                catch { }
+
                                 break;
                             }
                         }
@@ -723,15 +1038,26 @@ public sealed class WebServerHost
                 catch { }
 
                 // On proxied WS close, delete TTL/idle keys so Hub can reclaim promptly
-                try { await _db.KeyDeleteAsync(RedisKeys.BorrowTtl(browserId)); } catch { }
-                try { await _db.KeyDeleteAsync($"borrow_idle:{browserId}"); } catch { }
+                try { await _db.KeyDeleteAsync(RedisKeys.BorrowTtl(browserId)); }
+                catch { }
+
+                try { await _db.KeyDeleteAsync($"borrow_idle:{browserId}"); }
+                catch { }
 
                 _pool.MarkConnectionEnd(browserId);
+
+                // Release reserved WS slot and update metrics
+                if (reservedWsSlot)
+                {
+                    Interlocked.Decrement(ref _wsCurrentConnections);
+                    UpdateWsGauges();
+                }
 
                 // On client WS disconnect, attempt to auto-return the browser to the Hub to finalize the run
                 try
                 {
-                    if (_pool.TryFindLabelByBrowserId(browserId, out var labelKey) && !string.IsNullOrWhiteSpace(labelKey))
+                    if (_pool.TryFindLabelByBrowserId(browserId, out var labelKey) &&
+                        !string.IsNullOrWhiteSpace(labelKey))
                     {
                         var hubBase = _options.HubUrl?.TrimEnd('/') ?? string.Empty;
                         if (!string.IsNullOrEmpty(hubBase))
@@ -748,6 +1074,7 @@ public sealed class WebServerHost
                                 client.DefaultRequestHeaders.Remove("x-run-id");
                                 client.DefaultRequestHeaders.TryAddWithoutValidation("x-run-id", runId!);
                             }
+
                             if (!string.IsNullOrWhiteSpace(runName))
                             {
                                 client.DefaultRequestHeaders.Remove("x-run-name");
@@ -758,8 +1085,11 @@ public sealed class WebServerHost
                             var payload = new { labelKey, browserId };
                             var json = JsonSerializer.Serialize(payload);
                             using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                            try { await client.PostAsync(url, content); }
-                            catch { /* swallow errors; cleanup is best-effort */ }
+                            try { await client.PostAsync(url, content, cts.Token); }
+                            catch
+                            {
+                                /* swallow errors; cleanup is best-effort */
+                            }
                         }
                     }
                 }
@@ -769,7 +1099,8 @@ public sealed class WebServerHost
             return;
 
 
-            static async Task PumpRead(WebSocket src, WebSocket dst, Channel<Frame> outChannel, string direction, CancellationToken ct,
+            static async Task PumpRead(WebSocket src, WebSocket dst, Channel<Frame> outChannel, string direction,
+                CancellationToken ct,
                 Action<string>? onTextMessage, int maxMessageBytes, Action? onAnyActivity,
                 Func<string, Channel<Frame>, Frame, bool> tryEnqueue)
             {
@@ -789,17 +1120,31 @@ public sealed class WebServerHost
                                 src.CloseStatusDescription, ct);
                         }
                         catch { }
+
                         break;
                     }
 
                     // Track aggregated message size across frames without allowing integer overflow
-                    if (result.Count < 0 || (maxMessageBytes - currentMessageBytes) < result.Count)
+                    if (result.Count < 0 || maxMessageBytes - currentMessageBytes < result.Count)
                     {
                         // Close both ends due to MessageTooBig
-                        try { await src.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message too large", CancellationToken.None); } catch { }
-                        try { await dst.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message too large", CancellationToken.None); } catch { }
+                        try
+                        {
+                            await src.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message too large",
+                                CancellationToken.None);
+                        }
+                        catch { }
+
+                        try
+                        {
+                            await dst.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message too large",
+                                CancellationToken.None);
+                        }
+                        catch { }
+
                         break;
                     }
+
                     currentMessageBytes += result.Count;
 
                     // Enqueue the frame to the channel (copy buffer slice)
@@ -830,11 +1175,15 @@ public sealed class WebServerHost
                                 sb.Clear();
                                 if (!string.IsNullOrWhiteSpace(full))
                                 {
-                                    try { onTextMessage?.Invoke(full); } catch { }
+                                    try { onTextMessage?.Invoke(full); }
+                                    catch { }
                                 }
                             }
                         }
-                        catch { /* ignore capture errors */ }
+                        catch
+                        {
+                            /* ignore capture errors */
+                        }
                     }
                 }
             }
@@ -849,7 +1198,8 @@ public sealed class WebServerHost
                         {
                             try
                             {
-                                await dst.SendAsync(new ArraySegment<byte>(frame.Data), frame.MessageType, frame.EndOfMessage, ct);
+                                await dst.SendAsync(new ArraySegment<byte>(frame.Data), frame.MessageType,
+                                    frame.EndOfMessage, ct);
                             }
                             catch (OperationCanceledException) { throw; }
                             catch
@@ -877,7 +1227,8 @@ public sealed class WebServerHost
                     var key = RedisKeys.NodeUpgrade(_options.NodeId);
                     if (await _db.KeyExistsAsync(key))
                     {
-                        try { await _db.KeyDeleteAsync(key); } catch { }
+                        try { await _db.KeyDeleteAsync(key); }
+                        catch { }
 
                         // Stop local direct borrows early
                         _acceptingBorrows = false;
@@ -927,8 +1278,11 @@ public sealed class WebServerHost
                         int drainSeconds;
                         try
                         {
-                            drainSeconds = int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"), out var s2)
-                                ? Math.Max(0, s2) : 30;
+                            drainSeconds =
+                                int.TryParse(Environment.GetEnvironmentVariable("WORKER_DRAIN_TIMEOUT_SECONDS"),
+                                    out var s2)
+                                    ? Math.Max(0, s2)
+                                    : 30;
                         }
                         catch { drainSeconds = 30; }
 
@@ -937,7 +1291,11 @@ public sealed class WebServerHost
                         {
                             while (DateTime.UtcNow < until)
                             {
-                                if (!_pool.HasAnyActiveConnections()) break;
+                                if (!_pool.HasAnyActiveConnections())
+                                {
+                                    break;
+                                }
+
                                 await Task.Delay(250, appCts.Token);
                             }
                         }
@@ -945,7 +1303,8 @@ public sealed class WebServerHost
 
                         if (_pool.HasAnyActiveConnections())
                         {
-                            try { _pool.KillAll(); } catch { }
+                            try { _pool.KillAll(); }
+                            catch { }
                         }
 
                         await _pool.InitializeAsync();
@@ -953,10 +1312,23 @@ public sealed class WebServerHost
                 }
                 catch { }
 
-                try { await Task.Delay(1000, appCts.Token); } catch { }
+                try { await Task.Delay(1000, appCts.Token); }
+                catch { }
             }
         }, appCts.Token);
 
-        await app.RunAsync("http://0.0.0.0:5000");
+        // Read port from the environment variable or use default
+        var httpPort = Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "http://0.0.0.0:5000";
+
+        // Link app shutdown to appCts cancellation
+        using var registration = appCts.Token.Register(() =>
+        {
+            try { app.StopAsync().GetAwaiter().GetResult(); }
+            catch { }
+        });
+
+        await app.RunAsync(httpPort);
     }
+
+    private readonly record struct Frame(byte[] Data, WebSocketMessageType MessageType, bool EndOfMessage);
 }

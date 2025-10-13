@@ -27,11 +27,6 @@ spec:
               value: "http://0.0.0.0:{{ .Values.Dashboard.service.port }}"
             - name: HUB_SIGNALR
               value: "http://{{ include "pg.hub.name" . }}:{{ .Values.hub.service.port }}/ws"
-            - name: HUB_RUNNER_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "pg.hub.name" . }}-secrets
-                  key: hub_runner_secret
           livenessProbe:
             httpGet:
               path: /health

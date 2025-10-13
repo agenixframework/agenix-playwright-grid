@@ -1,0 +1,135 @@
+# ==============================================================================
+# Agenix Playwright Grid - Worker Pool Deployment (Phase 3: Decoupled)
+# ==============================================================================
+# This file defines worker services that can be deployed independently from
+# core infrastructure. Workers connect to the Hub via external network.
+#
+# Usage:
+#   docker compose -f docker-compose.workers.yml up -d
+#   docker compose -f docker-compose.workers.yml up --scale worker-chromium=10 -d
+#   docker compose -f docker-compose.workers.yml down
+#
+# Documentation: specs/dynamic_worker_registration/phase-3-decoupled-deployment.md
+# ==============================================================================
+
+# Project name is provided via -p flag in docker compose command
+# name: agenix-reportportal-workers
+
+# ==============================================================================
+# YAML Anchors (Shared Worker Configuration)
+# ==============================================================================
+
+x-worker-common: &worker-common
+  build:
+    context: ${WORKER_BUILD_CONTEXT:-.}
+    dockerfile: worker/Dockerfile
+    args:
+      PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
+  dns:
+    - 1.1.1.1
+    - 8.8.8.8
+  environment: &worker-env-common
+    # Hub Connection (can point to remote Hub)
+    - REDIS_URL=${REDIS_URL:-redis:6379}
+    - AGENIX_HUB_URL=${AGENIX_HUB_URL:-http://hub:5000}
+
+    # Worker Authentication
+    - AGENIX_WORKER_NODE_SECRET=${AGENIX_WORKER_NODE_SECRET:-node-secret}
+    - AGENIX_WORKER_NODE_NODE_SECRET=${AGENIX_WORKER_NODE_NODE_SECRET:-node-node-secret}
+
+    # Registration Verification
+    - AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS=${AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS:-300}
+
+    # Browser Health Checks
+    - AGENIX_WORKER_HEALTH_CHECK_ENABLED=${AGENIX_WORKER_HEALTH_CHECK_ENABLED:-false}
+    - AGENIX_WORKER_HEALTH_CHECK_INTERVAL_SECONDS=${AGENIX_WORKER_HEALTH_CHECK_INTERVAL_SECONDS:-30}
+    - AGENIX_WORKER_HEALTH_CHECK_TIMEOUT_SECONDS=${AGENIX_WORKER_HEALTH_CHECK_TIMEOUT_SECONDS:-5}
+    - AGENIX_WORKER_HEALTH_CHECK_FAILURE_THRESHOLD=${AGENIX_WORKER_HEALTH_CHECK_FAILURE_THRESHOLD:-3}
+
+    # WebSocket Configuration
+    - AGENIX_WORKER_PUBLIC_WS_HOST=${AGENIX_WORKER_PUBLIC_WS_HOST:-127.0.0.1}
+
+    # Playwright Version
+    - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+
+    # NodeId intentionally NOT set - auto-generated from HOSTNAME
+  shm_size: "1gb"
+  restart: unless-stopped
+
+# ==============================================================================
+# Worker Services (Browser-Specific Pools)
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Chromium Workers (Primary browser - high demand)
+  # ============================================================================
+  worker-chromium:
+    <<: *worker-common
+    deploy:
+      replicas: ${WORKER_CHROMIUM_REPLICAS:-5}
+    ports:
+      - "${WORKER_CHROMIUM_PORT_START:-5200}-${WORKER_CHROMIUM_PORT_END:-5299}:5000"
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis:6379}
+      - AGENIX_HUB_URL=${AGENIX_HUB_URL:-http://hub:5000}
+      - AGENIX_WORKER_NODE_SECRET=${AGENIX_WORKER_NODE_SECRET:-node-secret}
+      - AGENIX_WORKER_NODE_NODE_SECRET=${AGENIX_WORKER_NODE_NODE_SECRET:-node-node-secret}
+      - AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS=${AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS:-300}
+      # NOTE: PUBLIC_WS_HOST/PORT are NOT set - workers use internal container networking
+      # Docker port mapping (5200-5299:5000) is only for external access/testing
+      # In production, clients should connect through Hub proxy, not directly to workers
+      - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+      - AGENIX_WORKER_POOL_CONFIG=${AGENIX_WORKER_CHROMIUM_POOL_CONFIG:-AppB:Chromium:UAT=3}
+      - AGENIX_WORKER_CHROMIUM_ARGS=${AGENIX_WORKER_CHROMIUM_ARGS:---disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb}
+
+  # ============================================================================
+  # Firefox Workers (Standards compliance - medium demand)
+  # ============================================================================
+  worker-firefox:
+    <<: *worker-common
+    deploy:
+      replicas: ${WORKER_FIREFOX_REPLICAS:-3}
+    ports:
+      - "${WORKER_FIREFOX_PORT_START:-5300}-${WORKER_FIREFOX_PORT_END:-5399}:5000"
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis:6379}
+      - AGENIX_HUB_URL=${AGENIX_HUB_URL:-http://hub:5000}
+      - AGENIX_WORKER_NODE_SECRET=${AGENIX_WORKER_NODE_SECRET:-node-secret}
+      - AGENIX_WORKER_NODE_NODE_SECRET=${AGENIX_WORKER_NODE_NODE_SECRET:-node-node-secret}
+      - AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS=${AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS:-300}
+      # NOTE: PUBLIC_WS_HOST/PORT are NOT set - workers use internal container networking
+      - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+      - AGENIX_WORKER_POOL_CONFIG=${AGENIX_WORKER_FIREFOX_POOL_CONFIG:-AppB:Firefox:UAT=2}
+      - AGENIX_WORKER_FIREFOX_ARGS=${AGENIX_WORKER_FIREFOX_ARGS:---no-sandbox}
+
+  # ============================================================================
+  # WebKit Workers (iOS/Safari testing - low demand)
+  # ============================================================================
+  worker-webkit:
+    <<: *worker-common
+    deploy:
+      replicas: ${WORKER_WEBKIT_REPLICAS:-2}
+    ports:
+      - "${WORKER_WEBKIT_PORT_START:-5400}-${WORKER_WEBKIT_PORT_END:-5499}:5000"
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis:6379}
+      - AGENIX_HUB_URL=${AGENIX_HUB_URL:-http://hub:5000}
+      - AGENIX_WORKER_NODE_SECRET=${AGENIX_WORKER_NODE_SECRET:-node-secret}
+      - AGENIX_WORKER_NODE_NODE_SECRET=${AGENIX_WORKER_NODE_NODE_SECRET:-node-node-secret}
+      - AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS=${AGENIX_WORKER_REGISTRATION_VERIFICATION_INTERVAL_SECONDS:-300}
+      # NOTE: PUBLIC_WS_HOST/PORT are NOT set - workers use internal container networking
+      - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
+      - AGENIX_WORKER_POOL_CONFIG=${AGENIX_WORKER_WEBKIT_POOL_CONFIG:-AppB:Webkit:UAT=2}
+      - AGENIX_WORKER_WEBKIT_ARGS=${AGENIX_WORKER_WEBKIT_ARGS:---no-sandbox}
+
+# ==============================================================================
+# Network Configuration
+# ==============================================================================
+# Connect to external network created by core infrastructure
+# This enables workers to communicate with Hub, Redis, and other core services
+
+networks:
+  default:
+    name: agenix-reportportal-network
+    external: true

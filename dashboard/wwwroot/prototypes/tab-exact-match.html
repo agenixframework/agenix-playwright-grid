@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Exact Tab Styling Match</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      padding: 40px 20px;
+      background: #fafafa;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      color: #333;
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .demo-section {
+      background: white;
+      padding: 30px;
+      margin-bottom: 30px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .demo-section h2 {
+      font-size: 16px;
+      margin-bottom: 20px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .demo-section p {
+      color: #64748b;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    /* EXACT CSS FROM SCREENSHOT */
+    .view-tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-right: auto;
+      background: #f1f5f9;
+      padding: 0.25rem;
+      border-radius: 8px;
+    }
+
+    .view-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: #64748b;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .view-tab.active {
+      background: #ffffff;
+      color: #667eea;
+      box-shadow: 0 1px 3px rgba(102, 126, 234, 0.15), 0 1px 2px rgba(102, 126, 234, 0.1);
+    }
+
+    .view-tab:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .view-tab svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    /* Apply same to main tabs */
+    .main-tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-right: auto;
+      background: #f1f5f9;
+      padding: 0.25rem;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+
+    .main-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: #64748b;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .main-tab.active {
+      background: #ffffff;
+      color: #667eea;
+      box-shadow: 0 1px 3px rgba(102, 126, 234, 0.15), 0 1px 2px rgba(102, 126, 234, 0.1);
+    }
+
+    .main-tab:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .main-tab svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .content-area {
+      padding: 30px;
+      background: #fafafa;
+      border-radius: 8px;
+      min-height: 250px;
+    }
+
+    .content-area h3 {
+      color: #333;
+      font-size: 20px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+
+    .content-area p {
+      color: #64748b;
+      line-height: 1.8;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+
+    .comparison-box {
+      padding: 25px;
+      background: #fafafa;
+      border-radius: 10px;
+      border: 2px solid #e5e7eb;
+    }
+
+    .comparison-box h3 {
+      font-size: 14px;
+      margin-bottom: 15px;
+      color: #667eea;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .label {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #667eea;
+      color: white;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .feature-list li {
+      padding: 12px;
+      background: white;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      border-left: 3px solid #667eea;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .feature-list li strong {
+      color: #667eea;
+    }
+
+    @media (max-width: 900px) {
+      .comparison {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🎯 Exact Tab Styling Match</h1>
+
+  <div class="demo-section">
+    <h2>📌 Original Reference (List view / History)</h2>
+    <p>This is the exact styling from your screenshot:</p>
+
+    <div class="view-tabs">
+      <button class="view-tab active">
+        <svg viewBox="0 0 18 20" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M11.815 2A2.99 2.99 0 0 0 9 0a2.99 2.99 0 0 0-2.815 2H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4.185zM9 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm2 14H4v-2h7v2zm3-4H4v-2h10v2zM4 9V7h10v2H4z"/>
+        </svg>
+        List view
+      </button>
+      <button class="view-tab">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/>
+          <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/>
+        </svg>
+        History
+      </button>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>✨ Applied to Main Tabs (5 tabs)</h2>
+    <span class="label">Interactive Demo</span>
+    <p>Click on the tabs below to see the exact styling applied to the main navigation:</p>
+
+    <div class="main-tabs" id="demo-tabs">
+      <button class="main-tab active" data-tab="logs">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 3a5 5 0 0 0 0 10h6a5 5 0 0 0 0-10H5zm6 9a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>
+        </svg>
+        Execution Logs
+      </button>
+      <button class="main-tab" data-tab="artifacts">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/>
+        </svg>
+        Artifacts
+      </button>
+      <button class="main-tab" data-tab="details">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+          <path
+            d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+        </svg>
+        Run Details
+      </button>
+      <button class="main-tab" data-tab="history">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M8.515 1.019A7 7 0 0 0 8 1V0a8 8 0 0 1 .589.022l-.074.997zm2.004.45a7.003 7.003 0 0 0-.985-.299l.219-.976c.383.086.76.2 1.126.342l-.36.933zm1.37.71a7.01 7.01 0 0 0-.439-.27l.493-.87a8.025 8.025 0 0 1 .979.654l-.615.789a6.996 6.996 0 0 0-.418-.302zm1.834 1.79a6.99 6.99 0 0 0-.653-.796l.724-.69c.27.285.52.59.747.91l-.818.576zm.744 1.352a7.08 7.08 0 0 0-.214-.468l.893-.45a7.976 7.976 0 0 1 .45 1.088l-.95.313a7.023 7.023 0 0 0-.179-.483zm.53 2.507a6.991 6.991 0 0 0-.1-1.025l.985-.17c.067.386.106.778.116 1.17l-1 .025zm-.131 1.538c.033-.17.06-.339.081-.51l.993.123a7.957 7.957 0 0 1-.23 1.155l-.964-.267c.046-.165.086-.332.12-.501zm-.952 2.379c.184-.29.346-.594.486-.908l.914.405c-.16.36-.345.706-.555 1.038l-.845-.535zm-.964 1.205c.122-.122.239-.248.35-.378l.758.653a8.073 8.073 0 0 1-.401.432l-.707-.707z"/>
+          <path d="M8 1a7 7 0 1 0 4.95 11.95l.707.707A8.001 8.001 0 1 1 8 0v1z"/>
+          <path
+            d="M7.5 3a.5.5 0 0 1 .5.5v5.21l3.248 1.856a.5.5 0 0 1-.496.868l-3.5-2A.5.5 0 0 1 7 9V3.5a.5.5 0 0 1 .5-.5z"/>
+        </svg>
+        Execution History
+      </button>
+      <button class="main-tab" data-tab="commands">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+        </svg>
+        API Commands
+      </button>
+    </div>
+
+    <div class="content-area" id="content">
+      <h3>Execution Logs</h3>
+      <p>This tab displays all execution logs, test cases, and detailed step-by-step information about the test run.
+        Click on different tabs above to see the exact styling in action.</p>
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>📋 CSS Properties Used</h2>
+    <ul class="feature-list">
+      <li><strong>background: #f1f5f9</strong> - Light slate gray container background</li>
+      <li><strong>padding: 0.25rem</strong> - Tight padding around tabs (4px)</li>
+      <li><strong>gap: 0.25rem</strong> - Small gap between tabs (4px)</li>
+      <li><strong>border-radius: 8px</strong> - Rounded container corners</li>
+      <li><strong>color: #667eea (active)</strong> - Purple-blue for active tab text</li>
+      <li><strong>color: #64748b (inactive)</strong> - Slate gray for inactive tabs</li>
+      <li><strong>box-shadow</strong> - Subtle purple-tinted shadow for active tab</li>
+      <li><strong>transition: all 0.2s ease</strong> - Smooth state changes</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('.main-tab');
+  const content = document.getElementById('content');
+
+  const contentData = {
+    logs: {
+      title: 'Execution Logs',
+      text: 'This tab displays all execution logs, test cases, and detailed step-by-step information about the test run. Click on different tabs above to see the exact styling in action.'
+    },
+    artifacts: {
+      title: 'Artifacts',
+      text: 'View and download screenshots, videos, traces, and other files attached to your test runs. All artifacts are stored and organized by test case.'
+    },
+    details: {
+      title: 'Run Details',
+      text: 'Comprehensive information about the test run including environment details, browser version, operating system, configuration, and metadata.'
+    },
+    history: {
+      title: 'Execution History',
+      text: 'Timeline view showing all previous executions of this test with historical results, trends, and performance metrics over time.'
+    },
+    commands: {
+      title: 'API Commands',
+      text: 'Detailed log of all API commands and protocol messages exchanged during test execution. Useful for debugging and understanding test behavior.'
+    }
+  };
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      const tabKey = tab.dataset.tab;
+      const data = contentData[tabKey];
+      content.innerHTML = `<h3>${data.title}</h3><p>${data.text}</p>`;
+    });
+  });
+</script>
+</body>
+</html>

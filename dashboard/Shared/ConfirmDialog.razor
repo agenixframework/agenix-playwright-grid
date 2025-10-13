@@ -1,7 +1,9 @@
+@namespace Dashboard.Shared
 @* Reusable confirmation dialog component using pure Razor/Bootstrap markup (no browser-native confirm). *@
 @if (_visible)
 {
-    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle" style="background-color: rgba(0, 0, 0, 0.5);">
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+         aria-labelledby="confirmDialogTitle" style="background-color: rgba(0, 0, 0, 0.5);">
         <div class="modal-dialog modal-dialog-centered" role="document" @onkeydown="OnKeyDown">
             <div class="modal-content">
                 <div class="modal-header">
@@ -76,4 +78,5 @@
         _tcs = null;
         tcs?.TrySetResult(false);
     }
+
 }

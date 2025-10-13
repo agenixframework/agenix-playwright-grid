@@ -1,0 +1,193 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/agenixframework/agenix-playwright-grid/main/PlaywrightGrid.schema.json",
+  "title": "Agenix PlaywrightGrid Configuration",
+  "description": "Configuration file for Agenix PlaywrightGrid client library",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path to this JSON schema file"
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Enable or disable PlaywrightGrid client functionality",
+      "default": true
+    },
+    "server": {
+      "type": "object",
+      "description": "Hub server connection settings",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Base URL of the PlaywrightGrid Hub server",
+          "format": "uri",
+          "examples": [
+            "https://grid.example.com",
+            "http://localhost:5001"
+          ]
+        },
+        "project": {
+          "type": "string",
+          "description": "Project key for organizing test results",
+          "examples": [
+            "default_project",
+            "my-app-tests"
+          ]
+        },
+        "apiKey": {
+          "type": "string",
+          "description": "API key for authentication with the Hub",
+          "format": "uuid",
+          "examples": [
+            "aa19555c-c9ce-42eb-bb11-87757225d535"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "project"
+      ]
+    },
+    "launch": {
+      "type": "object",
+      "description": "Default launch configuration (test session level)",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Default name for launches",
+          "examples": [
+            "Regression Suite",
+            "Nightly Tests"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Default description for launches",
+          "examples": [
+            "Daily regression test suite",
+            "End-to-end functional tests"
+          ]
+        },
+        "attributes": {
+          "type": "array",
+          "description": "Default attributes/tags for launches",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "env:production",
+              "region:us-east",
+              "platform:x64"
+            ]
+          ]
+        }
+      }
+    },
+    "suite": {
+      "type": "object",
+      "description": "Default suite configuration (test feature/class level)",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Default name for suites",
+          "examples": [
+            "Login Tests",
+            "Shopping Cart Feature"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Default description for suites"
+        },
+        "attributes": {
+          "type": "array",
+          "description": "Default attributes/tags for suites",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "testRun": {
+      "type": "object",
+      "description": "Default test run configuration (individual test level)",
+      "properties": {
+        "defaultLabelKey": {
+          "type": "string",
+          "description": "Default label key for browser selection. Format: App:Browser:Environment:Region:OS",
+          "pattern": "^[^:]+:[^:]+:[^:]+.*$",
+          "examples": [
+            "MyApp:Chromium:UAT:US-East",
+            "AppB:Firefox:Production:EU-West:Linux",
+            "WebApp:WebKit:Staging:US-West"
+          ]
+        },
+        "attributes": {
+          "type": "array",
+          "description": "Default attributes/tags for test runs",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "smoke",
+              "regression",
+              "priority:high"
+            ]
+          ]
+        }
+      }
+    },
+    "timeout": {
+      "type": "object",
+      "description": "HTTP client timeout settings",
+      "properties": {
+        "seconds": {
+          "type": "integer",
+          "description": "HTTP request timeout in seconds",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 300
+        }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "description": "HTTP client retry settings",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "Number of retry attempts for failed requests",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 10
+        },
+        "delaySeconds": {
+          "type": "integer",
+          "description": "Base delay between retries in seconds (uses exponential backoff)",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 30
+        }
+      }
+    },
+    "concurrency": {
+      "type": "object",
+      "description": "Concurrency settings",
+      "properties": {
+        "maxConcurrentRequests": {
+          "type": "integer",
+          "description": "Maximum number of concurrent HTTP requests",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    }
+  },
+  "required": [
+    "server"
+  ]
+}

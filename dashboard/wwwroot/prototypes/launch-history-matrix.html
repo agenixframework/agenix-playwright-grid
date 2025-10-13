@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Launch History Matrix - Elegant Prototype</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #667eea;
+      --primary-dark: #5568d3;
+      --success-light: #d4edda;
+      --success-border: #c3e6cb;
+      --danger-light: #f8d7da;
+      --danger-border: #f5c6cb;
+      --white-bg: #ffffff;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-900: #111827;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --transition: all 0.2s ease;
+    }
+
+    body {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .page-header {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .page-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .page-subtitle {
+      color: var(--gray-600);
+      font-size: 0.95rem;
+    }
+
+    .controls-card {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--gray-200);
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label {
+      font-weight: 600;
+      color: var(--gray-700);
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      min-width: 120px;
+    }
+
+    .form-control, .form-select {
+      border-radius: 8px;
+      border: 1px solid var(--gray-300);
+      transition: var(--transition);
+      font-size: 0.875rem;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-select option {
+      padding: 0.5rem;
+    }
+
+    .btn-custom {
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-weight: 500;
+      transition: var(--transition);
+      border: 1px solid var(--gray-300);
+      background: white;
+      color: var(--gray-700);
+    }
+
+    .btn-custom:hover {
+      background: var(--gray-50);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary-custom {
+      background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
+      border: none;
+      color: white;
+    }
+
+    .btn-primary-custom:hover {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, #6a3f8f 100%);
+      color: white;
+    }
+
+    .matrix-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--gray-200);
+      max-height: 70vh;
+      overflow: auto;
+      position: relative;
+    }
+
+    .matrix-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 900px;
+    }
+
+    .matrix-table th {
+      background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
+      color: white;
+      padding: 0.5rem 0.625rem;
+      font-weight: 600;
+      text-align: center;
+      font-size: 0.813rem;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 2px solid var(--primary-dark);
+    }
+
+    .matrix-table th:first-child {
+      text-align: left;
+      position: sticky;
+      left: 0;
+      z-index: 20;
+      border-right: 2px solid var(--primary-dark);
+      min-width: 180px;
+    }
+
+    .matrix-table td {
+      padding: 0.375rem 0.5rem;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: middle;
+      transition: var(--transition);
+      text-align: center;
+    }
+
+    .matrix-table td:first-child {
+      position: sticky;
+      left: 0;
+      background: white;
+      z-index: 5;
+      border-right: 1px solid var(--gray-200);
+      text-align: left;
+    }
+
+    .matrix-table tbody tr:hover {
+      background: var(--gray-50);
+    }
+
+    .matrix-table tbody tr:hover td:first-child {
+      background: var(--gray-50);
+    }
+
+    .suite-name {
+      font-weight: 500;
+      color: var(--primary-color);
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.875rem;
+    }
+
+    .suite-name:hover {
+      color: var(--primary-dark);
+      text-decoration: underline;
+    }
+
+    .suite-name i {
+      font-size: 0.875rem;
+    }
+
+    .cell-content {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+      min-height: 28px;
+    }
+
+    .cell-passed {
+      background: var(--success-light);
+      cursor: pointer;
+    }
+
+    .cell-passed:hover {
+      background: #c3e6cb;
+    }
+
+    .cell-failed {
+      background: var(--danger-light);
+      cursor: pointer;
+    }
+
+    .cell-failed:hover {
+      background: #f5c6cb;
+    }
+
+    .cell-mixed {
+      background: #fff3cd;
+      cursor: pointer;
+    }
+
+    .cell-mixed:hover {
+      background: #ffe69c;
+    }
+
+    .cell-empty {
+      background: var(--gray-100);
+      position: relative;
+      color: var(--gray-400);
+    }
+
+    .empty-icon {
+      font-size: 1.125rem;
+      opacity: 0.4;
+    }
+
+    .launch-header-cell {
+      position: relative;
+    }
+
+    .launch-number {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.125rem;
+      font-size: 0.813rem;
+    }
+
+    .launch-meta {
+      font-size: 0.688rem;
+      opacity: 0.85;
+    }
+
+    /* Tooltip for cells */
+    .matrix-table td[data-tooltip] {
+      position: relative;
+    }
+
+    .matrix-table td[data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--gray-900);
+      color: white;
+      padding: 0.375rem 0.625rem;
+      border-radius: 6px;
+      white-space: nowrap;
+      font-size: 0.75rem;
+      z-index: 1000;
+      box-shadow: var(--shadow-lg);
+      margin-bottom: 4px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-400);
+      pointer-events: none;
+    }
+
+    .input-with-icon {
+      padding-left: 2.5rem;
+    }
+
+    .position-relative {
+      position: relative;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 1rem;
+      }
+
+      .page-header {
+        padding: 1.5rem;
+      }
+
+      .control-group {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .control-label {
+        min-width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container-fluid">
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">
+      <i class="bi bi-calendar3-range"></i> Launch History Matrix
+    </h1>
+    <p class="page-subtitle">
+      Track test suite results across recent launches with an elegant visual matrix
+    </p>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-card">
+    <div class="control-group">
+                <span class="control-label">
+                    <i class="bi bi-funnel"></i> Refine:
+                </span>
+      <div class="position-relative flex-grow-1">
+        <i class="bi bi-search search-icon"></i>
+        <input class="form-control input-with-icon" id="suiteFilter" placeholder="Filter by suite name..." type="text">
+      </div>
+      <button class="btn btn-custom">
+        <i class="bi bi-three-dots-vertical"></i> More
+      </button>
+    </div>
+
+    <div class="control-group">
+                <span class="control-label">
+                    <i class="bi bi-clock-history"></i> History Depth:
+                </span>
+      <select class="form-select" id="historyDepth" style="max-width: 120px;">
+        <option value="3">3</option>
+        <option value="5">5</option>
+        <option selected value="10">10</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+        <option value="25">25</option>
+        <option value="30">30</option>
+      </select>
+
+      <span class="control-label ms-3">
+                    <i class="bi bi-filter-circle"></i> Launch Filter:
+                </span>
+      <select class="form-select flex-grow-1" id="baseLaunch">
+        <option selected value="all">All launches</option>
+        <option value="same-name">Launches with the same name</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Matrix Table -->
+  <div class="matrix-container">
+    <table class="matrix-table">
+      <thead>
+      <tr>
+        <th style="min-width: 200px;">
+          <i class="bi bi-collection"></i> Suite Name
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #10</span>
+          <span class="launch-meta">2 hours ago</span>
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #9</span>
+          <span class="launch-meta">5 hours ago</span>
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #8</span>
+          <span class="launch-meta">8 hours ago</span>
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #7</span>
+          <span class="launch-meta">1 day ago</span>
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #6</span>
+          <span class="launch-meta">1 day ago</span>
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #5</span>
+          <span class="launch-meta">2 days ago</span>
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #4</span>
+          <span class="launch-meta">2 days ago</span>
+        </th>
+        <th class="launch-header-cell">
+          <span class="launch-number">Launch #3</span>
+          <span class="launch-meta">3 days ago</span>
+        </th>
+      </tr>
+      </thead>
+      <tbody>
+      <!-- Row 1: Suite with retries -->
+      <tr data-suite="Suite with retries">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-repeat"></i>
+            Suite with retries
+          </div>
+        </td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-failed" data-tooltip="1 test failed"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-failed" data-tooltip="1 test failed"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+      </tr>
+
+      <!-- Row 2: Suite with nested steps -->
+      <tr data-suite="Suite with nested steps">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-diagram-3"></i>
+            Suite with nested steps
+          </div>
+        </td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+        <td class="cell-mixed" data-tooltip="Mixed results"></td>
+      </tr>
+
+      <!-- Row 3: Filtering Launch Tests -->
+      <tr data-suite="Filtering Launch Tests">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-funnel-fill"></i>
+            Filtering Launch Tests
+          </div>
+        </td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-mixed" data-tooltip="3 tests: 1 skipped, 1 timeout, 1 aborted"></td>
+        <td class="cell-mixed" data-tooltip="4 tests: 2 skipped, 1 timeout, 1 aborted"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-mixed" data-tooltip="1 test skipped"></td>
+      </tr>
+
+      <!-- Row 4: Launch tests -->
+      <tr data-suite="Launch tests">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-rocket-takeoff"></i>
+            Launch tests
+          </div>
+        </td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-mixed" data-tooltip="2 tests: 1 timeout, 1 aborted"></td>
+        <td class="cell-failed" data-tooltip="3 tests: failures detected"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+      </tr>
+
+      <!-- Row 5: Test entity tests -->
+      <tr data-suite="Test entity tests">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-puzzle"></i>
+            Test entity tests
+          </div>
+        </td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-mixed" data-tooltip="3 tests: failures detected"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+      </tr>
+
+      <!-- Row 6: Permission tests -->
+      <tr data-suite="Permission tests">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-shield-lock"></i>
+            Permission tests
+          </div>
+        </td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-mixed" data-tooltip="2 tests: 1 passed, 1 timeout"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+      </tr>
+
+      <!-- Row 7: beforeSuite -->
+      <tr data-suite="beforeSuite">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-arrow-bar-up"></i>
+            beforeSuite
+          </div>
+        </td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-failed" data-tooltip="Test failed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+        <td class="cell-failed" data-tooltip="Test failed"></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+      </tr>
+
+      <!-- Row 8: Sharing tests -->
+      <tr data-suite="Sharing tests">
+        <td>
+          <div class="suite-name">
+            <i class="bi bi-share"></i>
+            Sharing tests
+          </div>
+        </td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-empty"><i class="bi bi-dash-lg empty-icon"></i></td>
+        <td class="cell-passed" data-tooltip="All tests passed"></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Suite name filtering
+  document.getElementById('suiteFilter').addEventListener('input', function (e) {
+    const filterValue = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll('tbody tr');
+
+    rows.forEach(row => {
+      const suiteName = row.getAttribute('data-suite').toLowerCase();
+      if (suiteName.includes(filterValue)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
+
+  // History depth change
+  document.getElementById('historyDepth').addEventListener('change', function (e) {
+    console.log('History depth changed to:', e.target.value);
+    // In a real implementation, this would trigger an API call to fetch more data
+  });
+
+  // Base launch change
+  document.getElementById('baseLaunch').addEventListener('change', function (e) {
+    console.log('Base launch changed to:', e.target.value);
+    // In a real implementation, this would filter the launches displayed
+  });
+
+  // Add click handlers to suite names for navigation
+  document.querySelectorAll('.suite-name').forEach(element => {
+    element.addEventListener('click', function () {
+      const suiteName = this.textContent.trim();
+      console.log('Clicked suite:', suiteName);
+      // In a real implementation, this would navigate to the suite details page
+    });
+  });
+
+  // Add click handlers to result cells
+  document.querySelectorAll('.cell-passed, .cell-failed, .cell-mixed').forEach(cell => {
+    cell.addEventListener('click', function (e) {
+      const tooltip = this.getAttribute('data-tooltip');
+      console.log('Clicked cell:', tooltip);
+      // In a real implementation, this would show detailed test results
+    });
+  });
+</script>
+</body>
+</html>

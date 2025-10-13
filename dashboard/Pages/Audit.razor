@@ -1,13 +1,233 @@
 @page "/audit"
-@using System.Net.Http.Json
-@using Dashboard.Application
+@using System.Text.Json
+@namespace Dashboard.Pages
 @inject IHttpClientFactory HttpFactory
 @inject IConfiguration Config
 
-<div class="d-flex align-items-center my-3">
-    <h3 class="mb-0">Audit</h3>
-    <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Reload">Refresh</button>
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                    d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/>
+                <path
+                    d="M5.5 3.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5zM6 5a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H6zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H6z"/>
+                <path d="M11.854 10.146a.5.5 0 0 0-.708.708l1 1a.5.5 0 0 0 .708-.708l-1-1z"/>
+                <circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1" fill="none"/>
+            </svg>
+        </div>
+        <div>
+            <h3>Audit</h3>
+            <div class="subtitle">View system audit logs and activity history</div>
+        </div>
+    </div>
+    <button class="elegant-btn elegant-btn-secondary" @onclick="Reload">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+            <path
+                d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+        </svg>
+        Refresh
+    </button>
 </div>
+
+<style>
+    .elegant-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .elegant-btn-secondary {
+        background: white;
+        color: #6b7280;
+        border: 2px solid #e5e7eb;
+    }
+
+    .elegant-btn-secondary:hover {
+        background: #f9fafb;
+        border-color: #d1d5db;
+    }
+
+    .elegant-btn svg {
+        flex-shrink: 0;
+    }
+
+    .filters-card {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .filter-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .filter-input, .filter-select {
+        width: 100%;
+        padding: 0.625rem 0.875rem;
+        font-size: 0.9rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        background: white;
+    }
+
+    .filter-input:focus, .filter-select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .elegant-btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .elegant-btn-primary:hover {
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        transform: translateY(-1px);
+    }
+
+    .audit-table-container {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 1.5rem;
+    }
+
+    .audit-table {
+        margin: 0;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .audit-table thead {
+        background: var(--surface-alt);
+    }
+
+    .audit-table thead th {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--brand-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .audit-table tbody td {
+        padding: 1rem 1.25rem;
+        vertical-align: top;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 0.875rem;
+    }
+
+    .audit-table tbody tr {
+        transition: background var(--transition-fast);
+    }
+
+    .audit-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    .audit-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .severity-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.625rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        border-radius: 12px;
+    }
+
+    .severity-error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .severity-warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .severity-info {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .category-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.625rem;
+        background: #f3f4f6;
+        color: var(--brand-text);
+        font-size: 0.8rem;
+        font-weight: 500;
+        border-radius: var(--radius);
+        border: 1px solid #e5e7eb;
+    }
+
+    .details-content {
+        font-size: 0.8rem;
+        color: var(--brand-muted);
+        line-height: 1.6;
+    }
+
+    .details-content .detail-key {
+        color: var(--brand-text);
+        font-weight: 600;
+    }
+
+
+    .empty-state-audit {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+
+    .empty-state-audit svg {
+        color: var(--brand-muted);
+        opacity: 0.3;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state-audit h4 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--brand-text);
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state-audit p {
+        font-size: 0.95rem;
+        color: var(--brand-muted);
+    }
+</style>
 
 @if (_error is not null)
 {
@@ -15,50 +235,60 @@
 }
 else if (_items is null)
 {
-    <div class="alert alert-info">Loading...</div>
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="mt-3 text-muted">Loading audit logs...</div>
+    </div>
 }
 else
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="row g-2 align-items-end">
-                <div class="col-12 col-md-3">
-                    <label class="form-label">Category</label>
-                    <select class="form-select" @bind="_category">
-                        <option value="">All</option>
-                        <option value="node">node</option>
-                        <option value="secrets">secrets</option>
-                        <option value="admin">admin</option>
-                    </select>
-                </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label">Action</label>
-                    <input class="form-control" placeholder="e.g., register.success" @bind="_action"/>
-                </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label">Since (UTC, ISO-8601)</label>
-                    <input class="form-control" placeholder="e.g., 2025-09-01T00:00:00Z" @bind="_since"/>
-                </div>
-                <div class="col-6 col-md-1">
-                    <label class="form-label">Take</label>
-                    <input class="form-control" type="number" min="1" max="500" @bind="_take"/>
-                </div>
-                <div class="col-6 col-md-2 d-grid">
-                    <button class="btn btn-primary" @onclick="ApplyFilters">Apply</button>
-                </div>
+    <div class="filters-card">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-3">
+                <label class="filter-label">Category</label>
+                <select class="filter-select" @bind="_category">
+                    <option value="">All Categories</option>
+                    <option value="node">Node</option>
+                    <option value="secrets">Secrets</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="filter-label">Action</label>
+                <input class="filter-input" placeholder="e.g., register.success" @bind="_action"/>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="filter-label">Since (UTC, ISO-8601)</label>
+                <input class="filter-input" placeholder="e.g., 2025-09-01T00:00:00Z" @bind="_since"/>
+            </div>
+            <div class="col-6 col-md-1">
+                <label class="filter-label">Take</label>
+                <input class="filter-input" type="number" min="1" max="500" @bind="_take"/>
+            </div>
+            <div class="col-6 col-md-2">
+                <button class="elegant-btn elegant-btn-primary w-100" @onclick="ApplyFilters">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                         viewBox="0 0 16 16">
+                        <path
+                            d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                    </svg>
+                    Apply Filters
+                </button>
             </div>
         </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-sm">
+    <div class="audit-table-container">
+        <table class="audit-table">
             <thead>
             <tr>
-                <th style="width: 220px;">Timestamp (UTC)</th>
+                <th style="width: 200px;">Timestamp (UTC)</th>
                 <th>Category</th>
                 <th>Action</th>
                 <th>Actor</th>
-                <th>IP</th>
+                <th>IP Address</th>
                 <th>Severity</th>
                 <th>Details</th>
             </tr>
@@ -66,30 +296,50 @@ else
             <tbody>
             @if (_items.Count == 0)
             {
-                <tr><td colspan="7" class="text-muted">No entries</td></tr>
+                <tr>
+                    <td colspan="7">
+                        <div class="empty-state-audit">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor"
+                                 viewBox="0 0 16 16">
+                                <path
+                                    d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/>
+                            </svg>
+                            <h4>No audit entries found</h4>
+                            <p>Try adjusting your filters or check back later</p>
+                        </div>
+                    </td>
+                </tr>
             }
             else
             {
                 @foreach (var e in _items)
                 {
                     <tr>
-                        <td>@e.TimestampUtc.ToString("u")</td>
-                        <td>@e.Category</td>
-                        <td>@e.Action</td>
-                        <td>@(e.Actor ?? "-")</td>
-                        <td>@(e.RemoteIp ?? "-")</td>
-                        <td><span class="badge @SeverityToClass(e.Severity)">@e.Severity</span></td>
+                        <td>
+                            <div style="font-weight: 500;">@e.TimestampUtc.ToString("yyyy-MM-dd")</div>
+                            <div
+                                style="font-size: 0.8rem; color: var(--brand-muted);">@e.TimestampUtc.ToString("HH:mm:ss")</div>
+                        </td>
+                        <td><span class="category-badge">@e.Category</span></td>
+                        <td style="font-family: monospace; font-size: 0.85rem;">@e.Action</td>
+                        <td>@(e.Actor ?? "—")</td>
+                        <td style="font-family: monospace; font-size: 0.85rem;">@(e.RemoteIp ?? "—")</td>
+                        <td>
+                            <span class="severity-badge @GetSeverityClass(e.Severity)">
+                                @(e.Severity ?? "Info")
+                            </span>
+                        </td>
                         <td>
                             @if (e.Details is null || e.Details.Count == 0)
                             {
-                                <span class="text-muted">-</span>
+                                <span class="text-muted">—</span>
                             }
                             else
                             {
-                                <div class="small text-muted">
+                                <div class="details-content">
                                     @foreach (var kv in e.Details)
                                     {
-                                        <div><span class="text-dark">@kv.Key</span>: @kv.Value</div>
+                                        <div><span class="detail-key">@kv.Key:</span> @kv.Value</div>
                                     }
                                 </div>
                             }
@@ -101,11 +351,12 @@ else
         </table>
     </div>
 
-    <div class="d-flex align-items-center gap-2 my-2">
-        <button class="btn btn-sm btn-outline-secondary" @onclick="Prev" disabled="@(_skip==0)">Prev</button>
-        <span class="text-muted small">Showing @(_items.Count) from offset @_skip</span>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="Next" disabled="@(_items.Count < _take)">Next</button>
-    </div>
+    <Dashboard.Shared.Pager
+        Total="@(_skip + _items.Count)"
+        Skip="@_skip"
+        Take="@_take"
+        OnPrev="@Prev"
+        OnNext="@Next"/>
 }
 
 @code {
@@ -151,45 +402,50 @@ else
         _error = null;
         try
         {
-            var client = HttpFactory.CreateClient("hub");
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
             var qs = new List<string> { $"skip={_skip}", $"take={_take}" };
             if (!string.IsNullOrWhiteSpace(_category)) qs.Add($"category={Uri.EscapeDataString(_category)}");
             if (!string.IsNullOrWhiteSpace(_action)) qs.Add($"action={Uri.EscapeDataString(_action)}");
             if (!string.IsNullOrWhiteSpace(_since)) qs.Add($"sinceUtc={Uri.EscapeDataString(_since)}");
-            var url = "/audit" + (qs.Count > 0 ? ("?" + string.Join('&', qs)) : string.Empty);
+            var url = "/audit" + (qs.Count > 0 ? "?" + string.Join('&', qs) : string.Empty);
             var resp = await client.GetAsync(url);
             if (!resp.IsSuccessStatusCode)
             {
                 _error = $"Failed to load audit: {(int)resp.StatusCode} {resp.ReasonPhrase}. " + ErrorHints.ForHttpFailure((int)resp.StatusCode, resp.ReasonPhrase);
-                _items = new();
+                _items = new List<AuditEntry>();
                 return;
             }
+
             var data = await resp.Content.ReadFromJsonAsync<List<AuditEntry>>(
-                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
-            _items = data ?? new();
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            _items = data ?? new List<AuditEntry>();
         }
         catch (Exception ex)
         {
             _error = ex.Message;
-            _items = new();
+            _items = new List<AuditEntry>();
         }
     }
 
-    private static string SeverityToClass(string? sev) => (sev ?? "Info") switch
+    private static string GetSeverityClass(string? sev)
     {
-        "Error" => "bg-danger",
-        "Warning" => "bg-warning text-dark",
-        _ => "bg-secondary"
-    };
+        return (sev ?? "Info") switch
+        {
+            "Error" => "severity-error",
+            "Warning" => "severity-warning",
+            _ => "severity-info"
+        };
+    }
 
     private sealed class AuditEntry
     {
         public DateTime TimestampUtc { get; set; }
-        public string Category { get; set; } = string.Empty;
-        public string Action { get; set; } = string.Empty;
+        public string Category { get; } = string.Empty;
+        public string Action { get; } = string.Empty;
         public string? Actor { get; set; }
         public string? RemoteIp { get; set; }
         public string? Severity { get; set; }
         public Dictionary<string, string>? Details { get; set; }
     }
+
 }

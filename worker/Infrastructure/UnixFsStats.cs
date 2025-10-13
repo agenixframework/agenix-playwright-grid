@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -26,26 +26,6 @@ namespace WorkerService.Infrastructure;
 /// </summary>
 internal static class UnixFsStats
 {
-    // ReSharper disable NotAccessedField.Local
-    // ReSharper disable InconsistentNaming
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Statvfs
-    {
-        public ulong f_bsize;   // file system block size
-        public ulong f_frsize;  // fragment size
-        public ulong f_blocks;  // size of fs in f_frsize units
-        public ulong f_bfree;   // # free blocks
-        public ulong f_bavail;  // # free blocks for unprivileged users
-        public ulong f_files;   // # inodes
-        public ulong f_ffree;   // # free inodes
-        public ulong f_favail;  // # free inodes for unprivileged users
-        public ulong f_fsid;    // file system ID
-        public ulong f_flag;    // mount flags
-        public ulong f_namemax; // maximum filename length
-    }
-    // ReSharper restore InconsistentNaming
-    // ReSharper restore NotAccessedField.Local
-
     [DllImport("libc", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern int statvfs(string path, out Statvfs buf);
 
@@ -60,7 +40,10 @@ internal static class UnixFsStats
 
         try
         {
-            if (!OperatingSystem.IsLinux()) return false;
+            if (!OperatingSystem.IsLinux())
+            {
+                return false;
+            }
 
             // Normalize early and guarantee non-null
             string full;
@@ -79,7 +62,9 @@ internal static class UnixFsStats
             while (!string.IsNullOrEmpty(probe))
             {
                 if (Directory.Exists(probe) || File.Exists(probe))
+                {
                     break;
+                }
 
                 var parent = Path.GetDirectoryName(probe);
                 if (string.IsNullOrEmpty(parent) || string.Equals(parent, probe, StringComparison.Ordinal))
@@ -87,6 +72,7 @@ internal static class UnixFsStats
                     probe = "/";
                     break;
                 }
+
                 probe = parent;
             }
 
@@ -94,7 +80,10 @@ internal static class UnixFsStats
             var effectivePath = string.IsNullOrEmpty(probe) ? "/" : probe;
 
             var rc = statvfs(effectivePath, out var st);
-            if (rc != 0) return false;
+            if (rc != 0)
+            {
+                return false;
+            }
 
             total = st.f_files;
             free = st.f_ffree;
@@ -107,4 +96,24 @@ internal static class UnixFsStats
             return false;
         }
     }
+
+    // ReSharper disable NotAccessedField.Local
+    // ReSharper disable InconsistentNaming
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Statvfs
+    {
+        public ulong f_bsize; // file system block size
+        public ulong f_frsize; // fragment size
+        public ulong f_blocks; // size of fs in f_frsize units
+        public ulong f_bfree; // # free blocks
+        public ulong f_bavail; // # free blocks for unprivileged users
+        public ulong f_files; // # inodes
+        public ulong f_ffree; // # free inodes
+        public ulong f_favail; // # free inodes for unprivileged users
+        public ulong f_fsid; // file system ID
+        public ulong f_flag; // mount flags
+        public ulong f_namemax; // maximum filename length
+    }
+    // ReSharper restore InconsistentNaming
+    // ReSharper restore NotAccessedField.Local
 }

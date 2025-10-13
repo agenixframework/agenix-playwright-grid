@@ -1,0 +1,1016 @@
+@page "/{projectKey}/members/"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using System.Text.Json
+@using Agenix.PlaywrightGrid.Domain
+@attribute [Authorize]
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Nav
+@inject ToastService Toasts
+@inject IHttpContextAccessor Accessor
+
+<link href="css/project-members.css" rel="stylesheet"/>
+
+<div class="pg-content">
+    <div class="container" style="max-width: 1600px;">
+        <div class="page-header">
+            <div class="header-content">
+                <div class="header-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                        <path fill-rule="evenodd"
+                              d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+                        <path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3>Project Members</h3>
+                    <div class="subtitle">Manage users and their roles for project @ProjectKey</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-2 align-items-center">
+                    <div class="col-12 col-md-6">
+                        <div class="input-group">
+                    <span class="input-group-text">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                        </svg>
+                    </span>
+                            <input type="text" class="form-control" placeholder="Search by name" @bind="SearchQuery"
+                                   @bind:event="oninput" @onkeyup="OnSearchKeyUp"/>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 text-end">
+                        <button class="btn btn-outline-secondary btn-sm me-2" title="Permission Map">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                 viewBox="0 0 16 16" class="me-1">
+                                <path
+                                    d="M5.338 1.59a61.44 61.44 0 0 0-2.837.856.481.481 0 0 0-.328.39c-.554 4.157.726 7.19 2.253 9.188a10.725 10.725 0 0 0 2.287 2.233c.346.244.652.42.893.533.12.057.218.095.293.118a.55.55 0 0 0 .101.025.615.615 0 0 0 .1-.025c.076-.023.174-.061.294-.118.24-.113.547-.29.893-.533a10.726 10.726 0 0 0 2.287-2.233c1.527-1.997 2.807-5.031 2.253-9.188a.48.48 0 0 0-.328-.39c-.651-.213-1.75-.56-2.837-.855C9.552 1.29 8.531 1.067 8 1.067c-.53 0-1.552.223-2.662.524zM5.072.56C6.157.265 7.31 0 8 0s1.843.265 2.928.56c1.11.3 2.229.655 2.887.87a1.54 1.54 0 0 1 1.044 1.262c.596 4.477-.787 7.795-2.465 9.99a11.775 11.775 0 0 1-2.517 2.453 7.159 7.159 0 0 1-1.048.625c-.28.132-.581.24-.829.24s-.548-.108-.829-.24a7.158 7.158 0 0 1-1.048-.625 11.777 11.777 0 0 1-2.517-2.453C1.928 10.487.545 7.169 1.141 2.692A1.54 1.54 0 0 1 2.185 1.43 62.456 62.456 0 0 1 5.072.56z"/>
+                                <path
+                                    d="M10.854 5.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7.5 7.793l2.646-2.647a.5.5 0 0 1 .708 0z"/>
+                            </svg>
+                            Permission Map
+                        </button>
+                        <button class="btn btn-primary btn-sm" @onclick="ShowInviteUser">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                 viewBox="0 0 16 16" class="me-1">
+                                <path
+                                    d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                            </svg>
+                            Invite User
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Error))
+        {
+            <div class="alert alert-danger" role="alert">@Error</div>
+        }
+
+        @* Invite User Modal *@
+        @if (InviteOpen)
+        {
+            <div class="modal-backdrop fade show" @onclick="() => InviteOpen = false"></div>
+            <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+                 aria-labelledby="inviteUserTitle">
+                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document"
+                     @onkeydown="OnInviteKeyDown" style="max-width: 540px;">
+                    <div class="modal-content elegant-modal compact-modal">
+                        <div class="elegant-modal-header compact-header">
+                            <div class="modal-icon compact-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                     viewBox="0 0 16 16">
+                                    <path
+                                        d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                                    <path fill-rule="evenodd"
+                                          d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5z"/>
+                                </svg>
+                            </div>
+                            <h5 class="modal-title" id="inviteUserTitle">Invite User</h5>
+                            <button type="button" class="elegant-close compact-close" aria-label="Close"
+                                    @onclick="() => InviteOpen = false">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                     viewBox="0 0 16 16">
+                                    <path
+                                        d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <EditForm Model="InviteModel" OnValidSubmit="CreateInviteAsync"
+                                  OnInvalidSubmit="InvalidSubmitFocus">
+                            <DataAnnotationsValidator/>
+                            <div class="modal-body elegant-modal-body compact-body">
+                                <div class="invite-subtitle compact-subtitle">Invite user to the project</div>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label for="inviteLogin" class="elegant-label compact-label">
+                                            Login or email <span class="label-required">*</span>
+                                        </label>
+                                        <Dashboard.Shared.AutoComplete Id="inviteLogin"
+                                                                       Class="elegant-input compact-input"
+                                                                       Placeholder="Enter login or email"
+                                                                       @bind-Value="InviteModel.LoginOrEmail"
+                                                                       Search="SearchUsersForAutoComplete"/>
+                                        <small class="elegant-hint compact-hint">Search for an existing user</small>
+                                        <ValidationMessage For="() => InviteModel.LoginOrEmail"/>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="inviteRole" class="elegant-label compact-label">Project role</label>
+                                        <InputSelect id="inviteRole" class="elegant-input compact-input"
+                                                     @bind-Value="InviteModel.ProjectRole">
+                                            @foreach (var role in Enum.GetValues<ProjectRole>())
+                                            {
+                                                <option value="@role">@GetProjectRoleDisplayName(role)</option>
+                                            }
+                                        </InputSelect>
+                                        <small class="elegant-hint compact-hint">User's role in the project</small>
+                                    </div>
+                                </div>
+                                <Dashboard.Shared.ValidationPanel Error="@InviteError"/>
+                            </div>
+                            <div class="elegant-modal-footer compact-footer">
+                                <button type="button" class="elegant-btn elegant-btn-secondary compact-btn"
+                                        @onclick="() => InviteOpen = false">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="elegant-btn elegant-btn-primary compact-btn"
+                                        disabled="@_busy">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                         viewBox="0 0 16 16">
+                                        <path
+                                            d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                                        <path fill-rule="evenodd"
+                                              d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5z"/>
+                                    </svg>
+                                    @if (_busy)
+                                    {
+                                        <span>Inviting...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Invite User</span>
+                                    }
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="table-responsive">
+            <table class="table table-borderless align-middle mb-3" style="min-width: 620px;">
+                <caption class="visually-hidden">Project Members</caption>
+                <thead>
+                <tr class="text-uppercase text-muted small">
+                    <th class="bg-light fw-semibold py-1 px-2 blockContainer__block-header--bOT4P text-nowrap"
+                        style="letter-spacing:.03em;width:35%;">Name / Login
+                    </th>
+                    <th class="bg-light fw-semibold py-1 px-2 blockContainer__block-header--bOT4P text-nowrap"
+                        style="letter-spacing:.03em;width:15%;">Last Login
+                    </th>
+                    <th class="bg-light fw-semibold py-1 px-2 blockContainer__block-header--bOT4P text-nowrap"
+                        style="letter-spacing:.03em;width:35%;">Project Role
+                    </th>
+                    <th class="bg-light fw-semibold text-end py-1 px-2 blockContainer__block-header--bOT4P text-nowrap"
+                        style="letter-spacing:.03em;width:15%;">Action
+                    </th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (Members is null)
+                {
+                    <tr class="assignedProjectsBlock__project-item">
+                        <td class="assignedProjectsBlock__project-item" colspan="4"><span
+                                class="text-muted">Loading…</span>
+                        </td>
+                    </tr>
+                }
+                else if (Members.Length == 0)
+                {
+                    <tr class="assignedProjectsBlock__project-item">
+                        <td class="assignedProjectsBlock__project-item" colspan="4"><span class="text-muted">No members in this project.</span>
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var member in FilteredMembers)
+                    {
+                        <tr class="assignedProjectsBlock__project-item">
+                            <td class="assignedProjectsBlock__project-item">
+                                <div class="d-flex align-items-center">
+                                    <img src="@GetAvatarUrl(member.UserId)" alt="Avatar" width="48" height="52"
+                                         class="rounded me-2" style="object-fit:cover;border:1px solid #e0e0e0;"/>
+                                    <div>
+                                        @if (!string.IsNullOrWhiteSpace(member.Name))
+                                        {
+                                            <div>
+                                                <span class="fw-semibold">@member.Name</span>
+                                                @if (IsSelf(member.UserId))
+                                                {
+                                                    <span class="badge rounded-pill text-bg-success ms-2"
+                                                          title="This is you">you</span>
+                                                }
+                                                @if (member.AccountRole == AccountRole.Administrator)
+                                                {
+                                                    <span class="badge rounded-pill text-bg-danger ms-1"
+                                                          title="Administrator">admin</span>
+                                                }
+                                            </div>
+                                            <div class="text-muted small">
+                                                @{
+                                                    var username = member.Username ?? member.UserId;
+                                                    if (username != member.UserId)
+                                                    {
+                                                        @($"{username} / {member.UserId}")
+                                                    }
+                                                    else
+                                                    {
+                                                        @username
+                                                    }
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div>
+                                                <span class="fw-semibold">@(member.Username ?? member.UserId)</span>
+                                                @if (IsSelf(member.UserId))
+                                                {
+                                                    <span class="badge rounded-pill text-bg-success ms-2"
+                                                          title="This is you">you</span>
+                                                }
+                                                @if (member.AccountRole == AccountRole.Administrator)
+                                                {
+                                                    <span class="badge rounded-pill text-bg-danger ms-1"
+                                                          title="Administrator">admin</span>
+                                                }
+                                            </div>
+                                            @if ((member.Username ?? member.UserId) != member.UserId)
+                                            {
+                                                <div class="text-muted small">@member.UserId</div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="assignedProjectsBlock__project-item">
+                                @if (member.LastLoginUtc.HasValue)
+                                {
+                                    <span
+                                        title="@member.LastLoginUtc.Value.ToString("u")">@FormatAgo(member.LastLoginUtc.Value)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="assignedProjectsBlock__project-item">
+                                @if (member.AccountRole == AccountRole.Administrator)
+                                {
+                                    <span
+                                        class="text-muted">Administrator has full privileges according to permission map</span>
+                                }
+                                else
+                                {
+                                    <select class="form-select form-select-sm"
+                                            @onchange="@(e => UpdateMemberRole(member.UserId, e.Value?.ToString()))"
+                                            value="@member.Role">
+                                        @foreach (var role in Enum.GetValues<ProjectRole>())
+                                        {
+                                            <option value="@role">@GetProjectRoleDisplayName(role)</option>
+                                        }
+                                    </select>
+                                }
+                            </td>
+                            <td class="assignedProjectsBlock__project-item text-end text-nowrap">
+                                <button class="btn btn-sm btn-outline-primary" title="Unassign"
+                                        disabled="@(member.AccountRole == AccountRole.Administrator && IsSelf(member.UserId))"
+                                        @onclick="() => UnassignMember(member.UserId)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                         viewBox="0 0 16 16" class="me-1">
+                                        <path
+                                            d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                                    </svg>
+                                    Unassign
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="text-muted small">1 - @(Members?.Length ?? 0) of @(Members?.Length ?? 0)</div>
+            <div class="text-muted small">50 per page</div>
+        </div>
+
+        @code {
+            [Parameter] public string ProjectKey { get; set; } = string.Empty;
+
+            private record MemberInfo(string UserId, string? Username, string? Name, DateTime? LastLoginUtc, ProjectRole Role, AccountRole AccountRole);
+
+            private MemberInfo[]? Members;
+            private readonly Dictionary<string, string> _avatarUrls = new();
+            private string DefaultAvatar => "images/no-avatar.png";
+            private string? Error;
+            private string SearchQuery = string.Empty;
+            private string? CurrentUserId { get; set; }
+            private bool _busy;
+
+            // Invite User Modal
+            private bool InviteOpen { get; set; }
+            private InviteForm InviteModel { get; set; } = new();
+            private string? InviteError { get; set; }
+
+            private sealed class InviteForm
+            {
+                [Required(ErrorMessage = "Login or email is required")]
+                public string LoginOrEmail { get; set; } = string.Empty;
+
+                public ProjectRole ProjectRole { get; set; } = ProjectRole.Member;
+            }
+
+            private bool IsSelf(string? id)
+            {
+                return !string.IsNullOrWhiteSpace(CurrentUserId) && !string.IsNullOrWhiteSpace(id) && string.Equals(CurrentUserId, id, StringComparison.OrdinalIgnoreCase);
+            }
+
+            private MemberInfo[] FilteredMembers
+            {
+                get
+                {
+                    if (Members == null) return [];
+                    if (string.IsNullOrWhiteSpace(SearchQuery)) return Members;
+
+                    var query = SearchQuery.ToLowerInvariant();
+                    return Members.Where(m =>
+                        (m.Name?.ToLowerInvariant().Contains(query) ?? false) ||
+                        (m.Username?.ToLowerInvariant().Contains(query) ?? false) ||
+                        m.UserId.ToLowerInvariant().Contains(query)
+                    ).ToArray();
+                }
+            }
+
+            protected override async Task OnInitializedAsync()
+            {
+                try
+                {
+                    var principal = Accessor?.HttpContext?.User;
+                    var name = principal?.Identity?.Name;
+                    CurrentUserId = principal?.FindFirst("preferred_username")?.Value
+                                    ?? principal?.FindFirst(ClaimTypes.Email)?.Value
+                                    ?? name
+                                    ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                }
+                catch
+                {
+                }
+
+                await LoadMembersAsync();
+            }
+
+            private async Task LoadMembersAsync()
+            {
+                try
+                {
+                    Error = null;
+                    Members = null;
+
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+
+                    // Get project members
+                    using var membersResp = await client.GetAsync($"/admin/projects/{Uri.EscapeDataString(ProjectKey)}/members");
+                    if (!membersResp.IsSuccessStatusCode)
+                    {
+                        Error = $"Failed to load members: {membersResp.StatusCode}";
+                        Members = Array.Empty<MemberInfo>();
+                        return;
+                    }
+
+                    var membersJson = await membersResp.Content.ReadAsStringAsync();
+                    var membersDoc = JsonDocument.Parse(membersJson);
+                    var membersList = new List<MemberInfo>();
+
+                    if (membersDoc.RootElement.TryGetProperty("items", out var items))
+                    {
+                        foreach (var item in items.EnumerateArray())
+                        {
+                            var userId = item.TryGetProperty("userId", out var uidEl) ? uidEl.GetString() ?? "" : "";
+                            if (string.IsNullOrEmpty(userId)) continue;
+
+                            var role = ProjectRole.Client;
+                            if (item.TryGetProperty("role", out var roleEl))
+                            {
+                                if (roleEl.ValueKind == JsonValueKind.Number)
+                                {
+                                    role = (ProjectRole)roleEl.GetInt32();
+                                }
+                                else if (roleEl.ValueKind == JsonValueKind.String)
+                                {
+                                    Enum.TryParse(roleEl.GetString(), true, out role);
+                                }
+                            }
+
+                            // Fetch user details
+                            using var userResp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(userId)}");
+                            if (userResp.IsSuccessStatusCode)
+                            {
+                                var userJson = await userResp.Content.ReadAsStringAsync();
+                                var userDoc = JsonDocument.Parse(userJson);
+
+                                var username = userDoc.RootElement.TryGetProperty("Username", out var unEl) || userDoc.RootElement.TryGetProperty("username", out unEl) ? unEl.GetString() : userId;
+                                var name = userDoc.RootElement.TryGetProperty("FullName", out var fnEl) || userDoc.RootElement.TryGetProperty("fullName", out fnEl) ? fnEl.GetString() : null;
+
+                                // Try both PascalCase and camelCase for LastLoginUtc
+                                DateTime? lastLogin = null;
+                                if ((userDoc.RootElement.TryGetProperty("LastLoginUtc", out var llEl) || userDoc.RootElement.TryGetProperty("lastLoginUtc", out llEl))
+                                    && llEl.ValueKind == JsonValueKind.String)
+                                {
+                                    if (DateTime.TryParse(llEl.GetString(), out var dt))
+                                    {
+                                        lastLogin = dt;
+                                    }
+                                }
+
+                                var accountRole = AccountRole.User;
+                                // Try both PascalCase and camelCase for AccountRole
+                                if (userDoc.RootElement.TryGetProperty("AccountRole", out var arEl) ||
+                                    userDoc.RootElement.TryGetProperty("accountRole", out arEl))
+                                {
+                                    if (arEl.ValueKind == JsonValueKind.Number)
+                                    {
+                                        accountRole = (AccountRole)arEl.GetInt32();
+                                    }
+                                    else if (arEl.ValueKind == JsonValueKind.String)
+                                    {
+                                        Enum.TryParse(arEl.GetString(), true, out accountRole);
+                                    }
+                                }
+
+                                membersList.Add(new MemberInfo(userId, username, name, lastLogin, role, accountRole));
+                            }
+                        }
+                    }
+
+                    Members = membersList.ToArray();
+
+                    // Preload avatars asynchronously
+                    _ = PreloadAvatarsAsync();
+                }
+                catch (Exception ex)
+                {
+                    Error = $"Error loading members: {ex.Message}";
+                    Members = Array.Empty<MemberInfo>();
+                }
+            }
+
+            private void OnSearchKeyUp(KeyboardEventArgs e)
+            {
+                StateHasChanged();
+            }
+
+            private void ShowInviteUser()
+            {
+                InviteError = null;
+                InviteModel = new InviteForm();
+                InviteOpen = true;
+            }
+
+            private void OnInviteKeyDown(KeyboardEventArgs e)
+            {
+                if (e?.Key == "Escape")
+                {
+                    InviteOpen = false;
+                    StateHasChanged();
+                }
+            }
+
+            private async Task CreateInviteAsync()
+            {
+                if (_busy) return;
+                InviteError = null;
+                if (string.IsNullOrWhiteSpace(InviteModel.LoginOrEmail))
+                {
+                    InviteError = "Login or email is required.";
+                    return;
+                }
+
+                try
+                {
+                    _busy = true;
+                    await InvokeAsync(StateHasChanged);
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    var input = InviteModel.LoginOrEmail.Trim();
+
+                    // Assign user to project
+                    var role = InviteModel.ProjectRole.ToString();
+                    using var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(ProjectKey)}/members/{Uri.EscapeDataString(input)}", new { role });
+                    var text = await resp.Content.ReadAsStringAsync();
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        InviteError = ParseErrorMessage(text) ?? $"Add to project failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                        return;
+                    }
+
+                    // Get username for toast message
+                    var username = await GetUsernameForToast(client, input);
+                    try
+                    {
+                        Toasts.Success($"Member '{username}' was assigned to the project");
+                    }
+                    catch
+                    {
+                    }
+
+                    InviteOpen = false;
+                    await LoadMembersAsync();
+                }
+                catch (Exception ex)
+                {
+                    InviteError = ex.Message;
+                }
+                finally
+                {
+                    _busy = false;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+
+            private async Task<string> GetUsernameForToast(HttpClient client, string input)
+            {
+                try
+                {
+                    using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(input)}");
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        var json = await resp.Content.ReadAsStringAsync();
+                        var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("Username", out var unEl) || doc.RootElement.TryGetProperty("username", out unEl))
+                        {
+                            return unEl.GetString() ?? input;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+
+                return input;
+            }
+
+            private async Task<IEnumerable<AutoComplete.Option>> SearchUsersForAutoComplete(string query)
+            {
+                if (string.IsNullOrWhiteSpace(query)) return Array.Empty<AutoComplete.Option>();
+                try
+                {
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    var resp = await client.GetAsync($"/admin/users?q={Uri.EscapeDataString(query)}&take=10");
+                    if (!resp.IsSuccessStatusCode) return Array.Empty<AutoComplete.Option>();
+                    var json = await resp.Content.ReadAsStringAsync();
+                    var doc = JsonDocument.Parse(json);
+                    var results = new List<AutoComplete.Option>();
+                    if (doc.RootElement.TryGetProperty("items", out var items))
+                    {
+                        foreach (var item in items.EnumerateArray())
+                        {
+                            var id = item.TryGetProperty("Id", out var idEl) || item.TryGetProperty("id", out idEl) ? idEl.GetString() : null;
+                            var username = item.TryGetProperty("Username", out var unEl) || item.TryGetProperty("username", out unEl) ? unEl.GetString() : null;
+                            if (!string.IsNullOrEmpty(id))
+                            {
+                                var label = !string.IsNullOrEmpty(username) ? $"{username} ({id})" : id;
+                                results.Add(new AutoComplete.Option(id, label));
+                            }
+                        }
+                    }
+
+                    return results;
+                }
+                catch
+                {
+                    return Array.Empty<AutoComplete.Option>();
+                }
+            }
+
+            private string? ParseErrorMessage(string? text)
+            {
+                if (string.IsNullOrWhiteSpace(text)) return null;
+                try
+                {
+                    var doc = JsonDocument.Parse(text);
+                    if (doc.RootElement.TryGetProperty("error", out var err)) return err.GetString();
+                }
+                catch
+                {
+                }
+
+                return null;
+            }
+
+            private void InvalidSubmitFocus()
+            {
+                // Focus first invalid field
+            }
+
+            private async Task UnassignMember(string userId)
+            {
+                try
+                {
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    using var resp = await client.DeleteAsync($"/admin/projects/{Uri.EscapeDataString(ProjectKey)}/members/{Uri.EscapeDataString(userId)}");
+
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        Toasts.Success($"User '{userId}' has been unassigned from project '{ProjectKey}'");
+                        await LoadMembersAsync();
+                    }
+                    else
+                    {
+                        var errorText = await resp.Content.ReadAsStringAsync();
+                        Toasts.Error($"Failed to unassign member: {errorText}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Toasts.Error($"Error unassigning member: {ex.Message}");
+                }
+            }
+
+            private string GetAvatarUrl(string userId)
+            {
+                return _avatarUrls.TryGetValue(userId, out var url) && !string.IsNullOrWhiteSpace(url) ? url : DefaultAvatar;
+            }
+
+            private async Task PreloadAvatarsAsync()
+            {
+                try
+                {
+                    var list = Members;
+                    if (list is null || list.Length == 0) return;
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    var tasks = new List<Task>();
+                    foreach (var m in list)
+                    {
+                        if (string.IsNullOrWhiteSpace(m.UserId)) continue;
+                        tasks.Add(LoadAvatarForAsync(client, m.UserId));
+                    }
+
+                    await Task.WhenAll(tasks);
+                }
+                catch
+                {
+                }
+                finally
+                {
+                    try
+                    {
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            private async Task LoadAvatarForAsync(HttpClient client, string id)
+            {
+                try
+                {
+                    using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(id)}/photo");
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        var ct = resp.Content.Headers.ContentType?.MediaType ?? "image/png";
+                        var bytes = await resp.Content.ReadAsByteArrayAsync();
+                        if (bytes is { Length: > 0 })
+                        {
+                            var dataUrl = $"data:{ct};base64,{Convert.ToBase64String(bytes)}";
+                            lock (_avatarUrls)
+                            {
+                                _avatarUrls[id] = dataUrl;
+                            }
+
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+
+                lock (_avatarUrls)
+                {
+                    _avatarUrls[id] = DefaultAvatar;
+                }
+            }
+
+            private async Task UpdateMemberRole(string userId, string? newRoleStr)
+            {
+                if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(newRoleStr) || !Enum.TryParse<ProjectRole>(newRoleStr, out var newRole))
+                    return;
+
+                try
+                {
+                    var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+                    using var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(ProjectKey)}/members/{Uri.EscapeDataString(userId)}", new { role = newRole.ToString() });
+
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        Toasts.Success("Role updated successfully");
+                        await LoadMembersAsync();
+                    }
+                    else
+                    {
+                        var errorText = await resp.Content.ReadAsStringAsync();
+                        Toasts.Error($"Failed to update role: {errorText}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Toasts.Error($"Error updating role: {ex.Message}");
+                }
+            }
+
+            private static string GetProjectRoleDisplayName(ProjectRole role)
+            {
+                return role switch
+                {
+                    ProjectRole.ProjectLead => "Project Lead",
+                    ProjectRole.Member => "Member",
+                    ProjectRole.Client => "Client",
+                    ProjectRole.Maintainer => "Maintainer",
+                    _ => role.ToString()
+                };
+            }
+
+            private static string FormatAgo(DateTime dt)
+            {
+                var utc = dt.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : dt.ToUniversalTime();
+                var span = DateTime.UtcNow - utc;
+                if (span.TotalSeconds < 0) span = TimeSpan.Zero;
+                if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s ago";
+                if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+                if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+                if (span.TotalDays < 30) return $"{(int)span.TotalDays}d ago";
+                return dt.ToString("MMM d, yyyy");
+            }
+
+        }
+
+        <style>
+            /* Project Members Page Styles */
+
+            /* Page header */
+            .page-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 2rem 0 1.5rem;
+                margin-bottom: 2rem;
+                border-bottom: 2px solid var(--border);
+            }
+
+            .header-content {
+                display: flex;
+                align-items: center;
+                gap: 1.25rem;
+            }
+
+            .header-icon {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 64px;
+                height: 64px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 16px;
+                color: white;
+                flex-shrink: 0;
+            }
+
+            .header-icon svg {
+                width: 32px;
+                height: 32px;
+            }
+
+            .page-header h3 {
+                font-size: 1.75rem;
+                font-weight: 700;
+                color: var(--brand-text);
+                margin: 0;
+            }
+
+            .subtitle {
+                color: var(--brand-muted);
+                font-size: 0.95rem;
+                margin-top: 0.25rem;
+            }
+
+            /* Card styling */
+            .card {
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            }
+
+            /* Table styling */
+            .table-responsive {
+                overflow-x: auto;
+            }
+
+            .table {
+                width: 100%;
+                margin-bottom: 0;
+            }
+
+            .table thead th {
+                background-color: #f9fafb !important;
+                color: #6b7280 !important;
+                font-size: 0.75rem !important;
+                font-weight: 600 !important;
+                text-transform: uppercase !important;
+                letter-spacing: 0.05em !important;
+                padding: 0.75rem 1rem !important;
+                border-bottom: 2px solid #e5e7eb !important;
+                vertical-align: middle !important;
+            }
+
+            .table tbody tr {
+                border-bottom: 1px solid #e5e7eb;
+                transition: background-color 0.15s ease;
+            }
+
+            .table tbody tr:hover {
+                background-color: #f9fafb;
+            }
+
+            .table tbody td {
+                padding: 1rem !important;
+                vertical-align: middle !important;
+                color: #374151;
+                font-size: 0.875rem;
+            }
+
+            /* Avatar styling */
+            .table tbody td img.rounded {
+                border: 2px solid #e5e7eb !important;
+                border-radius: 8px;
+            }
+
+            /* Name column styling */
+            .table tbody td .fw-semibold {
+                color: #111827;
+                font-size: 0.9375rem;
+                font-weight: 600;
+            }
+
+            .table tbody td .text-muted.small {
+                color: #6b7280;
+                font-size: 0.8125rem;
+            }
+
+            /* Badge styling */
+            .badge.rounded-pill {
+                font-size: 0.7rem;
+                padding: 0.25rem 0.5rem;
+                font-weight: 600;
+            }
+
+            .badge.text-bg-success {
+                background-color: #10b981 !important;
+            }
+
+            .badge.text-bg-danger {
+                background-color: #ef4444 !important;
+            }
+
+            /* Role dropdown styling */
+            .table tbody td .form-select {
+                font-size: 0.875rem;
+                padding: 0.375rem 2rem 0.375rem 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background-color: white;
+                min-width: 140px;
+            }
+
+            .table tbody td .form-select:focus {
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+                outline: none;
+            }
+
+            /* Action buttons */
+            .table tbody td .btn-link {
+                color: #3b82f6;
+                text-decoration: none;
+                font-size: 0.875rem;
+                padding: 0.25rem 0.5rem;
+                transition: all 0.15s ease;
+            }
+
+            .table tbody td .btn-link:hover {
+                color: #2563eb;
+                text-decoration: underline;
+            }
+
+            .table tbody td .btn-link:focus {
+                outline: 2px solid #3b82f6;
+                outline-offset: 2px;
+            }
+
+            /* Unassign button specific styling */
+            .table tbody td .btn-link svg {
+                width: 14px;
+                height: 14px;
+                margin-right: 4px;
+            }
+
+            /* Search and action buttons */
+            .input-group .input-group-text {
+                background-color: #f9fafb;
+                border: 1px solid #d1d5db;
+                border-right: none;
+            }
+
+            .input-group .form-control {
+                border-left: none;
+            }
+
+            .input-group .form-control:focus {
+                border-color: #3b82f6;
+                box-shadow: none;
+            }
+
+            .input-group:focus-within .input-group-text {
+                border-color: #3b82f6;
+            }
+
+            /* Top action buttons */
+            .btn-outline-secondary,
+            .btn-primary {
+                font-size: 0.875rem;
+                padding: 0.5rem 1rem;
+                font-weight: 500;
+                border-radius: 6px;
+                transition: all 0.15s ease;
+            }
+
+            .btn-outline-secondary {
+                border-color: #d1d5db;
+                color: #374151;
+            }
+
+            .btn-outline-secondary:hover {
+                background-color: #f9fafb;
+                border-color: #9ca3af;
+            }
+
+            .btn-primary {
+                background-color: #3b82f6;
+                border-color: #3b82f6;
+            }
+
+            .btn-primary:hover {
+                background-color: #2563eb;
+                border-color: #2563eb;
+            }
+
+            /* Responsive adjustments */
+            @@media (max-width: 768px) {
+                .page-header h3 {
+                    font-size: 1.5rem;
+                }
+
+                .header-icon {
+                    width: 48px;
+                    height: 48px;
+                }
+
+                .header-icon svg {
+                    width: 24px;
+                    height: 24px;
+                }
+
+                .table tbody td {
+                    padding: 0.75rem !important;
+                }
+
+                .table tbody td img.rounded {
+                    width: 40px !important;
+                    height: 40px !important;
+                }
+            }
+        </style>
+    </div>
+</div>

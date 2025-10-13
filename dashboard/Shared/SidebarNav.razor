@@ -1,0 +1,605 @@
+@inject NavigationManager Nav
+@inject IServiceProvider Services
+@using System.Security.Claims
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
+
+<nav class="pg-sidebar d-flex flex-column align-items-center">
+    <a class="brand d-flex align-items-center justify-content-center" href="/pool/" title="Live Browser Pool">
+        <img src="images/icon-128.png" alt="Logo"/>
+    </a>
+
+    <div class="spacer"></div>
+
+    <div class="menu d-flex flex-column align-items-center">
+        @if (IsInAdminArea && IsAdmin)
+        {
+            <NavLink class="icon-link" href="@($"/{CurrentUsername}_default/launches/")" title="Back to Launches">
+                @* back/return icon *@
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" aria-hidden="true">
+                    <path fill="currentColor" fill-rule="evenodd"
+                          d="M14.887 3.887L13 2l-8 8 8 8 1.887-1.887L8.773 10z"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="/admin/projects" title="All Projects">
+                @* projects/list icon *@
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 19 20" aria-hidden="true">
+                    <path transform="translate(0, 2)" fill="currentColor" fill-rule="evenodd"
+                          d="M4 12v4H1.01C.451 16 0 15.557 0 14.99V12h4zm15 0v2.99c0 .558-.447 1.01-.999 1.01H6v-4h13zM4 6v4H0V6h4zm15 0v4H6V6h13zM4 0v4H0V1.01C0 .451.443 0 1.01 0H4zm14.001 0c.552 0 .999.443.999 1.01V4H6V0h12.001z"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="/admin/users" title="All Users">
+                @* users icon - cleaner group representation *@
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path fill="currentColor"
+                          d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                    <path fill="currentColor"
+                          d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+                    <path fill="currentColor" d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="/admin/settings" title="Dashboard Settings">
+                @* settings/gear icon *@
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                    <path fill="currentColor" fill-rule="evenodd"
+                          d="M14.107 8.78c.033-.256.058-.516.058-.78s-.025-.524-.058-.78l1.74-1.324a.392.392 0 0 0 .098-.512L14.3 2.612c-.102-.172-.316-.244-.501-.172l-2.048.804a6.282 6.282 0 0 0-1.39-.788l-.307-2.12A.42.42 0 0 0 9.642 0H6.353a.412.412 0 0 0-.407.336l-.308 2.12a6.126 6.126 0 0 0-1.39.788L2.202 2.44a.417.417 0 0 0-.501.172L.055 5.384a.393.393 0 0 0 .099.512L1.889 7.22A6.113 6.113 0 0 0 1.83 8c0 .264.025.524.058.78L.154 10.104a.392.392 0 0 0-.099.512L1.7 13.388a.412.412 0 0 0 .501.172l2.048-.804c.423.316.888.584 1.39.788l.307 2.12a.412.412 0 0 0 .407.336h3.29a.412.412 0 0 0 .406-.336l.309-2.12a6.126 6.126 0 0 0 1.39-.788l2.047.804c.185.068.398 0 .501-.172l1.645-2.772a.393.393 0 0 0-.099-.512L14.107 8.78zm-6.11 2.02C6.408 10.8 5.12 9.548 5.12 8c0-1.548 1.287-2.8 2.878-2.8 1.591 0 2.878 1.252 2.878 2.8 0 1.548-1.287 2.8-2.878 2.8z"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="/admin/audit" title="Audit">
+                @* audit/document search icon *@
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path fill="currentColor"
+                          d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/>
+                    <path fill="currentColor"
+                          d="M5.5 3.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5zM6 5a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H6zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H6z"/>
+                    <path fill="currentColor" d="M11.854 10.146a.5.5 0 0 0-.708.708l1 1a.5.5 0 0 0 .708-.708l-1-1z"/>
+                    <circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1" fill="none"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="/admin/diagnostics" title="Diagnostics">
+                @* diagnostics/health monitor icon *@
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path fill="currentColor"
+                          d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                    <path fill="currentColor"
+                          d="M6.646 6.646a.5.5 0 0 1 .708 0L8 7.293l.646-.647a.5.5 0 0 1 .708.708L8.707 8l.647.646a.5.5 0 0 1-.708.708L8 8.707l-.646.647a.5.5 0 0 1-.708-.708L7.293 8l-.647-.646a.5.5 0 0 1 0-.708z"/>
+                    <path fill="currentColor" d="M10 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+                </svg>
+            </NavLink>
+        }
+        else
+        {
+            @* Project selector - only show if user has multiple projects *@
+            @if (UserProjects.Count > 1)
+            {
+                <div class="project-selector">
+                    <button class="icon-link project-menu-toggle" @onclick="ToggleProjectMenu" title="Switch Project">
+                        <div class="project-initials">@GetProjectInitials(CurrentProjectKey)</div>
+                    </button>
+                    @if (projectMenuOpen)
+                    {
+                        <div class="project-dropdown">
+                            @foreach (var project in UserProjects)
+                            {
+                                var isActive = string.Equals(project.Key, CurrentProjectKey, StringComparison.OrdinalIgnoreCase);
+                                <button class="project-item @(isActive ? "active" : "")"
+                                        @onclick="() => SwitchProject(project.Key)">
+                                    <span class="project-initials-small">@GetProjectInitials(project.Key)</span>
+                                    <span class="project-name">@project.Key</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <NavLink class="icon-link" href="@($"/{CurrentProjectKey}/launches/")" title="Launches">
+                @* launches/rocket icon *@
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" aria-hidden="true">
+                    <path transform="translate(-18, -19)" fill="currentColor" fill-rule="evenodd"
+                          d="M25.857 39l2.857-2.143v-4.286c2.78-2.135 5.467-4.415 6.429-5C37.929 24.438 38.079 19.683 38 19c-.547-.237-5.45.151-8.571 2.857-.6.986-2.8 3.704-5 6.429h-4.286L18 31.143h3.571c-.497 2.73-1.117 2.249.715 3.571 1.265 1.75.646 1.193 3.571.715V39z"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="@($"/{CurrentProjectKey}/members/")" title="Members">
+                @* members/users icon *@
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path fill="currentColor"
+                          d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                    <path fill="currentColor" fill-rule="evenodd"
+                          d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+                    <path fill="currentColor" d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="@($"/{CurrentProjectKey}/filters/")" title="Filters">
+                @* filters/funnel icon *@
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 17 17" aria-hidden="true">
+                    <path fill="currentColor" transform="matrix(-1 0 0 1 18 0), translate(-18.5, -19)"
+                          fill-rule="evenodd"
+                          d="M20 19c0 1.105.872 3.018 1.948 4.273L26 28v8c.552 0 1.321-.321 1.711-.711L30 33v-5l4.052-4.727C35.128 22.018 36 19.655 36 19H20z"/>
+                </svg>
+            </NavLink>
+            <NavLink class="icon-link" href="@($"/{CurrentProjectKey}/settings/")" title="Project Settings">
+                @* settings/gear icon *@
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                    <path fill="currentColor" fill-rule="evenodd"
+                          d="M14.107 8.78c.033-.256.058-.516.058-.78s-.025-.524-.058-.78l1.74-1.324a.392.392 0 0 0 .098-.512L14.3 2.612c-.102-.172-.316-.244-.501-.172l-2.048.804a6.282 6.282 0 0 0-1.39-.788l-.307-2.12A.42.42 0 0 0 9.642 0H6.353a.412.412 0 0 0-.407.336l-.308 2.12a6.126 6.126 0 0 0-1.39.788L2.202 2.44a.417.417 0 0 0-.501.172L.055 5.384a.393.393 0 0 0 .099.512L1.889 7.22A6.113 6.113 0 0 0 1.83 8c0 .264.025.524.058.78L.154 10.104a.392.392 0 0 0-.099.512L1.7 13.388a.412.412 0 0 0 .501.172l2.048-.804c.423.316.888.584 1.39.788l.307 2.12a.412.412 0 0 0 .407.336h3.29a.412.412 0 0 0 .406-.336l.309-2.12a6.126 6.126 0 0 0 1.39-.788l2.047.804c.185.068.398 0 .501-.172l1.645-2.772a.393.393 0 0 0-.099-.512L14.107 8.78zm-6.11 2.02C6.408 10.8 5.12 9.548 5.12 8c0-1.548 1.287-2.8 2.878-2.8 1.591 0 2.878 1.252 2.878 2.8 0 1.548-1.287 2.8-2.878 2.8z"/>
+                </svg>
+            </NavLink>
+        }
+    </div>
+
+    <div class="spacer flex-grow-1"></div>
+
+    <div class="user-menu">
+        <button class="avatar" title="Account" @onclick="ToggleMenu">
+            <img src="@AvatarUrl" alt="Profile"/>
+        </button>
+
+        @if (menuOpen)
+        {
+            <div class="user-dropdown">
+                <div class="user-header">
+                    <div class="user-header-content">
+                        <img src="@AvatarUrl" class="user-avatar" alt="Avatar"/>
+                        <div class="user-info">
+                            <div class="user-name">@DisplayName</div>
+                            @if (!string.IsNullOrEmpty(RoleLabel))
+                            {
+                                <span class="role-badge @RoleClass">@RoleLabel</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="user-items">
+                    <a href="/profile" class="menu-item @(IsActive("/profile") ? "active" : "")" @onclick="CloseMenu">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                        </svg>
+                        Profile
+                    </a>
+                    @if (IsAdmin)
+                    {
+                        <a href="/admin/projects" class="menu-item @(IsActive("/admin") ? "active" : "")"
+                           @onclick="CloseMenu">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                 viewBox="0 0 16 16">
+                                <path
+                                    d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/>
+                            </svg>
+                            Administrate
+                        </a>
+                    }
+                    <button type="button" class="menu-item logout-btn" @onclick="Logout">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path fill-rule="evenodd"
+                                  d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
+                            <path fill-rule="evenodd"
+                                  d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
+                        </svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</nav>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+    private bool menuOpen;
+    private bool projectMenuOpen;
+    private string DisplayName { get; set; } = "User";
+    private string CurrentUsername { get; set; } = string.Empty;
+    private string CurrentProjectKey { get; set; } = string.Empty;
+    private List<ProjectDto> UserProjects { get; } = new();
+    private string RoleLabel { get; set; } = string.Empty; // admin | member | viewer
+    private string RoleClass { get; set; } = string.Empty; // bg-danger | bg-primary | bg-success
+    private string AvatarUrl { get; set; } = "images/avatar.svg";
+    private AvatarState? Avatar;
+
+    private bool IsAdmin => string.Equals(RoleLabel, "admin", StringComparison.OrdinalIgnoreCase);
+    private bool IsInAdminArea => IsCurrentPathAdmin();
+    private bool IsInProjectArea => IsCurrentPathProject();
+
+    private class ProjectDto
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private bool IsCurrentPathAdmin()
+    {
+        try
+        {
+            var rel = Nav?.ToBaseRelativePath(Nav.Uri) ?? string.Empty;
+            // Only match /admin/ routes, not project keys like admin_default
+            return rel.StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool IsCurrentPathProject()
+    {
+        try
+        {
+            var rel = Nav?.ToBaseRelativePath(Nav.Uri) ?? string.Empty;
+            // Check if path matches /{project_key}/launches/ pattern
+            return rel.Contains("/launches", StringComparison.OrdinalIgnoreCase) &&
+                   !rel.StartsWith("admin", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string GetCurrentProjectLaunchesUrl()
+    {
+        try
+        {
+            var rel = Nav?.ToBaseRelativePath(Nav.Uri) ?? string.Empty;
+            // Extract project key from path like "project_key/launches/"
+            var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 0)
+            {
+                return $"/{parts[0]}/launches/";
+            }
+        }
+        catch
+        {
+        }
+
+        return "/";
+    }
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            Avatar = Services?.GetService(typeof(AvatarState)) as AvatarState;
+            AvatarUrl = Avatar is null ? "images/avatar.svg" : Avatar.Url;
+            if (Avatar != null) Avatar.Changed += OnAvatarChanged;
+            if (Nav != null) Nav.LocationChanged += OnLocationChanged;
+        }
+        catch
+        {
+        }
+    }
+
+    private void OnAvatarChanged()
+    {
+        try
+        {
+            AvatarUrl = Avatar?.Url ?? "images/avatar.svg";
+            InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && (string.IsNullOrWhiteSpace(AvatarUrl) || AvatarUrl == "images/avatar.svg"))
+        {
+            await TryFetchAvatarAsync();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthStateTask is not null)
+        {
+            var state = await AuthStateTask;
+            var user = state.User;
+            var name = user?.Identity?.Name;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = user?.FindFirst("preferred_username")?.Value
+                       ?? user?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                       ?? "User";
+            }
+
+            DisplayName = name!;
+
+            // Store username for navigation links
+            CurrentUsername = user?.FindFirst("preferred_username")?.Value ?? string.Empty;
+
+            // Extract current project key from URL
+            ExtractCurrentProjectKey();
+
+            // Determine role badge from Hub admin endpoints
+            try
+            {
+                var uid = user?.FindFirst("preferred_username")?.Value
+                          ?? user?.FindFirst(ClaimTypes.Email)?.Value
+                          ?? user?.Identity?.Name
+                          ?? user?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrWhiteSpace(uid))
+                {
+                    await LoadRoleBadgeAsync(uid);
+                    await LoadUserProjectsAsync(uid);
+                }
+                else
+                {
+                    ClearBadge();
+                }
+            }
+            catch
+            {
+                ClearBadge();
+            }
+        }
+    }
+
+    private async Task LoadRoleBadgeAsync(string uid)
+    {
+        try
+        {
+            var factory = Services?.GetService(typeof(IHttpClientFactory)) as IHttpClientFactory;
+            if (factory is null)
+            {
+                ClearBadge();
+                return;
+            }
+
+            var client = factory.CreateClient(HttpClientNames.Hub);
+
+            using (var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(uid)}"))
+            {
+                if (resp.IsSuccessStatusCode)
+                {
+                    var json = await resp.Content.ReadAsStringAsync();
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+                        JsonElement roleEl;
+                        // Prefer accountRole (canonical), fallback to legacy role
+                        var hasRole = root.TryGetProperty("accountRole", out roleEl) || root.TryGetProperty("AccountRole", out roleEl)
+                                                                                     || root.TryGetProperty("role", out roleEl) || root.TryGetProperty("Role", out roleEl);
+                        if (hasRole)
+                        {
+                            if (roleEl.ValueKind == JsonValueKind.Number)
+                            {
+                                if (roleEl.GetInt32() == 1)
+                                {
+                                    RoleLabel = "admin";
+                                    RoleClass = "bg-danger";
+                                    return;
+                                }
+                            }
+                            else if (roleEl.ValueKind == JsonValueKind.String)
+                            {
+                                var s = roleEl.GetString() ?? string.Empty;
+                                var sl = s.Trim().ToLowerInvariant();
+                                if (sl == "administrator" || sl == "admin")
+                                {
+                                    RoleLabel = "admin";
+                                    RoleClass = "bg-danger";
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            // Not admin → clear badge based solely on AccountRole
+            ClearBadge();
+        }
+        catch
+        {
+            ClearBadge();
+        }
+    }
+
+    private void ClearBadge()
+    {
+        RoleLabel = string.Empty;
+        RoleClass = string.Empty;
+    }
+
+    private async Task TryFetchAvatarAsync()
+    {
+        try
+        {
+            if (AuthStateTask is null) return;
+            var state = await AuthStateTask;
+            var user = state.User;
+            var uid = user?.FindFirst("preferred_username")?.Value
+                      ?? user?.FindFirst(ClaimTypes.Email)?.Value
+                      ?? user?.Identity?.Name
+                      ?? user?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(uid)) return;
+            var factory = Services?.GetService(typeof(IHttpClientFactory)) as IHttpClientFactory;
+            if (factory is null) return;
+            var client = factory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(uid)}/photo");
+            if (resp.IsSuccessStatusCode)
+            {
+                var ct = resp.Content.Headers.ContentType?.MediaType ?? "image/png";
+                var bytes = await resp.Content.ReadAsByteArrayAsync();
+                if (bytes is { Length: > 0 })
+                {
+                    var dataUrl = $"data:{ct};base64,{Convert.ToBase64String(bytes)}";
+                    AvatarUrl = dataUrl;
+                    try
+                    {
+                        Avatar?.Set(dataUrl);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        try
+        {
+            InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            if (Avatar != null) Avatar.Changed -= OnAvatarChanged;
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            if (Nav != null) Nav.LocationChanged -= OnLocationChanged;
+        }
+        catch
+        {
+        }
+    }
+
+    private void ToggleMenu()
+    {
+        menuOpen = !menuOpen;
+    }
+
+    private void CloseMenu()
+    {
+        menuOpen = false;
+    }
+
+    private string MenuItemClass(string target)
+    {
+        var active = IsActive(target) ? " userBlock__active--crO0t" : string.Empty;
+        return $"item userBlock__menu-item--MKb1c{active}";
+    }
+
+    private bool IsActive(string href)
+    {
+        try
+        {
+            var rel = Nav?.ToBaseRelativePath(Nav.Uri) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(href)) return false;
+            if (href.StartsWith("/")) href = href.Substring(1);
+            return rel.StartsWith(href, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void Logout()
+    {
+        menuOpen = false;
+        var returnUrl = "/login";
+        Nav.NavigateTo($"/auth/logout?returnUrl={Uri.EscapeDataString(returnUrl)}", true);
+    }
+
+    private void ExtractCurrentProjectKey()
+    {
+        try
+        {
+            var rel = Nav?.ToBaseRelativePath(Nav.Uri) ?? string.Empty;
+            var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 0 && !parts[0].Equals("admin", StringComparison.OrdinalIgnoreCase))
+            {
+                CurrentProjectKey = parts[0];
+            }
+            else
+            {
+                CurrentProjectKey = $"{CurrentUsername}_default";
+            }
+        }
+        catch
+        {
+            CurrentProjectKey = $"{CurrentUsername}_default";
+        }
+    }
+
+    private async Task LoadUserProjectsAsync(string userId)
+    {
+        try
+        {
+            var factory = Services?.GetService(typeof(IHttpClientFactory)) as IHttpClientFactory;
+            if (factory is null) return;
+            var client = factory.CreateClient(HttpClientNames.Hub);
+
+            using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(userId)}/projects");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                UserProjects.Clear();
+
+                // API returns { total: N, items: [...] } where items are Membership objects
+                if (root.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in itemsEl.EnumerateArray())
+                    {
+                        // Extract projectKey from Membership object
+                        var key = item.TryGetProperty("projectKey", out var k) && k.ValueKind == JsonValueKind.String
+                            ? k.GetString() ?? string.Empty
+                            : string.Empty;
+
+                        // Use projectKey as name for now (we can fetch full project details later if needed)
+                        var name = key;
+
+                        if (!string.IsNullOrEmpty(key))
+                        {
+                            UserProjects.Add(new ProjectDto { Key = key, Name = name });
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private string GetProjectInitials(string projectKey)
+    {
+        if (string.IsNullOrEmpty(projectKey) || projectKey.Length < 2)
+            return projectKey.ToUpper();
+
+        var first = projectKey[0];
+        var last = projectKey[projectKey.Length - 1];
+        return $"{char.ToUpper(first)}{char.ToUpper(last)}";
+    }
+
+    private void ToggleProjectMenu()
+    {
+        projectMenuOpen = !projectMenuOpen;
+    }
+
+    private void SwitchProject(string projectKey)
+    {
+        projectMenuOpen = false;
+        Nav.NavigateTo($"/{projectKey}/launches/", true);
+    }
+
+}

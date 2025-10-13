@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error Modal Prototype - Agenix Playwright Grid</title>
+
+    <!-- Bootstrap 5.3.0 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- html2canvas for PNG capture -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+    <style>
+        /* Purple gradient theme matching dashboard */
+        :root {
+            --gradient-start: #667eea;
+            --gradient-end: #764ba2;
+            --border-color: #dee2e6;
+            --text-muted: #6c757d;
+        }
+
+        body {
+            padding: 40px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .demo-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .demo-controls h5 {
+            margin-bottom: 15px;
+            color: var(--gradient-end);
+        }
+
+        /* Error Modal Styles */
+        .error-modal .modal-header {
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            color: white;
+            border-bottom: none;
+            padding: 20px 24px;
+        }
+
+        .error-modal .modal-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .error-modal .modal-title i {
+            font-size: 1.5rem;
+        }
+
+        .error-modal .modal-body {
+            padding: 24px;
+        }
+
+        .error-message {
+            background: #f8f9fa;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .error-message p {
+            margin: 0;
+            color: #212529;
+            font-weight: 500;
+        }
+
+        .error-metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .error-metadata-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .error-metadata-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .error-metadata-value {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #212529;
+            font-weight: 500;
+        }
+
+        .status-code {
+            background: #dc3545;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .status-code.status-4xx {
+            background: #fd7e14;
+        }
+
+        .status-code.status-5xx {
+            background: #dc3545;
+        }
+
+        .collapsible-section {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .collapsible-header {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s ease;
+        }
+
+        .collapsible-header:hover {
+            background: #e9ecef;
+        }
+
+        .collapsible-header h6 {
+            margin: 0;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #495057;
+        }
+
+        .collapsible-toggle {
+            transition: transform 0.3s ease;
+        }
+
+        .collapsible-toggle.expanded {
+            transform: rotate(180deg);
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+            background: white;
+        }
+
+        .collapsible-content.show {
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .collapsible-content pre {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .copy-button {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            background: var(--gradient-start);
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .copy-button:hover {
+            background: var(--gradient-end);
+            transform: translateY(-1px);
+        }
+
+        .copy-button.copied {
+            background: #28a745;
+        }
+
+        .retry-info {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .retry-info i {
+            font-size: 1.2rem;
+            color: #ffc107;
+        }
+
+        .retry-info p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #856404;
+        }
+
+        .modal-footer {
+            border-top: 1px solid var(--border-color);
+            padding: 16px 24px;
+        }
+
+        .btn-retry {
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            border: none;
+            color: white;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-retry:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+
+        .btn-retry:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Animation */
+        .modal.fade .modal-dialog {
+            transform: scale(0.95) translateY(-20px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .modal.show .modal-dialog {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .error-metadata {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-dialog {
+                margin: 10px;
+            }
+
+            .modal-body {
+                padding: 16px;
+            }
+
+            .collapsible-content.show {
+                max-height: 300px;
+            }
+        }
+
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Tooltip for copy button */
+        .copy-tooltip {
+            position: absolute;
+            background: #212529;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            transform: translateY(-100%);
+            margin-top: -8px;
+        }
+
+        .copy-button:hover .copy-tooltip {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Demo Controls -->
+    <div class="container">
+        <div class="demo-controls">
+            <h5><i class="bi bi-gear-fill"></i> Error Modal Prototype Demo</h5>
+            <p class="text-muted mb-3">Click the buttons below to see different error scenarios:</p>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-danger" onclick="showError('network')">
+                    <i class="bi bi-wifi-off"></i> Network Error
+                </button>
+                <button class="btn btn-danger" onclick="showError('server')">
+                    <i class="bi bi-server"></i> Server Error (500)
+                </button>
+                <button class="btn btn-warning" onclick="showError('client')">
+                    <i class="bi bi-exclamation-triangle"></i> Client Error (404)
+                </button>
+                <button class="btn btn-info" onclick="showError('rateLimit')">
+                    <i class="bi bi-stopwatch"></i> Rate Limit (429)
+                </button>
+                <button class="btn btn-secondary" onclick="showError('validation')">
+                    <i class="bi bi-file-earmark-x"></i> Validation Error
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div class="modal fade error-modal" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <!-- Header with gradient -->
+                <div class="modal-header">
+                    <h5 class="modal-title" id="errorModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span id="errorTitle">Request Failed</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <!-- Body -->
+                <div class="modal-body">
+                    <!-- Error Message -->
+                    <div class="error-message" id="errorMessage">
+                        <p>Failed to fetch launch details from the server.</p>
+                    </div>
+
+                    <!-- Retry Info (conditional) -->
+                    <div class="retry-info d-none" id="retryInfo">
+                        <i class="bi bi-arrow-repeat"></i>
+                        <div>
+                            <p><strong>Retrying:</strong> <span id="retryAttempt">1</span>/3</p>
+                            <p class="mb-0 text-muted" style="font-size: 0.85rem;">Next retry in <span id="retryDelay">2</span> seconds...</p>
+                        </div>
+                    </div>
+
+                    <!-- Error Metadata Grid -->
+                    <div class="error-metadata">
+                        <div class="error-metadata-item">
+                            <div class="error-metadata-label">Status Code</div>
+                            <div class="error-metadata-value">
+                                <span class="status-code status-5xx" id="statusCode">500</span>
+                            </div>
+                        </div>
+                        <div class="error-metadata-item">
+                            <div class="error-metadata-label">Request Method</div>
+                            <div class="error-metadata-value" id="httpMethod">GET</div>
+                        </div>
+                        <div class="error-metadata-item">
+                            <div class="error-metadata-label">Endpoint</div>
+                            <div class="error-metadata-value" id="endpoint">/api/launches/123</div>
+                        </div>
+                        <div class="error-metadata-item">
+                            <div class="error-metadata-label">Timestamp</div>
+                            <div class="error-metadata-value" id="timestamp">2025-12-25 14:30:45</div>
+                        </div>
+                        <div class="error-metadata-item">
+                            <div class="error-metadata-label">Request ID</div>
+                            <div class="error-metadata-value" id="requestId">req_abc123xyz</div>
+                        </div>
+                        <div class="error-metadata-item">
+                            <div class="error-metadata-label">Event Code</div>
+                            <div class="error-metadata-value">
+                                <span class="event-code" id="eventCode">DB04</span>
+                            </div>
+                        </div>
+                        <div class="error-metadata-item">
+                            <div class="error-metadata-label">Error Category</div>
+                            <div class="error-metadata-value" id="errorCategory">Server</div>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible: Technical Details -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" onclick="toggleCollapse('technicalDetails')">
+                            <h6><i class="bi bi-file-text"></i> Technical Details</h6>
+                            <i class="bi bi-chevron-down collapsible-toggle" id="technicalDetailsToggle"></i>
+                        </div>
+                        <div class="collapsible-content" id="technicalDetailsContent">
+                            <pre id="technicalDetailsText">The server encountered an internal error and was unable to complete your request.
+
+Error: System.NullReferenceException: Object reference not set to an instance of an object.
+   at PostgresResultsStore.GetLaunchAsync(Guid id) in PostgresResultsStore.cs:line 123
+   at LaunchesEndpoints.GetLaunch(Guid id) in LaunchesEndpoints.cs:line 45</pre>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible: Stack Trace -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" onclick="toggleCollapse('stackTrace')">
+                            <h6><i class="bi bi-code-slash"></i> Stack Trace</h6>
+                            <i class="bi bi-chevron-down collapsible-toggle" id="stackTraceToggle"></i>
+                        </div>
+                        <div class="collapsible-content" id="stackTraceContent">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted" style="font-size: 0.85rem;">Full stack trace for debugging</span>
+                                <button class="copy-button" onclick="copyToClipboard('stackTraceText', this)">
+                                    <i class="bi bi-clipboard"></i> Copy
+                                    <span class="copy-tooltip">Click to copy</span>
+                                </button>
+                            </div>
+                            <pre id="stackTraceText">System.NullReferenceException: Object reference not set to an instance of an object.
+   at Agenix.PlaywrightGrid.Hub.Infrastructure.Adapters.Results.PostgresResultsStore.GetLaunchAsync(Guid id) in /app/hub/Infrastructure/Adapters/Results/PostgresResultsStore.cs:line 123
+   at Agenix.PlaywrightGrid.Hub.Infrastructure.Web.LaunchesEndpoints.&lt;&gt;c__DisplayClass5_0.&lt;&lt;MapLaunchesEndpoints&gt;b__0&gt;d.MoveNext() in /app/hub/Infrastructure/Web/LaunchesEndpoints.cs:line 45
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Routing.EndpointMiddleware.&lt;Invoke&gt;g__AwaitRequestTask|7_0(Endpoint endpoint, Task requestTask, ILogger logger)
+   at Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddlewareImpl.&lt;Invoke&gt;g__Awaited|10_0(ExceptionHandlerMiddlewareImpl middleware, HttpContext context, Task task)</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer with actions -->
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary me-auto" id="savePngButton" onclick="saveAsPng()">
+                        <i class="bi bi-camera"></i> Save as PNG
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Dismiss
+                    </button>
+                    <button type="button" class="btn btn-retry" id="retryButton" onclick="retryRequest()">
+                        <i class="bi bi-arrow-clockwise"></i> Retry Request
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Error scenarios for demo
+        const errorScenarios = {
+            network: {
+                title: 'Network Connection Failed',
+                message: 'Unable to connect to the server. Please check your internet connection and try again.',
+                statusCode: null,
+                httpMethod: 'GET',
+                endpoint: '/api/launches/123',
+                requestId: 'req_network_001',
+                category: 'Network',
+                eventCode: 'NET01',  // ADD THIS
+                isRetryable: true,
+                details: 'HttpRequestException: The request was canceled due to network timeout.\n\nThis typically happens when:\n- Internet connection is unstable\n- Server is not responding\n- Firewall is blocking the request',
+                stackTrace: 'System.Net.Http.HttpRequestException: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.\n---> System.Threading.Tasks.TaskCanceledException: The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.\n---> System.TimeoutException: The operation was canceled.\n   at System.Net.Http.HttpClient.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)'
+            },
+            server: {
+                title: 'Server Error',
+                message: 'The server encountered an error while processing your request. Our team has been notified.',
+                statusCode: 500,
+                httpMethod: 'POST',
+                endpoint: '/api/launches',
+                requestId: 'req_server_002',
+                category: 'Server',
+                eventCode: 'DB04',  // ADD THIS
+                isRetryable: true,
+                details: 'Internal Server Error: NullReferenceException occurred while processing the request.\n\nThe server has been notified and our team is investigating the issue.',
+                stackTrace: 'System.NullReferenceException: Object reference not set to an instance of an object.\n   at PostgresResultsStore.GetLaunchAsync(Guid id) in PostgresResultsStore.cs:line 123\n   at LaunchesEndpoints.GetLaunch(Guid id) in LaunchesEndpoints.cs:line 45\n   at Microsoft.AspNetCore.Routing.EndpointMiddleware.Invoke(HttpContext httpContext)'
+            },
+            client: {
+                title: 'Resource Not Found',
+                message: 'The launch you are looking for does not exist or has been deleted.',
+                statusCode: 404,
+                httpMethod: 'GET',
+                endpoint: '/api/launches/999',
+                requestId: 'req_notfound_003',
+                category: 'Client',
+                eventCode: 'LCH03',  // ADD THIS
+                isRetryable: false,
+                details: 'Not Found: Launch with ID 999 does not exist in the database.\n\nPossible reasons:\n- Launch was deleted\n- Launch ID is incorrect\n- You do not have access to this project',
+                stackTrace: null
+            },
+            rateLimit: {
+                title: 'Rate Limit Exceeded',
+                message: 'Too many requests. Please wait 60 seconds before trying again.',
+                statusCode: 429,
+                httpMethod: 'POST',
+                endpoint: '/api/launches',
+                requestId: 'req_ratelimit_005',
+                category: 'Client',
+                eventCode: 'RLM01',  // ADD THIS
+                isRetryable: true,
+                retryAfter: 60,
+                details: 'Too Many Requests: You have exceeded 100 requests per minute.\n\nRate limit will reset in 45 seconds.\n\nConsider:\n- Reducing request frequency\n- Implementing client-side caching\n- Batching requests',
+                stackTrace: null
+            },
+            validation: {
+                title: 'Unauthorized Access',
+                message: 'You do not have permission to perform this action. Please contact your administrator.',
+                statusCode: 403,
+                httpMethod: 'DELETE',
+                endpoint: '/api/launches/123',
+                requestId: 'req_unauth_004',
+                category: 'Client',
+                eventCode: 'ADM11',  // ADD THIS
+                isRetryable: false,
+                details: 'Bad Request: Validation failed for the following fields:\n\n- Name: Required field is missing\n- LaunchNumber: Must be a positive integer\n- ProjectKey: Must not exceed 50 characters',
+                stackTrace: null
+            }
+        };
+
+        let currentModal = null;
+
+        function showError(scenario) {
+            const error = errorScenarios[scenario];
+
+            // Update modal content
+            document.getElementById('errorTitle').textContent = error.title;
+            document.getElementById('errorMessage').querySelector('p').textContent = error.message;
+
+            // Status code
+            const statusCodeEl = document.getElementById('statusCode');
+            if (error.statusCode) {
+                statusCodeEl.textContent = error.statusCode;
+                statusCodeEl.className = 'status-code status-' + Math.floor(error.statusCode / 100) + 'xx';
+                statusCodeEl.parentElement.parentElement.classList.remove('d-none');
+            } else {
+                statusCodeEl.textContent = 'N/A';
+                statusCodeEl.parentElement.parentElement.classList.add('d-none');
+            }
+
+            // Other metadata
+            document.getElementById('httpMethod').textContent = error.httpMethod;
+            document.getElementById('endpoint').textContent = error.endpoint;
+            document.getElementById('requestId').textContent = error.requestId;
+            document.getElementById('eventCode').textContent = error.eventCode || 'N/A';
+            document.getElementById('errorCategory').textContent = error.category;
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+
+            // Technical details
+            document.getElementById('technicalDetailsText').textContent = error.details;
+
+            // Stack trace
+            const stackTraceSection = document.querySelector('.collapsible-section:last-child');
+            if (error.stackTrace) {
+                stackTraceSection.classList.remove('d-none');
+                document.getElementById('stackTraceText').textContent = error.stackTrace;
+            } else {
+                stackTraceSection.classList.add('d-none');
+            }
+
+            // Retry button
+            const retryButton = document.getElementById('retryButton');
+            if (error.isRetryable) {
+                retryButton.classList.remove('d-none');
+                retryButton.disabled = false;
+            } else {
+                retryButton.classList.add('d-none');
+            }
+
+            // Hide retry info initially
+            document.getElementById('retryInfo').classList.add('d-none');
+
+            // Reset collapsible sections
+            closeAllCollapsibles();
+
+            // Show modal
+            currentModal = new bootstrap.Modal(document.getElementById('errorModal'));
+            currentModal.show();
+        }
+
+        function toggleCollapse(sectionId) {
+            const content = document.getElementById(sectionId + 'Content');
+            const toggle = document.getElementById(sectionId + 'Toggle');
+
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                toggle.classList.remove('expanded');
+            } else {
+                content.classList.add('show');
+                toggle.classList.add('expanded');
+            }
+        }
+
+        function closeAllCollapsibles() {
+            document.querySelectorAll('.collapsible-content').forEach(content => {
+                content.classList.remove('show');
+            });
+            document.querySelectorAll('.collapsible-toggle').forEach(toggle => {
+                toggle.classList.remove('expanded');
+            });
+        }
+
+        function copyToClipboard(elementId, button) {
+            const text = document.getElementById(elementId).textContent;
+
+            // Modern clipboard API
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual feedback
+                const icon = button.querySelector('i');
+                const originalIcon = icon.className;
+                icon.className = 'bi bi-check-circle-fill';
+                button.classList.add('copied');
+                button.querySelector('.copy-tooltip').textContent = 'Copied!';
+
+                setTimeout(() => {
+                    icon.className = originalIcon;
+                    button.classList.remove('copied');
+                    button.querySelector('.copy-tooltip').textContent = 'Click to copy';
+                }, 2000);
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
+        }
+
+        function retryRequest() {
+            const retryInfo = document.getElementById('retryInfo');
+            const retryButton = document.getElementById('retryButton');
+
+            // Show retry info
+            retryInfo.classList.remove('d-none');
+
+            // Disable retry button during retry
+            retryButton.disabled = true;
+            retryButton.innerHTML = '<i class="bi bi-hourglass-split"></i> Retrying...';
+
+            // Simulate retry attempts with exponential backoff
+            let attempt = 1;
+            const delays = [2, 4, 8];
+
+            function simulateRetry() {
+                document.getElementById('retryAttempt').textContent = attempt;
+                document.getElementById('retryDelay').textContent = delays[attempt - 1] || 0;
+
+                setTimeout(() => {
+                    if (attempt < 3) {
+                        attempt++;
+                        simulateRetry();
+                    } else {
+                        // Final retry - show success or failure
+                        if (Math.random() > 0.5) {
+                            // Success
+                            currentModal.hide();
+                            alert('✅ Request succeeded after retry!');
+                        } else {
+                            // Final failure
+                            retryInfo.classList.add('d-none');
+                            retryButton.disabled = false;
+                            retryButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Retry Request';
+                            document.getElementById('errorMessage').innerHTML =
+                                '<p><strong>All retry attempts failed.</strong> The error persists after 3 attempts. Please try again later or contact support.</p>';
+                        }
+                    }
+                }, delays[attempt - 1] * 1000);
+            }
+
+            simulateRetry();
+        }
+
+        async function saveAsPng() {
+            const modalContent = document.querySelector('#errorModal .modal-content');
+            const saveButton = document.getElementById('savePngButton');
+            const originalText = saveButton.innerHTML;
+
+            try {
+                saveButton.disabled = true;
+                saveButton.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+
+                // Ensure collapsibles are expanded if we want to capture everything,
+                // but usually we just capture what is visible.
+                // For this prototype, we'll just capture the current state.
+
+                const canvas = await html2canvas(modalContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2, // Higher quality
+                    logging: false,
+                    useCORS: true
+                });
+
+                const link = document.createElement('a');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                link.download = `error-details-${timestamp}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
+                saveButton.innerHTML = '<i class="bi bi-check-circle"></i> Saved!';
+                setTimeout(() => {
+                    saveButton.disabled = false;
+                    saveButton.innerHTML = originalText;
+                }, 2000);
+
+            } catch (err) {
+                console.error('Failed to save PNG:', err);
+                alert('Failed to save image. Please try again.');
+                saveButton.disabled = false;
+                saveButton.innerHTML = originalText;
+            }
+        }
+
+        // Keyboard accessibility
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && currentModal) {
+                currentModal.hide();
+            }
+        });
+    </script>
+</body>
+</html>

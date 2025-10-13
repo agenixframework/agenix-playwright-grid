@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -23,14 +23,6 @@ namespace WorkerService.Tools;
 
 internal static class PoolConfigValidator
 {
-    private sealed record PoolSummary(
-        int EffectiveTotalCapacity,
-        IDictionary<string, int> ByBrowser,
-        IDictionary<string, int> Pools,
-        string Region,
-        string Os,
-        string Source);
-
     public static int Run(string[] args)
     {
         // Args: validate-pool-config [--pool "..."] [--json]
@@ -43,7 +35,7 @@ internal static class PoolConfigValidator
         }
 
         var source = "ENV:POOL_CONFIG";
-        var poolConfig = poolArg ?? Environment.GetEnvironmentVariable("POOL_CONFIG") ?? string.Empty;
+        var poolConfig = poolArg ?? Environment.GetEnvironmentVariable("AGENIX_WORKER_POOL_CONFIG") ?? string.Empty;
         if (string.IsNullOrWhiteSpace(poolConfig))
         {
             // Fall back to WorkerOptions default for predictability
@@ -52,14 +44,16 @@ internal static class PoolConfigValidator
         }
 
         var region = Environment.GetEnvironmentVariable("NODE_REGION") ?? "local";
-        var os = Environment.GetEnvironmentVariable("NODE_OS") ?? "linux"; // WorkerOptions.DetectContainerOs() not public; best-effort
+        var os = Environment.GetEnvironmentVariable("NODE_OS") ??
+                 "linux"; // WorkerOptions.DetectContainerOs() not public; best-effort
 
         var errors = new List<string>();
         var warnings = new List<string>();
         var pools = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var seenOriginal = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var part in poolConfig.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in poolConfig.Split(',',
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var kv = part.Split('=', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (kv.Length != 2 || !int.TryParse(kv[1], out var count))
@@ -67,6 +61,7 @@ internal static class PoolConfigValidator
                 errors.Add($"Malformed entry '{part}'. Expected format Label=Count.");
                 continue;
             }
+
             var rawKey = kv[0];
             if (!seenOriginal.Add(rawKey))
             {
@@ -79,7 +74,8 @@ internal static class PoolConfigValidator
             {
                 // Back-compat: accept raw keys but record a warning
                 key = rawKey;
-                warnings.Add($"Non-canonical label key '{rawKey}' accepted as-is (does not follow App:Browser:Env schema with Browser second).");
+                warnings.Add(
+                    $"Non-canonical label key '{rawKey}' accepted as-is (does not follow App:Browser:Env schema with Browser second).");
             }
             else
             {
@@ -133,11 +129,13 @@ internal static class PoolConfigValidator
             {
                 Console.WriteLine($"    {kv.Key} = {kv.Value}");
             }
+
             Console.WriteLine("  ByBrowser:");
             foreach (var kv in byBrowser.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
             {
                 Console.WriteLine($"    {kv.Key} = {kv.Value}");
             }
+
             Console.WriteLine($"  EffectiveTotalCapacity: {total}");
         }
 
@@ -156,9 +154,18 @@ internal static class PoolConfigValidator
                 var obj = new { Errors = errors };
                 Console.WriteLine(JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
             }
+
             return 1;
         }
 
         return 0;
     }
+
+    private sealed record PoolSummary(
+        int EffectiveTotalCapacity,
+        IDictionary<string, int> ByBrowser,
+        IDictionary<string, int> Pools,
+        string Region,
+        string Os,
+        string Source);
 }

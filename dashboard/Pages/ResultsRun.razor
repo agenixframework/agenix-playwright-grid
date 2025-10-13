@@ -1,7 +1,8 @@
 @page "/results/{runId}"
-@using System.Net.Http
-@using System.Net.Http.Json
-@using Microsoft.AspNetCore.Components
+@page "/{projectKey}/launches/{launchId:guid}/suites/{suiteId:guid}/runs/{runId}"
+@using System.Net
+@using System.Runtime.InteropServices
+@using System.Text.Json
 @implements IAsyncDisposable
 @inject IHttpClientFactory HttpFactory
 @inject IConfiguration Config
@@ -9,190 +10,790 @@
 @inject ILogger<ResultsRun> Logger
 @inject DashboardFeatureFlags Flags
 
-<div class="d-flex align-items-center justify-content-between my-3">
-    <h3 class="mb-0">Run @(!string.IsNullOrWhiteSpace(_run?.RunName) ? _run!.RunName : Short(runId))</h3>
-    <a href="/results" class="btn btn-sm btn-outline-secondary" title="Back to Runs">&larr; Back to Runs</a>
-</div>
+<link rel="stylesheet" href="/css/test-run-details.css"/>
+<link rel="stylesheet" href="/css/test-step-tree.css"/>
+<link rel="stylesheet" href="/css/artifact-viewer.css"/>
+<link rel="stylesheet" href="/css/test-item-components.css"/>
 
-@if (runNotFound)
-{
-    <div class="alert alert-warning">
-        Run not found. <a href="/results">Back to runs</a>
+<div class="test-run-details">
+    <div class="page-header d-flex align-items-end justify-content-between">
+        <div>
+            <h3>
+                Run @(!string.IsNullOrWhiteSpace(_run?.RunName) ? _run!.RunName : Short(runId))
+            </h3>
+            <div class="subtitle">View detailed test run results and traces</div>
+        </div>
     </div>
-}
-else if (_run == null)
-{
-    <div class="alert alert-info">Loading run...</div>
-}
-else
-{
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="d-flex justify-content-between">
-                <div>
-                    <div><span class="text-muted">Status:</span> <span
-                            class="badge @StatusBadgeClass(_run.Status)">@DisplayStatus(_run.Status)</span></div>
-                    <div class="small text-muted">App: @_run.App · Browser: @_run.Browser · Env: @_run.Env</div>
-                    <div class="small text-muted">Region/OS: @(_run.Region ?? "-") / @GetDisplayOS()</div>
+
+    @if (runNotFound)
+    {
+        <div class="alert alert-warning">
+            Run not found. <a href="/results">Back to runs</a>
+        </div>
+    }
+    else if (_run == null)
+    {
+        <div class="alert alert-info">Loading run...</div>
+    }
+    else
+    {
+        @* Main Tab Navigation - Same style as view tabs *@
+        <div class="main-tabs">
+            <button class="main-tab @(MainTab == "logs" ? "active" : "")"
+                    @onclick='() => MainTab = "logs"'>
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path d="M5 3a5 5 0 0 0 0 10h6a5 5 0 0 0 0-10H5zm6 9a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>
+                </svg>
+                Execution Logs
+            </button>
+            <button class="main-tab @(MainTab == "attachments" ? "active" : "")"
+                    @onclick='() => MainTab = "attachments"'>
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path
+                        d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/>
+                </svg>
+                Artifacts
+            </button>
+            <button class="main-tab @(MainTab == "details" ? "active" : "")"
+                    @onclick='() => MainTab = "details"'>
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                    <path
+                        d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                </svg>
+                Run Details
+            </button>
+            <button class="main-tab @(MainTab == "history" ? "active" : "")"
+                    @onclick='() => MainTab = "history"'>
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path
+                        d="M8.515 1.019A7 7 0 0 0 8 1V0a8 8 0 0 1 .589.022l-.074.997zm2.004.45a7.003 7.003 0 0 0-.985-.299l.219-.976c.383.086.76.2 1.126.342l-.36.933zm1.37.71a7.01 7.01 0 0 0-.439-.27l.493-.87a8.025 8.025 0 0 1 .979.654l-.615.789a6.996 6.996 0 0 0-.418-.302zm1.834 1.79a6.99 6.99 0 0 0-.653-.796l.724-.69c.27.285.52.59.747.91l-.818.576zm.744 1.352a7.08 7.08 0 0 0-.214-.468l.893-.45a7.976 7.976 0 0 1 .45 1.088l-.95.313a7.023 7.023 0 0 0-.179-.483zm.53 2.507a6.991 6.991 0 0 0-.1-1.025l.985-.17c.067.386.106.778.116 1.17l-1 .025zm-.131 1.538c.033-.17.06-.339.081-.51l.993.123a7.957 7.957 0 0 1-.23 1.155l-.964-.267c.046-.165.086-.332.12-.501zm-.952 2.379c.184-.29.346-.594.486-.908l.914.405c-.16.36-.345.706-.555 1.038l-.845-.535zm-.964 1.205c.122-.122.239-.248.35-.378l.758.653a8.073 8.073 0 0 1-.401.432l-.707-.707z"/>
+                    <path d="M8 1a7 7 0 1 0 4.95 11.95l.707.707A8.001 8.001 0 1 1 8 0v1z"/>
+                    <path
+                        d="M7.5 3a.5.5 0 0 1 .5.5v5.21l3.248 1.856a.5.5 0 0 1-.496.868l-3.5-2A.5.5 0 0 1 7 9V3.5a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+                Execution History
+            </button>
+            <button class="main-tab @(MainTab == "commands" ? "active" : "")"
+                    @onclick='() => MainTab = "commands"'>
+                <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path
+                        d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                </svg>
+                API Commands
+            </button>
+        </div>
+
+        @* Info Panel with View Tabs (List view / History) - Only for Execution Logs *@
+        @if (MainTab == "logs")
+        {
+            <div class="info-panel">
+                <div class="info-line">
+                    <div class="view-tabs">
+                        <button class="view-tab @(ViewMode == "list" ? "active" : "")"
+                                @onclick='() => ViewMode = "list"'>
+                            <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 20">
+                                <path
+                                    d="M11.815 2A2.99 2.99 0 0 0 9 0a2.99 2.99 0 0 0-2.815 2H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4.185zM9 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm2 14H4v-2h7v2zm3-4H4v-2h10v2zM4 9V7h10v2H4z"></path>
+                            </svg>
+                            List view
+                        </button>
+                        <button class="view-tab @(ViewMode == "history" ? "active" : "")"
+                                @onclick='() => ViewMode = "history"'>
+                            <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                                <path
+                                    d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"></path>
+                                <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"></path>
+                            </svg>
+                            History
+                        </button>
+                    </div>
+                    <div class="test-summary-stats">
+                        <span class="test-stat">Total: <strong>@(_testCases?.Count ?? 0)</strong></span>
+                        <span class="test-stat-dot passed">●</span>
+                        <span class="test-stat">Passed <strong>@PassedCount</strong></span>
+                        <span class="test-stat-dot failed">●</span>
+                        <span class="test-stat">Failed <strong>@FailedCount</strong></span>
+                        <span class="test-stat-dot skipped">●</span>
+                        <span class="test-stat">Skipped <strong>@SkippedCount</strong></span>
+                        <span class="test-stat-dot running">●</span>
+                        <span class="test-stat">Running <strong>@RunningCount</strong></span>
+                    </div>
                 </div>
-                <div class="text-end small text-muted">
-                    <div>Started: @_run.StartedAtUtc.ToLocalTime().ToString("g")</div>
-                    @if (_run.CompletedAtUtc is not null)
+            </div>
+        }
+
+        @* Test Cases Tab Content - Shows directly under Execution Logs *@
+        @if (MainTab == "logs")
+        {
+            <div class="test-cases-section">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="section-title mb-0">Test Cases</h5>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button"
+                                class="btn @(_testCaseViewMode == "legacy" ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick='() => _testCaseViewMode = "legacy"'>
+                            <i class="bi bi-list-ul"></i> Legacy View
+                        </button>
+                        <button type="button"
+                                class="btn @(_testCaseViewMode == "hierarchical" ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick='() => _testCaseViewMode = "hierarchical"'>
+                            <i class="bi bi-diagram-3"></i> Hierarchical View
+                        </button>
+                    </div>
+                </div>
+                @if (_testCases == null)
+                {
+                    <div class="text-muted">Loading test cases...</div>
+                }
+                else if (_testCases.Count == 0)
+                {
+                    <div class="alert alert-info">
+                        <strong>No test cases yet</strong>
+                        <p class="mb-0 small mt-2">
+                            Test cases will appear here when uploaded via the Client library or Test Logger.
+                            See documentation for integration examples.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    @if (_testCaseViewMode == "hierarchical" && _testItems != null && _testItems.Count > 0)
                     {
-                        <div>Completed: @_run.CompletedAtUtc.Value.ToLocalTime().ToString("g")</div>
+                        @* Hierarchical Test Item Tree View *@
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Hierarchical View:</strong> Showing test items with hierarchy (Tests, Steps,
+                            Scenarios, Hooks).
+                            Switch to Legacy View to see the traditional flat list.
+                        </div>
+                        <TestItemTree Items="@_testItems"
+                                      ShowMetadata="true"
+                                      ShowActions="false"
+                                      ShowErrorStack="true"
+                                      ExpandAll="false"/>
                     }
-                    <div>Node: @(_run.WorkerNodeId ?? "-")</div>
-                    <div>
-                        PW/Browsers: @(string.Join(" / ", new[] { _run.PlaywrightVersion, _run.BrowserVersion }.Where(x => !string.IsNullOrWhiteSpace(x))))</div>
-                </div>
-            </div>
-            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-                <span class="badge bg-light text-dark">Duration: @DurationText()</span>
-                @if (_run.Failed > 0)
-                {
-                    <span class="badge bg-danger">Failed: @_run.Failed</span>
-                }
-                <span class="badge bg-light text-dark">Commands: @CommandCount</span>
-                <span class="badge bg-light text-dark">Kinds: @KindCounts.Count</span>
-                <button class="btn btn-sm btn-outline-secondary" title="Copy RunId" @onclick="CopyRunId">Copy RunId
-                </button>
-                @if (!string.IsNullOrWhiteSpace(_run.ExternalId))
-                {
-                    <button class="btn btn-sm btn-outline-secondary" title="Copy ExternalId" @onclick="CopyExternalId">
-                        Copy ExternalId
-                    </button>
-                }
-                @if (IsRunningStatus(_run.Status))
-                {
-                    <button class="btn btn-sm btn-outline-danger" disabled="@_stopping" @onclick="StopRunAsync">
-                        @(_stopping ? "Stopping..." : "Mark Stopped & Release")
-                    </button>
-                }
-            </div>
-        </div>
-    </div>
-
-    <div class="border-start border-end border-bottom p-2 mb-3">
-        <h5 class="mb-2">Commands</h5>
-        <div class="row g-2 mb-2">
-            <div class="col-sm-3">
-                <input class="form-control form-control-sm" placeholder="Kind (e.g. Borrow)"
-                       value="@cmdKindFilter"
-                       @oninput="OnKindInput"/>
-            </div>
-            <div class="col-sm-3">
-                <input class="form-control form-control-sm" placeholder="Direction (c2s/s2c/runner)"
-                       value="@cmdDirectionFilter"
-                       @oninput="OnDirectionInput"/>
-            </div>
-        </div>
-        @if (KindCounts.Count > 0)
-        {
-            <div class="mb-2">
-                <span class="small text-muted me-2">Quick filters:</span>
-                @foreach (var kv in KindCounts.OrderBy(kv => kv.Key))
-                {
-                    <button
-                        class="btn btn-sm @(string.Equals(cmdKindFilter, kv.Key, StringComparison.OrdinalIgnoreCase) ? "btn-primary" : "btn-outline-primary") me-1 mb-1"
-                        @onclick="() => SetKindFilter(kv.Key)">
-                        @kv.Key <span class="badge bg-light text-dark ms-1">@kv.Value</span>
-                    </button>
-                }
-                @if (!string.IsNullOrWhiteSpace(cmdKindFilter))
-                {
-                    <button class="btn btn-sm btn-outline-secondary mb-1" @onclick="ClearKindFilter">Clear</button>
-                }
-            </div>
-        }
-        @if (_commands == null)
-        {
-            <div class="text-muted">Loading commands...</div>
-        }
-        else if (FilteredCommands.Count == 0)
-        {
-            <div class="text-muted">No commands.</div>
-        }
-        else
-        {
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="small text-muted">Showing @PageStart-@PageEnd of @CmdTotal</div>
-                <div class="btn-group btn-group-sm" role="group" aria-label="Commands pagination">
-                    <button class="btn btn-outline-secondary" disabled="@(CmdPage <= 1)" @onclick="PrevCmdPage">Prev
-                    </button>
-                    <span class="btn btn-light disabled">Page @CmdPage / @CmdTotalPages</span>
-                    <button class="btn btn-outline-secondary" disabled="@(CmdPage >= CmdTotalPages)"
-                            @onclick="NextCmdPage">Next
-                    </button>
-                </div>
-            </div>
-            <div class="list-group small">
-                @foreach (var ev in PagedCommands)
-                {
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <span class="badge bg-secondary me-2">@ev.Kind</span>
-                                <strong>@ev.Message</strong>
-                                @if (!string.IsNullOrWhiteSpace(ev.TestId))
-                                {
-                                    <span class="badge bg-light text-dark ms-2">test=@ev.TestId</span>
-                                }
-                                @if (ev.Props is not null && ev.Props.Count > 0)
-                                {
-                                    <div class="mt-1">
-                                        @foreach (var p in ev.Props)
-                                        {
-                                            <span class="badge bg-light text-dark me-1">@p.Key=@p.Value</span>
-                                        }
+                    else if (_testCaseViewMode == "hierarchical")
+                    {
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            No hierarchical test items available. The test run may not have been created with
+                            hierarchical test item support.
+                            Switch to Legacy View to see test cases.
+                        </div>
+                    }
+                    else
+                    {
+                        @* Legacy Test Cases List *@
+                        @foreach (var test in _testCases.OrderBy(t => t.StartTime))
+                        {
+                            <div class="rp-test-case-card mb-3">
+                                <div class="rp-test-header">
+                                    @* Status Count Badges *@
+                                    <div class="rp-status-badges">
+                                        <span class="rp-badge rp-badge-passed">✓ 0</span>
+                                        <span class="rp-badge rp-badge-failed">✗ 0</span>
+                                        <span class="rp-badge rp-badge-skipped">⊙ 0</span>
+                                        <span class="rp-badge rp-badge-interrupted">⊘ 0</span>
                                     </div>
-                                }
+
+                                    @* Test Title and Status *@
+                                    <div class="rp-test-title-row">
+                                        <span class="badge @TestStatusBadge(test.Status) me-2">@test.Status</span>
+                                        <a href="/@(projectKey ?? "default")/runs/@runId/tests/@test.TestId"
+                                           class="test-title-link">
+                                            <strong class="test-title">@test.TestTitle</strong>
+                                        </a>
+                                        <span class="rp-test-time ms-auto">
+                                        <span class="rp-duration">@FormatDuration(test.DurationMs)</span>
+                                        <span
+                                            class="rp-timestamp">@test.StartTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    </span>
+                                    </div>
+
+                                    @* Test File Path *@
+                                    @if (test.TestFile != null)
+                                    {
+                                        <div class="rp-test-file">
+                                            📄 @test.TestFile@(test.LineNumber.HasValue ? $":{test.LineNumber}" : "")
+                                        </div>
+                                    }
+
+                                    @* Tags *@
+                                    @if (test.Tags.Count > 0)
+                                    {
+                                        <div class="rp-test-tags">
+                                            @foreach (var tag in test.Tags)
+                                            {
+                                                <span class="rp-tag">@tag</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="rp-test-body">
+                                    @* Collapsible Steps Section *@
+                                    @if (test.Steps.Count > 0)
+                                    {
+                                        <details class="rp-expandable-section" open="@(test.Status == "Failed")">
+                                            <summary class="rp-section-header">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                     fill="currentColor" viewBox="0 0 16 16" class="rp-expand-icon">
+                                                    <path fill-rule="evenodd"
+                                                          d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                                </svg>
+                                                Steps (@test.Steps.Count)
+                                            </summary>
+                                            <div class="rp-section-content">
+                                                <TestStepTree Steps="test.Steps"/>
+                                            </div>
+                                        </details>
+                                    }
+
+                                    @* Collapsible Console Output Section *@
+                                    @if (test.StdOut.Count > 0 || test.StdErr.Count > 0 || test.ErrorMessage != null)
+                                    {
+                                        <details class="rp-expandable-section">
+                                            <summary class="rp-section-header">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                     fill="currentColor" viewBox="0 0 16 16" class="rp-expand-icon">
+                                                    <path fill-rule="evenodd"
+                                                          d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                                </svg>
+                                                Console Output
+                                            </summary>
+                                            <div class="rp-section-content">
+                                                @if (test.ErrorMessage != null)
+                                                {
+                                                    <div class="alert alert-danger mb-2">
+                                                        <strong>Error:</strong> @test.ErrorMessage
+                                                        @if (test.ErrorStack != null)
+                                                        {
+                                                            <details class="mt-2">
+                                                                <summary class="text-muted">Show stack trace</summary>
+                                                                <pre class="small mt-2 mb-0">@test.ErrorStack</pre>
+                                                            </details>
+                                                        }
+                                                    </div>
+                                                }
+                                                @if (test.StdOut.Count > 0)
+                                                {
+                                                    <div class="console-output">
+                                                        @foreach (var line in test.StdOut)
+                                                        {
+                                                            <div>@line</div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        </details>
+                                    }
+
+                                    @* Artifacts *@
+                                    @if (test.Attachments.Count > 0)
+                                    {
+                                        <details class="rp-expandable-section">
+                                            <summary class="rp-section-header">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                     fill="currentColor" viewBox="0 0 16 16" class="rp-expand-icon">
+                                                    <path fill-rule="evenodd"
+                                                          d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                                </svg>
+                                                Attachments (@test.Attachments.Count)
+                                            </summary>
+                                            <div class="rp-section-content">
+                                                <ArtifactViewer Artifacts="test.Attachments"/>
+                                            </div>
+                                        </details>
+                                    }
+
+                                    @* Console Output *@
+                                    @if (test.StdOut.Count > 0 || test.StdErr.Count > 0)
+                                    {
+                                        <details class="mt-2">
+                                            <summary class="fw-bold">Console Output</summary>
+                                            <div class="console-output mt-2">
+                                                @if (test.StdOut.Count > 0)
+                                                {
+                                                    <div class="console-stdout">
+                                                        <strong class="text-muted">stdout:</strong>
+                                                        <pre class="small mb-0">@string.Join("\n", test.StdOut)</pre>
+                                                    </div>
+                                                }
+                                                @if (test.StdErr.Count > 0)
+                                                {
+                                                    <div class="console-stderr mt-2">
+                                                        <strong class="text-danger">stderr:</strong>
+                                                        <pre
+                                                            class="small mb-0 text-danger">@string.Join("\n", test.StdErr)</pre>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </details>
+                                    }
+                                </div>
                             </div>
-                            <div class="text-end">
-                                <div class="text-muted">@ev.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</div>
-                                <button class="btn btn-sm btn-outline-secondary mt-1"
-                                        @onclick="async () => await Copy(ev)">Copy
-                                </button>
+                        }
+                    }
+                }
+            </div>
+        }
+
+
+        @* API Commands Tab Content - Main tab *@
+        @if (MainTab == "commands")
+        {
+            <div class="test-cases-section">
+                @* Enhanced Stats Header - Compact & Elegant *@
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 rounded-3"
+                     style="background: #f8f9fa; border: 1px solid #e9ecef;">
+                    <div class="d-flex align-items-center gap-1 px-2 py-1 rounded-pill"
+                         style="background: white; border: 1px solid #e3e8ef;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#667eea"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M8.515 1.019A7 7 0 0 0 8 1V0a8 8 0 0 1 .589.022l-.074.997zm2.004.45a7.003 7.003 0 0 0-.985-.299l.219-.976c.383.086.76.2 1.126.342l-.36.933zm1.37.71a7.01 7.01 0 0 0-.439-.27l.493-.87a8.025 8.025 0 0 1 .979.654l-.615.789a6.996 6.996 0 0 0-.418-.302zm1.834 1.79a6.99 6.99 0 0 0-.653-.796l.724-.69c.27.285.52.59.747.91l-.818.576zm.744 1.352a7.08 7.08 0 0 0-.214-.468l.893-.45a7.976 7.976 0 0 1 .45 1.088l-.95.313a7.023 7.023 0 0 0-.179-.483zm.53 2.507a6.991 6.991 0 0 0-.1-1.025l.985-.17c.067.386.106.778.116 1.17l-1 .025zm-.131 1.538c.033-.17.06-.339.081-.51l.993.123a7.957 7.957 0 0 1-.23 1.155l-.964-.267c.046-.165.086-.332.12-.501zm-.952 2.379c.184-.29.346-.594.486-.908l.914.405c-.16.36-.345.706-.555 1.038l-.845-.535zm-.964 1.205c.122-.122.239-.248.35-.378l.758.653a8.073 8.073 0 0 1-.401.432l-.707-.707z"/>
+                            <path d="M8 1a7 7 0 1 0 4.95 11.95l.707.707A8.001 8.001 0 1 1 8 0v1z"/>
+                            <path
+                                d="M7.5 3a.5.5 0 0 1 .5.5v5.21l3.248 1.856a.5.5 0 0 1-.496.868l-3.5-2A.5.5 0 0 1 7 9V3.5a.5.5 0 0 1 .5-.5z"/>
+                        </svg>
+                        <span class="small" style="color: #667eea; font-weight: 500;">Duration</span>
+                        <span class="badge rounded-pill"
+                              style="background: #667eea; color: white; font-size: 0.7rem; padding: 0.25rem 0.5rem;">@DurationText()</span>
+                    </div>
+                    @if (_run.Failed > 0)
+                    {
+                        <div class="d-flex align-items-center gap-1 px-2 py-1 rounded-pill"
+                             style="background: white; border: 1px solid #f8d7da;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#dc3545"
+                                 viewBox="0 0 16 16">
+                                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                <path
+                                    d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                            <span class="small" style="color: #dc3545; font-weight: 500;">Failed</span>
+                            <span class="badge rounded-pill bg-danger"
+                                  style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">@_run.Failed</span>
+                        </div>
+                    }
+                    <div class="d-flex align-items-center gap-1 px-2 py-1 rounded-pill"
+                         style="background: white; border: 1px solid #e3e8ef;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#6c757d"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                        </svg>
+                        <span class="small text-secondary" style="font-weight: 500;">Commands</span>
+                        <span class="badge rounded-pill"
+                              style="background: #6c757d; color: white; font-size: 0.7rem; padding: 0.25rem 0.5rem;">@CommandCount</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 px-2 py-1 rounded-pill"
+                         style="background: white; border: 1px solid #e3e8ef;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#0d6efd"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
+                        </svg>
+                        <span class="small text-primary" style="font-weight: 500;">Kinds</span>
+                        <span class="badge rounded-pill"
+                              style="background: #0d6efd; color: white; font-size: 0.7rem; padding: 0.25rem 0.5rem;">@KindCounts.Count</span>
+                    </div>
+                </div>
+
+                @* Filters and Commands Section with elegant borders *@
+                <div class="rounded-3 mb-3" style="border: 1px solid #e3e8ef; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div class="p-3"
+                         style="background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%); border-bottom: 1px solid #e3e8ef; border-radius: 0.5rem 0.5rem 0 0;">
+                        <div class="row g-2 mb-2">
+                            <div class="col-sm-3">
+                                <input class="form-control form-control-sm" placeholder="Kind (e.g. Borrow)"
+                                       value="@cmdKindFilter"
+                                       @oninput="OnKindInput"/>
+                            </div>
+                            <div class="col-sm-3">
+                                <input class="form-control form-control-sm" placeholder="Direction (c2s/s2c/runner)"
+                                       value="@cmdDirectionFilter"
+                                       @oninput="OnDirectionInput"/>
                             </div>
                         </div>
-
-                        @if (string.Equals(ev.Kind, "PwProtocol", StringComparison.OrdinalIgnoreCase))
+                        @if (KindCounts.Count > 0)
                         {
-                            <div class="mt-2">
-                                @RenderPlaywrightProtocol(ev)
+                            <div class="mb-2">
+                                <span class="small text-muted me-2">Quick filters:</span>
+                                @foreach (var kv in KindCounts.OrderBy(kv => kv.Key))
+                                {
+                                    <button
+                                        class="btn btn-sm @(string.Equals(cmdKindFilter, kv.Key, StringComparison.OrdinalIgnoreCase) ? "btn-primary" : "btn-outline-primary") me-1 mb-1"
+                                        @onclick="() => SetKindFilter(kv.Key)">
+                                        @kv.Key <span class="badge bg-light text-dark ms-1">@kv.Value</span>
+                                    </button>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(cmdKindFilter))
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary mb-1" @onclick="ClearKindFilter">
+                                        Clear
+                                    </button>
+                                }
                             </div>
                         }
                     </div>
-                }
+
+                    @if (_commands == null)
+                    {
+                        <div class="text-muted p-3">Loading commands...</div>
+                    }
+                    else if (FilteredCommands.Count == 0)
+                    {
+                        <div class="text-muted p-3">No commands.</div>
+                    }
+                    else
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-0 p-3 border-bottom"
+                             style="background: #fafbfc;">
+                            <div class="d-flex align-items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#667eea"
+                                     viewBox="0 0 16 16">
+                                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                    <path
+                                        d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                                </svg>
+                                <span class="small text-secondary"
+                                      style="font-weight: 500;">Showing <strong>@PageStart-@PageEnd</strong> of <strong>@CmdTotal</strong></span>
+                            </div>
+                            <nav aria-label="Commands pagination">
+                                <ul class="pagination pagination-sm mb-0">
+                                    <li class="page-item @(CmdPage <= 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="PrevCmdPage" disabled="@(CmdPage <= 1)"
+                                                style="border-radius: 6px 0 0 6px;">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                 fill="currentColor" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd"
+                                                      d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                                            </svg>
+                                            <span class="ms-1">Previous</span>
+                                        </button>
+                                    </li>
+                                    <li class="page-item disabled">
+                                    <span class="page-link bg-white border-start-0 border-end-0">
+                                        Page <strong>@CmdPage</strong> of <strong>@CmdTotalPages</strong>
+                                    </span>
+                                    </li>
+                                    <li class="page-item @(CmdPage >= CmdTotalPages ? "disabled" : "")">
+                                        <button class="page-link" @onclick="NextCmdPage"
+                                                disabled="@(CmdPage >= CmdTotalPages)"
+                                                style="border-radius: 0 6px 6px 0;">
+                                            <span class="me-1">Next</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                 fill="currentColor" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd"
+                                                      d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                                            </svg>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+
+                        @* Commands List *@
+                        <div class="p-3">
+                            @foreach (var ev in PagedCommands)
+                            {
+                                <div class="mb-3 pb-3 small" style="border-bottom: 1px solid #e9ecef;">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <span class="badge bg-secondary me-2"
+                                                  style="font-size: 0.7rem;">@ev.Kind</span>
+                                            <strong style="font-size: 0.875rem;">@ev.Message</strong>
+                                            @if (!string.IsNullOrWhiteSpace(ev.TestId))
+                                            {
+                                                <span class="badge bg-light text-dark ms-2" style="font-size: 0.7rem;">test=@ev.TestId</span>
+                                            }
+                                            @if (ev.Props is not null && ev.Props.Count > 0)
+                                            {
+                                                <div class="mt-1">
+                                                    @foreach (var p in ev.Props)
+                                                    {
+                                                        <span class="badge bg-light text-dark me-1"
+                                                              style="font-size: 0.7rem;">@p.Key=@p.Value</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="text-end">
+                                            <div
+                                                class="text-muted small">@ev.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</div>
+                                            <button class="btn btn-sm btn-outline-secondary mt-1"
+                                                    style="font-size: 0.75rem; padding: 0.25rem 0.5rem;"
+                                                    @onclick="async () => await Copy(ev)">Copy
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    @if (string.Equals(ev.Kind, "PwProtocol", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <div class="mt-2">
+                                            @RenderPlaywrightProtocol(ev)
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        @if (CmdTotalPages > 1)
+                        {
+                            <div class="d-flex justify-content-end align-items-center p-3 border-top"
+                                 style="background: #fafbfc; border-radius: 0 0 0.5rem 0.5rem;">
+                                <nav aria-label="Commands pagination bottom">
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item @(CmdPage <= 1 ? "disabled" : "")">
+                                            <button class="page-link" @onclick="PrevCmdPage" disabled="@(CmdPage <= 1)"
+                                                    style="border-radius: 6px 0 0 6px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                     fill="currentColor" viewBox="0 0 16 16">
+                                                    <path fill-rule="evenodd"
+                                                          d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                                                </svg>
+                                                <span class="ms-1">Previous</span>
+                                            </button>
+                                        </li>
+                                        <li class="page-item disabled">
+                                        <span class="page-link bg-white border-start-0 border-end-0">
+                                            Page <strong>@CmdPage</strong> of <strong>@CmdTotalPages</strong>
+                                        </span>
+                                        </li>
+                                        <li class="page-item @(CmdPage >= CmdTotalPages ? "disabled" : "")">
+                                            <button class="page-link" @onclick="NextCmdPage"
+                                                    disabled="@(CmdPage >= CmdTotalPages)"
+                                                    style="border-radius: 0 6px 6px 0;">
+                                                <span class="me-1">Next</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                     fill="currentColor" viewBox="0 0 16 16">
+                                                    <path fill-rule="evenodd"
+                                                          d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                                                </svg>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        }
+                    }
+                </div>
             </div>
-            @if (CmdTotalPages > 1)
+        }
+    }
+
+    @* Artifacts Tab Content - Main tab *@
+    @if (MainTab == "attachments")
+    {
+        <div class="test-cases-section">
+            @if (_testCases == null)
             {
-                <div class="d-flex justify-content-end align-items-center mt-2">
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Commands pagination bottom">
-                        <button class="btn btn-outline-secondary" disabled="@(CmdPage <= 1)" @onclick="PrevCmdPage">
-                            Prev
-                        </button>
-                        <span class="btn btn-light disabled">Page @CmdPage / @CmdTotalPages</span>
-                        <button class="btn btn-outline-secondary" disabled="@(CmdPage >= CmdTotalPages)"
-                                @onclick="NextCmdPage">Next
-                        </button>
+                <div class="text-muted p-3">Loading artifacts...</div>
+            }
+            else
+            {
+                var allArtifacts = _testCases
+                    .Where(tc => tc.Attachments != null && tc.Attachments.Count > 0)
+                    .SelectMany(tc => tc.Attachments.Select(a => new { TestCase = tc, Artifact = a }))
+                    .ToList();
+
+                if (allArtifacts.Count == 0)
+                {
+                    <div class="empty-state-container" style="padding: 4rem 2rem; text-align: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="#cbd5e1"
+                             viewBox="0 0 16 16" style="margin-bottom: 1.5rem;">
+                            <path
+                                d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/>
+                        </svg>
+                        <h5 style="color: #64748b; font-weight: 500; margin-bottom: 0.5rem;">No artifacts available</h5>
+                        <p style="color: #94a3b8; font-size: 0.9rem; margin: 0;">
+                            This test run does not have any attached artifacts such as screenshots, videos, or trace
+                            files.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-3">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#667eea"
+                                 viewBox="0 0 16 16">
+                                <path
+                                    d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/>
+                            </svg>
+                            <h5 class="mb-0" style="color: #667eea;">Artifacts (@allArtifacts.Count)</h5>
+                        </div>
+
+                        <div class="row g-3">
+                            @foreach (var item in allArtifacts)
+                            {
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-start gap-2 mb-2">
+                                                @if (item.Artifact.ContentType?.StartsWith("image/") == true)
+                                                {
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                         fill="#28a745" viewBox="0 0 16 16">
+                                                        <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                                                        <path
+                                                            d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                                                    </svg>
+                                                }
+                                                else if (item.Artifact.ContentType?.StartsWith("video/") == true)
+                                                {
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                         fill="#dc3545" viewBox="0 0 16 16">
+                                                        <path
+                                                            d="M0 12V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm6.79-6.907A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+                                                    </svg>
+                                                }
+                                                else
+                                                {
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                         fill="#6c757d" viewBox="0 0 16 16">
+                                                        <path
+                                                            d="M5 4a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm-.5 2.5A.5.5 0 0 1 5 6h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zM5 8a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+                                                        <path
+                                                            d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/>
+                                                    </svg>
+                                                }
+                                                <div class="flex-grow-1">
+                                                    <div class="small fw-bold text-truncate"
+                                                         title="@item.Artifact.Name">@item.Artifact.Name</div>
+                                                    <div class="small text-muted">@item.TestCase.TestTitle</div>
+                                                </div>
+                                            </div>
+                                            <div class="small text-muted mb-2">
+                                                @if (item.Artifact.Size > 0)
+                                                {
+                                                    <span>@FormatFileSize(item.Artifact.Size)</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(item.Artifact.ContentType))
+                                                {
+                                                    <span class="ms-2">@item.Artifact.ContentType</span>
+                                                }
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(item.Artifact.Path))
+                                            {
+                                                <a href="/api/artifacts/@item.Artifact.Path" target="_blank"
+                                                   class="btn btn-sm btn-outline-primary w-100">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                                         fill="currentColor" viewBox="0 0 16 16" class="me-1">
+                                                        <path
+                                                            d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
+                                                        <path
+                                                            d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
+                                                    </svg>
+                                                    View
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @if (MainTab == "details")
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        @* Dual Status Display: Test Outcomes and Browser Session *@
+                        <div class="status-container mb-2">
+                            @* Primary: Test Outcome Status *@
+                            <div class="mb-1">
+                                <span class="text-muted">Tests:</span>
+                                <span class="badge @GetTestStatusBadgeClass(_run!.ComputedStatus ?? _run.Status)">
+                                @GetTestStatusDisplay(_run!.ComputedStatus ?? _run.Status)
+                            </span>
+                                <span class="ms-2 small text-muted">
+                                @GetTestResultsSummary()
+                            </span>
+                            </div>
+
+                            @* Secondary: Browser Session Status (only show if problematic) *@
+                            @if (IsBrowserSessionProblematic(_run!.SessionStatus ?? _run.Status))
+                            {
+                                <div>
+                                    <span class="text-muted">Browser:</span>
+                                    <span class="badge @GetSessionStatusBadgeClass(_run!.SessionStatus ?? _run.Status)"
+                                          title="@GetSessionStatusTooltip(_run!.SessionStatus ?? _run.Status)">
+                                    @GetSessionStatusDisplay(_run!.SessionStatus ?? _run.Status)
+                                </span>
+                                    <span class="ms-2 small text-warning">
+                                    ⚠️ Infrastructure issue - browser session did not close cleanly
+                                </span>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="small text-muted">App: @_run!.App · Browser: @_run.Browser · Env: @_run.Env</div>
+                        <div class="small text-muted">Region/OS: @(_run!.Region ?? "-") / @GetDisplayOS()</div>
+                    </div>
+                    <div class="text-end small text-muted">
+                        <div>Started: @_run!.StartedAtUtc.ToLocalTime().ToString("g")</div>
+                        @if (_run!.CompletedAtUtc is not null)
+                        {
+                            <div>Completed: @_run.CompletedAtUtc.Value.ToLocalTime().ToString("g")</div>
+                        }
+                        <div>Node: @(_run.WorkerNodeId ?? "-")</div>
+                        <div>
+                            PW/Browsers: @(string.Join(" / ", new[] { _run.PlaywrightVersion, _run.BrowserVersion }.Where(x => !string.IsNullOrWhiteSpace(x))))</div>
                     </div>
                 </div>
-            }
-        }
-    </div>
-}
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                    <button class="btn btn-sm btn-outline-secondary" title="Copy RunId" @onclick="CopyRunId">Copy RunId
+                    </button>
+                    @if (!string.IsNullOrWhiteSpace(_run.ExternalId))
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" title="Copy ExternalId"
+                                @onclick="CopyExternalId">
+                            Copy ExternalId
+                        </button>
+                    }
+                    @if (IsRunningStatus(_run.Status))
+                    {
+                        <button class="btn btn-sm btn-outline-danger" disabled="@_stopping" @onclick="StopRunAsync">
+                            @(_stopping ? "Stopping..." : "Mark Stopped & Release")
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
 
-<ConfirmDialog @ref="Confirm" />
+    <ConfirmDialog @ref="Confirm"/>
+</div>
 
 @code {
     private ConfirmDialog? Confirm;
     [Parameter] public string runId { get; set; } = string.Empty;
+    [Parameter] public string? projectKey { get; set; }
+    [Parameter] public Guid? launchId { get; set; }
+    [Parameter] public Guid? suiteId { get; set; }
 
     private ResultRunSummaryDto? _run;
-    private bool runNotFound = false;
+    private bool runNotFound;
     private List<CommandLogEventDto>? _commands;
     private HubConnection? _conn;
-    private bool _disposed = false;
+    private bool _disposed;
+
+    // Test cases state
+    private List<TestCaseDetailDto>? _testCases;
+    private List<TestItemDto>? _testItems; // Hierarchical test items
+    private string _testCaseViewMode = "legacy"; // "legacy" or "hierarchical"
+
+    // Tab management
+    private string MainTab = "logs"; // Main tab (logs, attachments, details, history)
+    private string ActiveTab = "tests"; // Sub-tab for logs (tests or commands)
+    private string ViewMode = "list"; // View mode for logs tab (list or history)
 
     // Client-side detected OS for display when server OS is missing
     private string? _displayOs;
@@ -204,7 +805,7 @@ else
 
     private string GetDisplayOS()
     {
-        return NeedsOsDetect() ? (_displayOs ?? "-") : (_run!.OS ?? "-");
+        return NeedsOsDetect() ? _displayOs ?? "-" : _run!.OS ?? "-";
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -237,11 +838,11 @@ else
 
     // Pagination state for Commands
     private int CmdPage = 1;
-    private int CmdPageSize = 50;
+    private readonly int CmdPageSize = 50;
 
     // Server-driven paging state
-    private bool _useServerPaging = false;
-    private int _serverCmdCount = 0;
+    private bool _useServerPaging;
+    private int _serverCmdCount;
     private List<CommandLogEventDto> _pageBuffer = new();
 
     private int CmdTotal => _useServerPaging ? _serverCmdCount : FilteredCommands.Count;
@@ -402,8 +1003,8 @@ else
         var span = end - start;
         if (span.TotalSeconds < 1) return "<1s";
         if (span.TotalMinutes < 1) return $"{(int)span.TotalSeconds}s";
-        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m {(int)span.Seconds}s";
-        return $"{(int)span.TotalHours}h {(int)span.Minutes}m";
+        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+        return $"{(int)span.TotalHours}h {span.Minutes}m";
     }
 
     private async Task CopyRunId()
@@ -448,7 +1049,7 @@ else
             _conn = null;
         }
 
-        var http = HttpFactory.CreateClient("hub");
+        var http = HttpFactory.CreateClient(HttpClientNames.Hub);
         var got404 = false;
 
         try
@@ -456,7 +1057,7 @@ else
             var resp = await http.GetAsync($"/results/{runId}");
             if (!resp.IsSuccessStatusCode)
             {
-                if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+                if (resp.StatusCode == HttpStatusCode.NotFound)
                     got404 = true;
             }
             else
@@ -470,6 +1071,45 @@ else
         }
         catch
         {
+        }
+
+        // Load test cases
+        try
+        {
+            var testCasesResp = await http.GetAsync($"/api/runs/{runId}/tests");
+            if (testCasesResp.IsSuccessStatusCode)
+            {
+                _testCases = await testCasesResp.Content.ReadFromJsonAsync<List<TestCaseDetailDto>>();
+            }
+            else
+            {
+                _testCases = new List<TestCaseDetailDto>();
+            }
+        }
+        catch
+        {
+            _testCases = new List<TestCaseDetailDto>();
+        }
+
+        // Try to load hierarchical test items (Phase 7 integration)
+        try
+        {
+            // Attempt to get test items for this run (if run has been converted to test item)
+            var testItemResp = await http.GetAsync($"/api/test-items/{runId}/tree?maxDepth=5");
+            if (testItemResp.IsSuccessStatusCode)
+            {
+                var rootItem = await testItemResp.Content.ReadFromJsonAsync<TestItemDto>();
+                _testItems = rootItem != null ? new List<TestItemDto> { rootItem } : new List<TestItemDto>();
+            }
+            else
+            {
+                _testItems = new List<TestItemDto>();
+            }
+        }
+        catch
+        {
+            // Test items not available - not an error, just means this run doesn't use hierarchical model yet
+            _testItems = new List<TestItemDto>();
         }
 
         // Try to enable server-driven paging: query count and load first page
@@ -502,14 +1142,10 @@ else
                 ClampPage();
             }
 
-            // Seed simulated data only if still empty
+            // No simulated data - only show real browser commands from database
+            // Only Test and Scenario types should have real browser events logged
             lock (_gate)
             {
-                if (_commands.Count == 0)
-                    _commands = GenerateSimulatedPlaywrightCommands(runId);
-                if (_run is null && _commands.Count > 0)
-                    _run = GenerateSimulatedRunSummary(runId);
-
                 runNotFound = got404 && _run is null && _commands.Count == 0;
             }
 
@@ -545,7 +1181,7 @@ else
                     StateHasChanged();
                 }));
 
-            _conn.On<CommandLogEventDto[]>("CommandLogChunk", (CommandLogEventDto[] items) =>
+            _conn.On("CommandLogChunk", (CommandLogEventDto[] items) =>
             {
                 if (_disposed) return;
                 if (items == null || items.Length == 0) return;
@@ -585,6 +1221,78 @@ else
                 }
             });
 
+            // SignalR test case updates
+            _conn.On<ResultTestCaseDto>("TestUpdate", testCase =>
+            {
+                InvokeAsync(() =>
+                {
+                    if (_disposed) return;
+                    if (!string.Equals(testCase.RunId, runId, StringComparison.OrdinalIgnoreCase)) return;
+
+                    lock (_gate)
+                    {
+                        _testCases ??= new List<TestCaseDetailDto>();
+
+                        // Convert ResultTestCaseDto to TestCaseDetailDto
+                        var detailedTest = new TestCaseDetailDto
+                        {
+                            RunId = testCase.RunId,
+                            TestId = testCase.TestId,
+                            TestTitle = testCase.Title,
+                            TestFile = testCase.File,
+                            Status = testCase.Status,
+                            StartTime = DateTime.UtcNow,
+                            EndTime = null,
+                            DurationMs = testCase.DurationMs,
+                            ErrorMessage = testCase.ErrorMessage,
+                            ErrorStack = testCase.ErrorStack
+                        };
+
+                        var existing = _testCases.FirstOrDefault(t => t.TestId == testCase.TestId);
+                        if (existing != null)
+                            _testCases.Remove(existing);
+                        _testCases.Add(detailedTest);
+                    }
+
+                    StateHasChanged();
+                });
+            });
+
+            // SignalR test item updates (Phase 9 - Real-time hierarchical updates)
+            _conn.On<TestItemDto>("TestItemUpdated", testItem =>
+            {
+                InvokeAsync(() =>
+                {
+                    if (_disposed) return;
+                    if (_testItems == null) return;
+
+                    lock (_gate)
+                    {
+                        // Update or add the test item in the hierarchical structure
+                        UpdateTestItemInTree(testItem);
+                    }
+
+                    StateHasChanged();
+                });
+            });
+
+            _conn.On<Guid, string?, string?>("TestItemStatusChanged", (itemId, sessionStatus, computedStatus) =>
+            {
+                InvokeAsync(() =>
+                {
+                    if (_disposed) return;
+                    if (_testItems == null) return;
+
+                    lock (_gate)
+                    {
+                        // Find and update the test item status
+                        UpdateTestItemStatus(itemId, sessionStatus, computedStatus);
+                    }
+
+                    StateHasChanged();
+                });
+            });
+
             await _conn.StartAsync();
             await _conn.SendAsync("JoinRun", runId);
         }
@@ -619,6 +1327,145 @@ else
         }
     }
 
+    // Phase 9: Helper methods for real-time test item updates
+    private void UpdateTestItemInTree(TestItemDto updatedItem)
+    {
+        if (_testItems == null) return;
+
+        // Find and update the item in the tree (recursive search)
+        for (var i = 0; i < _testItems.Count; i++)
+        {
+            if (_testItems[i].Id == updatedItem.Id)
+            {
+                // Found at root level - replace it
+                _testItems[i] = updatedItem;
+                return;
+            }
+
+            // Search in children recursively
+            if (UpdateItemInChildren(_testItems[i], updatedItem))
+                return;
+        }
+
+        // If not found, add as new root item (shouldn't happen normally)
+        _testItems.Add(updatedItem);
+    }
+
+    private bool UpdateItemInChildren(TestItemDto parent, TestItemDto updatedItem)
+    {
+        if (parent.Children == null) return false;
+
+        for (var i = 0; i < parent.Children.Count; i++)
+        {
+            if (parent.Children[i].Id == updatedItem.Id)
+            {
+                // Found in children - need to create new parent with updated child (immutable records)
+                var newChildren = parent.Children.ToList();
+                newChildren[i] = updatedItem;
+
+                // Update the parent in the main list
+                UpdateParentWithNewChildren(parent.Id, newChildren);
+                return true;
+            }
+
+            // Search deeper
+            if (UpdateItemInChildren(parent.Children[i], updatedItem))
+                return true;
+        }
+
+        return false;
+    }
+
+    private void UpdateParentWithNewChildren(Guid parentId, List<TestItemDto> newChildren)
+    {
+        if (_testItems == null) return;
+
+        for (var i = 0; i < _testItems.Count; i++)
+        {
+            if (_testItems[i].Id == parentId)
+            {
+                _testItems[i] = _testItems[i] with { Children = newChildren };
+                return;
+            }
+
+            // Search in children
+            UpdateParentInChildren(_testItems[i], parentId, newChildren);
+        }
+    }
+
+    private bool UpdateParentInChildren(TestItemDto item, Guid targetParentId, List<TestItemDto> newChildren)
+    {
+        if (item.Children == null) return false;
+
+        for (var i = 0; i < item.Children.Count; i++)
+        {
+            if (item.Children[i].Id == targetParentId)
+            {
+                var updatedChildren = item.Children.ToList();
+                updatedChildren[i] = updatedChildren[i] with { Children = newChildren };
+
+                // Need to update this item's parent now
+                UpdateParentWithNewChildren(item.Id, updatedChildren);
+                return true;
+            }
+
+            if (UpdateParentInChildren(item.Children[i], targetParentId, newChildren))
+                return true;
+        }
+
+        return false;
+    }
+
+    private void UpdateTestItemStatus(Guid itemId, string? sessionStatus, string? computedStatus)
+    {
+        if (_testItems == null) return;
+
+        // Find and update status in the tree
+        for (var i = 0; i < _testItems.Count; i++)
+        {
+            if (_testItems[i].Id == itemId)
+            {
+                _testItems[i] = _testItems[i] with
+                {
+                    SessionStatus = sessionStatus ?? _testItems[i].SessionStatus,
+                    ComputedStatus = computedStatus ?? _testItems[i].ComputedStatus
+                };
+                return;
+            }
+
+            // Search in children
+            if (UpdateStatusInChildren(_testItems[i], itemId, sessionStatus, computedStatus))
+                return;
+        }
+    }
+
+    private bool UpdateStatusInChildren(TestItemDto parent, Guid itemId, string? sessionStatus, string? computedStatus)
+    {
+        if (parent.Children == null) return false;
+
+        for (var i = 0; i < parent.Children.Count; i++)
+        {
+            if (parent.Children[i].Id == itemId)
+            {
+                var updatedChild = parent.Children[i] with
+                {
+                    SessionStatus = sessionStatus ?? parent.Children[i].SessionStatus,
+                    ComputedStatus = computedStatus ?? parent.Children[i].ComputedStatus
+                };
+
+                var newChildren = parent.Children.ToList();
+                newChildren[i] = updatedChild;
+                UpdateParentWithNewChildren(parent.Id, newChildren);
+                return true;
+            }
+
+            if (UpdateStatusInChildren(parent.Children[i], itemId, sessionStatus, computedStatus))
+                return true;
+        }
+
+        return false;
+    }
+
     private async Task Copy(CommandLogEventDto ev)
     {
         var props = ev.Props is null || ev.Props.Count == 0
@@ -647,8 +1494,8 @@ else
         var pretty = text;
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(text);
-            pretty = System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions
+            using var doc = JsonDocument.Parse(text);
+            pretty = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions
             {
                 WriteIndented = true
             });
@@ -659,14 +1506,14 @@ else
         }
 
         // Encode content to avoid HTML injection; keep our own badges unencoded
-        var encoded = System.Net.WebUtility.HtmlEncode(pretty);
+        var encoded = WebUtility.HtmlEncode(pretty);
         var html = $"{dirBadge}<pre class=\"mb-0 small\" style=\"white-space:pre-wrap; overflow:auto; max-height:24rem;\">{encoded}</pre>";
         return new MarkupString(html);
     }
 
     private static string Short(string? id)
     {
-        return id?.Length > 8 ? id.Substring(0, 8) : (id ?? "-");
+        return id?.Length > 8 ? id.Substring(0, 8) : id ?? "-";
     }
 
     private static string StatusBadgeClass(string? status)
@@ -693,7 +1540,99 @@ else
         return string.Equals(status, "Passed", StringComparison.OrdinalIgnoreCase) ? "Finished" : status!;
     }
 
-    private bool _stopping = false;
+    // Test Status Display (Primary)
+    private static string GetTestStatusBadgeClass(string? status)
+    {
+        var s = status?.Trim().ToLowerInvariant() ?? "";
+        return s switch
+        {
+            "passed" => "bg-success",
+            "failed" => "bg-danger",
+            "inprogress" or "running" => "bg-primary",
+            "skipped" => "bg-secondary",
+            "timedout" => "bg-warning text-dark",
+            "cancelled" => "bg-secondary",
+            "errored" => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string GetTestStatusDisplay(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return "InProgress";
+        return status switch
+        {
+            "InProgress" => "In Progress",
+            "Passed" => "✅ Passed",
+            "Failed" => "❌ Failed",
+            "Skipped" => "⊘ Skipped",
+            "Timedout" => "⏱️ Timed Out",
+            "Cancelled" => "🛑 Cancelled",
+            "Errored" => "⚠️ Errored",
+            _ => status
+        };
+    }
+
+    private string GetTestResultsSummary()
+    {
+        if (_run == null) return "";
+        var parts = new List<string>();
+        if (_run.Passed > 0) parts.Add($"{_run.Passed} passed");
+        if (_run.Failed > 0) parts.Add($"{_run.Failed} failed");
+        if (_run.Skipped > 0) parts.Add($"{_run.Skipped} skipped");
+        if (_run.TimedOut > 0) parts.Add($"{_run.TimedOut} timed out");
+        return parts.Count > 0 ? $"({string.Join(", ", parts)})" : $"({_run.TotalTests} tests)";
+    }
+
+    // Browser Session Status Display (Secondary)
+    private static bool IsBrowserSessionProblematic(string? sessionStatus)
+    {
+        var s = sessionStatus?.Trim().ToLowerInvariant() ?? "";
+        return s is "stopped" or "autostopped" or "aborted";
+    }
+
+    private static string GetSessionStatusBadgeClass(string? sessionStatus)
+    {
+        var s = sessionStatus?.Trim().ToLowerInvariant() ?? "";
+        return s switch
+        {
+            "completed" => "bg-success",
+            "running" => "bg-primary",
+            "stopped" => "bg-warning text-dark",
+            "autostopped" => "bg-warning text-dark",
+            "aborted" => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string GetSessionStatusDisplay(string? sessionStatus)
+    {
+        if (string.IsNullOrWhiteSpace(sessionStatus)) return "-";
+        return sessionStatus switch
+        {
+            "Completed" => "✅ Completed",
+            "Running" => "▶️ Running",
+            "Stopped" => "🛑 Stopped",
+            "AutoStopped" => "⚠️ Auto-Stopped",
+            "Aborted" => "❌ Aborted",
+            _ => sessionStatus
+        };
+    }
+
+    private static string GetSessionStatusTooltip(string? sessionStatus)
+    {
+        var s = sessionStatus?.Trim().ToLowerInvariant() ?? "";
+        return s switch
+        {
+            "stopped" => "Browser session was manually stopped by user",
+            "autostopped" => "Browser session was automatically stopped due to timeout or cleanup",
+            "aborted" => "Browser session was aborted due to infrastructure error",
+            "completed" => "Browser session completed and was returned to pool successfully",
+            _ => "Browser session status"
+        };
+    }
+
+    private bool _stopping;
 
     private static bool IsRunningStatus(string? status)
     {
@@ -712,7 +1651,7 @@ else
         using var __scope = Logger.BeginScope(new Dictionary<string, object> { ["runId"] = id! });
         try
         {
-            var http = HttpFactory.CreateClient("hub");
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
             var resp = await http.PostAsync($"/results/{id}/stop", null);
             if (!resp.IsSuccessStatusCode)
             {
@@ -739,7 +1678,7 @@ else
             Browser = "Chromium",
             Env = "local",
             Region = "",
-            OS = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            OS = RuntimeInformation.OSDescription,
             Status = "Running",
             TotalTests = 1,
             Passed = 0,
@@ -790,7 +1729,7 @@ else
     {
         try
         {
-            var http = HttpFactory.CreateClient("hub");
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
             var resp = await http.GetAsync($"/results/{runId}/commands/count");
             if (!resp.IsSuccessStatusCode) return false;
             var payload = await resp.Content.ReadFromJsonAsync<CountResponse>();
@@ -815,7 +1754,7 @@ else
         var skip = (page - 1) * CmdPageSize;
         try
         {
-            var http = HttpFactory.CreateClient("hub");
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
             var url = $"/results/{runId}/commands?skip={skip}&take={CmdPageSize}";
             var items = await http.GetFromJsonAsync<List<CommandLogEventDto>>(url) ?? new List<CommandLogEventDto>();
             _pageBuffer = items.OrderBy(c => c.TimestampUtc).ToList();
@@ -824,6 +1763,56 @@ else
         {
             _pageBuffer = new List<CommandLogEventDto>();
         }
+    }
+
+    // ===== Test Case Methods =====
+
+    private void SetActiveTab(string tab)
+    {
+        ActiveTab = tab;
+    }
+
+    // Test statistics
+    private int PassedCount => _testCases?.Count(t => t.Status == "Passed") ?? 0;
+    private int FailedCount => _testCases?.Count(t => t.Status == "Failed") ?? 0;
+    private int SkippedCount => _testCases?.Count(t => t.Status == "Skipped") ?? 0;
+    private int RunningCount => _testCases?.Count(t => t.Status == "Running") ?? 0;
+
+    private static string TestStatusBadge(string status)
+    {
+        return status.ToLowerInvariant() switch
+        {
+            "passed" => "bg-success",
+            "failed" => "bg-danger",
+            "skipped" => "bg-secondary",
+            "running" => "bg-warning text-dark",
+            "queued" => "bg-info",
+            "timedout" => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        var order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private static string FormatDuration(double ms)
+    {
+        if (ms < 1000)
+            return $"{ms:F0}ms";
+        if (ms < 60000)
+            return $"{ms / 1000:F2}s";
+        return $"{ms / 60000:F1}m";
     }
 
 }

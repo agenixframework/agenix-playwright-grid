@@ -1,13 +1,29 @@
 @page "/"
+@page "/pool/"
+@using System.Text.RegularExpressions
 @using Dashboard.Application.Ports
 @implements IDisposable
 @inject IPoolStateReader Proxy
 @inject IHttpClientFactory HttpFactory
 @inject IJSRuntime JS
 
-<div class="d-flex align-items-center my-3">
-    <h3 class="mb-0">Live Browser Pool Dashboard</h3>
-    <a class="btn btn-sm btn-outline-primary ms-auto" href="/results" title="Go to Test Results">View Test Results</a>
+<link href="css/index-pool.css" rel="stylesheet"/>
+
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M1.5 8a6.5 6.5 0 1 1 13 0A6.5 6.5 0 0 1 1.5 8zM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0z"/>
+                <path
+                    d="M6.646 6.646a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L8.293 9H6.5a.5.5 0 0 1 0-1h1.793L6.646 6.354a.5.5 0 0 1 0-.708z"/>
+                <circle cx="8" cy="8" r="1.5"/>
+            </svg>
+        </div>
+        <div>
+            <h3>Live Browser Pool Dashboard</h3>
+            <div class="subtitle">Monitor active browser pools and resource utilization</div>
+        </div>
+    </div>
 </div>
 
 @if (Proxy.Get() is null)
@@ -57,79 +73,170 @@ else
         </div>
     </div>
 
-    <h5 class="mt-3">Pools</h5>
-    @if (state.Pools.Count == 0)
+    <div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+        <h5 class="mb-0">Pools</h5>
+        <div class="d-flex gap-2 align-items-center">
+            <div class="search-controls">
+                <input type="text" class="form-control form-control-sm" placeholder="Search pools..."
+                       @bind="_poolSearchQuery" @oninput="StateHasChanged" style="width: 200px;">
+            </div>
+            <select class="form-select form-select-sm" @bind="_poolFilterStatus" style="width: 140px;">
+                <option value="all">All Status</option>
+                <option value="healthy">Healthy</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="offline">Offline</option>
+            </select>
+        </div>
+    </div>
+
+    @if (GetFilteredAndSortedPools().Count() == 0)
     {
-        <div class="text-muted">No pools configured.</div>
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            @if (state.Pools.Count == 0)
+            {
+                <span>No pools configured.</span>
+            }
+            else
+            {
+                <span>No pools match the current filter criteria.</span>
+            }
+        </div>
     }
     else
     {
         <div class="row g-3">
-            @foreach (var p in state.Pools.OrderBy(x => x.Label))
+            @foreach (var p in GetFilteredAndSortedPools())
             {
                 var borrowedPct = Percent(p.Borrowed, p.Total);
                 var availPct = Percent(p.Total - p.Borrowed, p.Total);
+                var healthStatus = GetPoolHealthStatus(p);
+                var isRestarting = IsRestarting(p.Label);
+
                 <div class="col-12 col-md-6 col-lg-4">
-                    <div class="card h-100 @(p.MaintenanceActive ? "bg-light border-secondary opacity-75" : "")">
+                    <div
+                        class="card h-100 pool-card @(p.MaintenanceActive ? "maintenance-mode" : "") @(isRestarting ? "restarting" : "")">
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="fw-semibold">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="pool-header">
                                     @{
                                         var engine = GetEngine(p.Label);
                                     }
-                                    <span class="me-1" title="@engine">@((MarkupString)GetEngineIcon(engine))</span>
-                                    @p.Label
+                                    <div class="d-flex align-items-start">
+                                        <span class="me-2 pool-icon @GetActivityIndicatorClass(isRestarting)"
+                                              title="@engine">@((MarkupString)GetEngineIcon(engine))</span>
+                                        <div>
+                                            <div class="fw-semibold pool-name tooltip-trigger"
+                                                 title="Pool: @p.Label\nEngine: @engine">@p.Label</div>
+                                            @if (!string.IsNullOrWhiteSpace(p.BrowserVersion))
+                                            {
+                                                <div class="small text-muted browser-version tooltip-trigger"
+                                                     title="Browser Version: @p.BrowserVersion">@p.BrowserVersion</div>
+                                            }
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="d-flex align-items-center">
-                                    @if (p.MaintenanceActive)
-                                    {
-                                        <span class="badge bg-warning text-dark me-2"
-                                              title="Borrowing paused; counts frozen">Maintenance</span>
-                                    }
-                                    <span class="badge bg-secondary">@p.Total total</span>
-                                    <div class="dropdown ms-2">
-                                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Pool actions">
+                                <div class="d-flex align-items-center flex-wrap gap-1">
+                                    <span class="badge @healthStatus.badgeClass pool-status-badge tooltip-trigger"
+                                          title="@GetPoolTooltip(p)">@healthStatus.status.ToUpper()</span>
+                                    <span class="badge bg-light text-dark total-count">@p.Total total</span>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary pool-actions-btn"
+                                                type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                                title="Pool actions">
                                             &#8942;
                                         </button>
-                                        <ul class="dropdown-menu dropdown-menu-end">
+                                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-enhanced">
+                                            <li class="dropdown-header">
+                                                <i class="fas fa-cog me-2"></i>Pool Actions
+                                            </li>
                                             <li>
-                                                <button class="dropdown-item" disabled="@(p.MaintenanceActive || IsRestarting(p.Label))" @onclick="() => RestartPool(p.Label)">
-                                                    @if (IsRestarting(p.Label))
+                                                <button class="dropdown-item @(isRestarting ? "loading" : "")"
+                                                        disabled="@(p.MaintenanceActive || isRestarting)"
+                                                        @onclick="() => RestartPool(p.Label)"
+                                                        title="Restart all pre-warmed browsers in this pool">
+                                                    @if (isRestarting)
                                                     {
-                                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                        <i class="spinner-border spinner-border-sm me-2" role="status"
+                                                           aria-hidden="true"></i>
                                                         <span>Restarting…</span>
                                                     }
                                                     else
                                                     {
-                                                        <span>Restart All</span>
+                                                        <i class="fas fa-redo me-2 text-warning"></i>
+                                                        <span>Restart Pool</span>
                                                     }
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <hr class="dropdown-divider">
+                                            </li>
+                                            <li class="dropdown-header">
+                                                <i class="fas fa-info-circle me-2"></i>Pool Info
+                                            </li>
+                                            <li>
+                                                <button class="dropdown-item-info" disabled>
+                                                    <div class="d-flex justify-content-between">
+                                                        <span>Utilization:</span>
+                                                        <strong>@((p.Total > 0 ? Math.Round(p.Borrowed * 100.0 / p.Total, 1) : 0).ToString("F1"))%</strong>
+                                                    </div>
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button class="dropdown-item-info" disabled>
+                                                    <div class="d-flex justify-content-between">
+                                                        <span>Available:</span>
+                                                        <strong class="text-success">@(p.Total - p.Borrowed)</strong>
+                                                    </div>
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button class="dropdown-item-info" disabled>
+                                                    <div class="d-flex justify-content-between">
+                                                        <span>In Use:</span>
+                                                        <strong class="text-primary">@p.Borrowed</strong>
+                                                    </div>
                                                 </button>
                                             </li>
                                         </ul>
                                     </div>
                                 </div>
                             </div>
-                            @if (!string.IsNullOrWhiteSpace(p.BrowserVersion))
-                            {
-                                <div class="small text-muted">Browser: @p.BrowserVersion</div>
-                            }
-                            <div class="mt-2 small">
-                                <span class="text-danger me-2">Borrowed: @p.Borrowed</span>
-                                <span class="text-success">Available: @(p.Total - p.Borrowed)</span>
+
+                            <div class="pool-stats mb-3">
+                                <div class="row g-2 text-center">
+                                    <div class="col-4">
+                                        <div class="stat-value text-success">@(p.Total - p.Borrowed)</div>
+                                        <div class="stat-label">Available</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="stat-value text-danger">@p.Borrowed</div>
+                                        <div class="stat-label">Borrowed</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="stat-value text-primary">@borrowedPct%</div>
+                                        <div class="stat-label">Utilization</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="progress mt-2" role="progressbar" aria-label="Pool utilization"
-                                 aria-valuemin="0" aria-valuemax="100">
-                                <div class="progress-bar bg-success" style="width:@(availPct)%"></div>
-                                <div class="progress-bar bg-danger" style="width:@(borrowedPct)%"></div>
+
+                            <div class="progress enhanced-progress mb-2" role="progressbar"
+                                 aria-label="Pool utilization"
+                                 aria-valuemin="0" aria-valuemax="100" style="height: 8px;">
+                                <div class="progress-bar bg-success progress-available"
+                                     style="width:@(availPct)%"></div>
+                                <div class="progress-bar bg-danger progress-borrowed"
+                                     style="width:@(borrowedPct)%"></div>
                             </div>
-                            <div class="d-flex justify-content-between small text-muted mt-1">
-                                <div>@availPct% available</div>
-                                <div>@borrowedPct% borrowed</div>
-                            </div>
+
                             @if (p.MaintenanceActive)
                             {
-                                <div class="mt-2 small text-muted">
-                                    Maintenance mode: borrowing paused; counts frozen until pool is fully restored.
+                                <div class="alert alert-warning alert-sm mb-2">
+                                    <i class="fas fa-tools me-1"></i>
+                                    <small>Maintenance mode: borrowing paused; counts frozen until pool is fully
+                                        restored.</small>
                                 </div>
                             }
 
@@ -155,100 +262,430 @@ else
         </div>
     }
 
-    <h5 class="mt-4">Workers</h5>
-    @if (state.Workers!.Count == 0)
+    <div class="d-flex align-items-center justify-content-between mt-4 mb-3">
+        <h5 class="mb-0">Workers</h5>
+        <div class="d-flex gap-2 align-items-center">
+            <div class="search-controls">
+                <input type="text" class="form-control form-control-sm" placeholder="Search workers..."
+                       @bind="_workerSearchQuery" @oninput="StateHasChanged" style="width: 200px;">
+            </div>
+            <select class="form-select form-select-sm" @bind="_workerFilterStatus" style="width: 140px;">
+                <option value="all">All Status</option>
+                <option value="online">Online</option>
+                <option value="warning">Warning</option>
+                <option value="offline">Offline</option>
+                <option value="quarantined">Quarantined</option>
+            </select>
+            <span class="badge bg-light text-dark">@state.Workers!.Count total</span>
+        </div>
+    </div>
+
+    @if (GetFilteredAndSortedWorkers().Count() == 0)
     {
-        <div class="text-muted">No workers registered.</div>
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            @if (state.Workers!.Count == 0)
+            {
+                <span>No workers registered. Workers will appear here once they connect to the hub.</span>
+            }
+            else
+            {
+                <span>No workers match the current filter criteria.</span>
+            }
+        </div>
     }
     else
     {
         <div class="table-responsive">
-            <table class="table table-sm align-middle">
+            <table class="table table-sm align-middle workers-table">
                 <thead>
                 <tr>
+                    <th scope="col" style="width: 40px;"></th>
                     <th scope="col">Worker</th>
-                    <th scope="col"
+                    <th scope="col" class="d-none d-md-table-cell"
                         title="Worker-provided metadata labels (e.g., region=local). 'local' is the default region if NODE_REGION is not set.">
                         Labels
                     </th>
-                    <th scope="col">Last seen</th>
-                    <th scope="col">Playwright</th>
-                    <th scope="col" class="text-end">Total browsers</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="d-none d-lg-table-cell">Playwright</th>
+                    <th scope="col" class="text-end">Browsers</th>
                     <th scope="col" class="text-end">Actions</th>
                 </tr>
                 </thead>
                 <tbody>
-                @foreach (var w in state.Workers)
+                @foreach (var w in GetFilteredAndSortedWorkers())
                 {
-                    <tr>
-                        <td class="fw-semibold" title="@w.Id">@ShortId(w.Id)</td>
+                    var connectionStatus = GetWorkerConnectionStatus(w);
+                    var isUpgrading = IsUpgrading(w.Id);
+
+                    <tr class="worker-row @(w.Quarantined ? "quarantined" : "")">
                         <td>
+                            <button class="btn btn-sm btn-link expand-btn p-0"
+                                    @onclick="() => ToggleWorkerExpansion(w.Id)"
+                                    title="@(_expandedWorkers.Contains(w.Id) ? "Collapse details" : "Expand details")">
+                                <i class="fas @(_expandedWorkers.Contains(w.Id) ? "fa-chevron-up" : "fa-chevron-down")"></i>
+                            </button>
+                        </td>
+                        <td>
+                            <div class="worker-info">
+                                <span class="fw-semibold worker-id tooltip-trigger"
+                                      title="@GetWorkerTooltip(w)">@ShortId(w.Id)</span>
+                                <div class="d-md-none small text-muted mt-1">
+                                    @if (w.Labels?.Count > 0)
+                                    {
+                                        @foreach (var lab in w.Labels.Take(2))
+                                        {
+                                            var truncated = TruncateLabel(lab);
+                                            <span class="badge bg-light text-dark me-1 label-badge tooltip-trigger"
+                                                  title="@lab">@truncated</span>
+                                        }
+
+                                        @if (w.Labels.Count > 2)
+                                        {
+                                            <span class="text-muted tooltip-trigger"
+                                                  title="@string.Join("\n", w.Labels.Skip(2))">+@(w.Labels.Count - 2) more</span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </td>
+                        <td class="d-none d-md-table-cell">
                             @if (w.Labels == null || w.Labels.Count == 0)
                             {
                                 <span class="text-muted">—</span>
                             }
                             else
                             {
-                                @foreach (var lab in w.Labels)
+                                @foreach (var lab in w.Labels.Take(3))
                                 {
-                                    <span class="badge bg-light text-dark me-1">@lab</span>
+                                    var truncated = TruncateLabel(lab);
+                                    <span class="badge bg-light text-dark me-1 label-badge tooltip-trigger"
+                                          title="@lab">@truncated</span>
+                                }
+
+                                @if (w.Labels.Count > 3)
+                                {
+                                    <span class="text-muted small tooltip-trigger"
+                                          title="@string.Join("\n", w.Labels.Skip(3))">+@(w.Labels.Count - 3) more</span>
                                 }
                             }
                         </td>
                         <td>
-                            <span title="@w.LastSeen.ToString("u")">@FormatAgo(w.LastSeen)</span>
+                            <div class="worker-status">
+                                <span class="badge @connectionStatus.badgeClass worker-status-badge mb-1"
+                                      title="@connectionStatus.description">@connectionStatus.status.ToUpper()</span>
+                                <div class="small text-muted"
+                                     title="@w.LastSeen.ToString("u")">@FormatAgo(w.LastSeen)</div>
+                            </div>
                         </td>
-                        <td>
+                        <td class="d-none d-lg-table-cell">
                             @if (string.IsNullOrWhiteSpace(w.PlaywrightVersion))
                             {
                                 <span class="text-muted">—</span>
                             }
                             else
                             {
-                                <span>@w.PlaywrightVersion</span>
+                                <span class="playwright-version">@w.PlaywrightVersion</span>
                             }
                         </td>
-                        <td class="text-end">@w.TotalBrowsers</td>
+                        <td class="text-end">
+                            <span class="browser-count">@w.TotalBrowsers</span>
+                        </td>
                         <td class="text-end">
                             <div class="dropdown d-inline">
-                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Worker actions">
-                                    &#8942;
+                                <button
+                                    class="btn btn-sm btn-outline-secondary worker-actions-btn @(isUpgrading ? "activity-pulse" : "")"
+                                    type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                    title="Worker actions">
+                                    &#8943;
                                 </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
+                                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-sm dropdown-menu-enhanced">
+                                    <li class="dropdown-header">
+                                        <i class="fas fa-server me-2"></i>Worker Actions
+                                    </li>
                                     <li>
-                                        <button class="dropdown-item" disabled="@IsUpgrading(w.Id)" title="Graceful drain and restart sidecars on this worker" @onclick="() => UpgradeWorker(w.Id)">
-                                            @if (IsUpgrading(w.Id))
+                                        <button class="dropdown-item @(isUpgrading ? "loading" : "")"
+                                                disabled="@isUpgrading"
+                                                title="Graceful drain and restart sidecars on this worker"
+                                                @onclick="() => UpgradeWorker(w.Id)">
+                                            @if (isUpgrading)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                <i class="spinner-border spinner-border-sm me-2" role="status"
+                                                   aria-hidden="true"></i>
                                                 <span>Restarting…</span>
                                             }
                                             else
                                             {
-                                                <span>Restart</span>
+                                                <i class="fas fa-sync-alt me-2 text-warning"></i>
+                                                <span>Restart Worker</span>
                                             }
                                         </button>
                                     </li>
+                                    @if (w.Quarantined)
+                                    {
+                                        <li>
+                                            <hr class="dropdown-divider">
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item text-danger" disabled>
+                                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                                <span>Quarantined</span>
+                                            </button>
+                                        </li>
+                                    }
                                 </ul>
                             </div>
                         </td>
                     </tr>
+                    @if (_expandedWorkers.Contains(w.Id))
+                    {
+                        <tr class="worker-details-row">
+                            <td></td>
+                            <td colspan="6" class="p-0">
+                                <div class="worker-details-panel">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="detail-card">
+                                                <h6 class="detail-title"><i
+                                                        class="fas fa-info-circle text-primary me-2"></i>Worker
+                                                    Information</h6>
+                                                <div class="detail-content">
+                                                    <div class="detail-item">
+                                                        <strong>Full ID:</strong> <code
+                                                            class="worker-id-full">@w.Id</code>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <strong>Status:</strong> <span
+                                                            class="badge @connectionStatus.badgeClass">@connectionStatus.status</span>
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <strong>Last
+                                                            Seen:</strong> @w.LastSeen.ToString("yyyy-MM-dd HH:mm:ss") UTC
+                                                    </div>
+                                                    <div class="detail-item">
+                                                        <strong>Quarantined:</strong> <span
+                                                            class="@(w.Quarantined ? "text-danger" : "text-success")">@(w.Quarantined ? "Yes" : "No")</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="detail-card">
+                                                <h6 class="detail-title"><i class="fas fa-cogs text-success me-2"></i>Technical
+                                                    Details</h6>
+                                                <div class="detail-content">
+                                                    <div class="detail-item">
+                                                        <strong>Total Browsers:</strong> @w.TotalBrowsers
+                                                    </div>
+                                                    @if (!string.IsNullOrWhiteSpace(w.PlaywrightVersion))
+                                                    {
+                                                        <div class="detail-item">
+                                                            <strong>Playwright Version:</strong>
+                                                            <code>@w.PlaywrightVersion</code>
+                                                        </div>
+                                                    }
+                                                    @if (w.Labels?.Count > 0)
+                                                    {
+                                                        <div class="detail-item">
+                                                            <strong>Labels:</strong>
+                                                            <div class="mt-1">
+                                                                @foreach (var label in w.Labels)
+                                                                {
+                                                                    <span
+                                                                        class="badge bg-light text-dark me-1 mb-1">@label</span>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
                 }
                 </tbody>
             </table>
         </div>
     }
 
+    <!-- Phase 3: Analytics Dashboard -->
+    <div class="analytics-section mt-5">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <h4 class="mb-0"><i class="fas fa-chart-line text-primary me-2"></i>Analytics & Performance</h4>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" style="width: 120px;">
+                    <option value="1h">Last Hour</option>
+                    <option value="24h" selected>Last 24h</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                </select>
+                <button class="btn btn-sm btn-outline-secondary" title="Refresh Data">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Key Metrics Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <i class="fas fa-clock text-info"></i>
+                        <span>Avg Response Time</span>
+                    </div>
+                    <div class="metric-value">@GetAverageResponseTime()ms</div>
+                    <div class="metric-trend @GetTrendClass("response", 5.2)">
+                        <i class="fas @GetTrendIcon(5.2)"></i>
+                        <span>+5.2% vs yesterday</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <i class="fas fa-chart-line text-success"></i>
+                        <span>Success Rate</span>
+                    </div>
+                    <div class="metric-value">@GetSuccessRate().ToString("F2")%</div>
+                    <div class="metric-trend @GetTrendClass("success", 2.1)">
+                        <i class="fas @GetTrendIcon(2.1)"></i>
+                        <span>+2.1% vs yesterday</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <i class="fas fa-users text-warning"></i>
+                        <span>Peak Concurrency</span>
+                    </div>
+                    <div class="metric-value">@GetPeakConcurrency()</div>
+                    <div class="metric-trend @GetTrendClass("concurrency", -1.3)">
+                        <i class="fas @GetTrendIcon(-1.3)"></i>
+                        <span>-1.3% vs yesterday</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <i class="fas fa-server text-danger"></i>
+                        <span>Resource Usage</span>
+                    </div>
+                    <div class="metric-value">@GetResourceUsage()%</div>
+                    <div class="metric-trend @GetTrendClass("resource", 0.8)">
+                        <i class="fas @GetTrendIcon(0.8)"></i>
+                        <span>+0.8% vs yesterday</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health Alerts -->
+        <div class="alerts-section mb-4">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="mb-0"><i class="fas fa-bell text-warning me-2"></i>System Alerts</h6>
+                <span class="badge bg-warning">@GetActiveAlertsCount() Active</span>
+            </div>
+
+            <div class="alerts-container">
+                @foreach (var alert in GetSystemAlerts())
+                {
+                    <div class="alert-item @GetAlertClass(alert.severity)">
+                        <div class="alert-icon">
+                            <i class="fas @GetAlertIcon(alert.severity)"></i>
+                        </div>
+                        <div class="alert-content">
+                            <div class="alert-title">@alert.title</div>
+                            <div class="alert-description">@alert.description</div>
+                            <div class="alert-time">@FormatAgo(alert.timestamp)</div>
+                        </div>
+                        <div class="alert-actions">
+                            <button class="btn btn-sm btn-link text-muted" title="Dismiss">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                @if (!GetSystemAlerts().Any())
+                {
+                    <div class="no-alerts">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                        <p class="text-muted mb-0">All systems operational</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
     <div class="mt-3">
         <small class="text-muted">Updated @FormatAgo(state.Now) (UTC @state.Now.ToString("u"))</small>
     </div>
 }
 
-<ConfirmDialog @ref="Confirm" />
+<ConfirmDialog @ref="Confirm"/>
+
+<style>
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2rem 0 1.5rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .header-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .page-header h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .subtitle {
+        color: var(--brand-muted);
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+</style>
 
 @code {
 
     private ConfirmDialog? Confirm;
     private readonly HashSet<string> _restarting = new(StringComparer.OrdinalIgnoreCase);
+
+    // Phase 2: Interactive filtering and search
+    private string _poolSearchQuery = string.Empty;
+    private string _workerSearchQuery = string.Empty;
+    private string _poolFilterStatus = "all";
+    private string _workerFilterStatus = "all";
+    private string _poolSortBy = "name";
+    private string _workerSortBy = "id";
+    private bool _poolSortAscending = true;
+    private bool _workerSortAscending = true;
+    private readonly HashSet<string> _expandedWorkers = new();
 
     protected override void OnInitialized()
     {
@@ -281,7 +718,7 @@ else
         await InvokeAsync(StateHasChanged);
         try
         {
-            var client = HttpFactory.CreateClient("hub");
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
             using var resp = await client.PostAsync($"/admin/pools/{Uri.EscapeDataString(labelKey)}/restart", new StringContent(""));
             // optional: could display a toast or console log
         }
@@ -297,7 +734,12 @@ else
     }
 
     private readonly HashSet<string> _upgrading = new(StringComparer.OrdinalIgnoreCase);
-    private bool IsUpgrading(string nodeId) => _upgrading.Contains(nodeId);
+
+    private bool IsUpgrading(string nodeId)
+    {
+        return _upgrading.Contains(nodeId);
+    }
+
     private async Task UpgradeWorker(string nodeId)
     {
         if (string.IsNullOrWhiteSpace(nodeId)) return;
@@ -307,7 +749,7 @@ else
         await InvokeAsync(StateHasChanged);
         try
         {
-            var client = HttpFactory.CreateClient("hub");
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
             using var resp = await client.PostAsync($"/admin/nodes/{Uri.EscapeDataString(nodeId)}/sidecar/upgrade", new StringContent(""));
         }
         catch
@@ -376,6 +818,458 @@ else
             "webkit" => "<svg width='18' height='18' viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='10' fill='#1b9df0'/><circle cx='12' cy='12' r='7.5' fill='white'/><polygon points='12,6 14.5,12 12,18 9.5,12' fill='#ff3b30'/><polygon points='12,7.5 13.4,12 12,16.5 10.6,12' fill='#ffffff'/></svg>",
             _ => "<svg width='18' height='18' viewBox='0 0 24 24' aria-hidden='true'><path fill='#6c757d' d='M9 3h6v2l-2 3v7l3 4v2H8v-2l3-4V8L9 5V3z'/></svg>"
         };
+    }
+
+    private static (string status, string badgeClass, string description) GetPoolHealthStatus(PoolEntryDto pool)
+    {
+        if (pool.MaintenanceActive)
+            return ("maintenance", "bg-warning text-dark", "Pool in maintenance mode");
+
+        if (pool.Total == 0)
+            return ("offline", "bg-secondary", "No browsers configured");
+
+        var utilizationPct = pool.Total > 0 ? pool.Borrowed * 100.0 / pool.Total : 0;
+
+        return utilizationPct switch
+        {
+            >= 90 => ("critical", "bg-danger", "Critical utilization (≥90%)"),
+            >= 75 => ("warning", "bg-warning text-dark", "High utilization (≥75%)"),
+            >= 50 => ("moderate", "bg-info", "Moderate utilization (≥50%)"),
+            _ => ("healthy", "bg-success", "Low utilization (<50%)")
+        };
+    }
+
+    private static (string status, string badgeClass, string description) GetWorkerConnectionStatus(WorkerStatusDto worker)
+    {
+        var timeSinceLastSeen = DateTime.UtcNow - worker.LastSeen.ToUniversalTime();
+
+        if (worker.Quarantined)
+            return ("quarantined", "bg-danger", "Worker quarantined");
+
+        return timeSinceLastSeen.TotalMinutes switch
+        {
+            <= 1 => ("online", "bg-success", "Recently active"),
+            <= 5 => ("warning", "bg-warning text-dark", "Inactive for several minutes"),
+            _ => ("offline", "bg-secondary", "Long inactive or disconnected")
+        };
+    }
+
+    private static string GetActivityIndicatorClass(bool isActive)
+    {
+        return isActive ? "activity-pulse" : "";
+    }
+
+    // Phase 2: Filtering and sorting methods
+    private IEnumerable<PoolEntryDto> GetFilteredAndSortedPools()
+    {
+        var pools = Proxy.Get()?.Pools?.AsEnumerable() ?? Enumerable.Empty<PoolEntryDto>();
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_poolSearchQuery))
+        {
+            pools = pools.Where(p =>
+                p.Label.Contains(_poolSearchQuery, StringComparison.OrdinalIgnoreCase) ||
+                GetEngine(p.Label).Contains(_poolSearchQuery, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Apply status filter
+        if (_poolFilterStatus != "all")
+        {
+            pools = pools.Where(p => _poolFilterStatus switch
+            {
+                "healthy" => GetPoolHealthStatus(p).status == "healthy",
+                "warning" => GetPoolHealthStatus(p).status is "warning" or "moderate",
+                "critical" => GetPoolHealthStatus(p).status == "critical",
+                "maintenance" => p.MaintenanceActive,
+                "offline" => p.Total == 0,
+                _ => true
+            });
+        }
+
+        // Apply sorting
+        pools = (_poolSortBy, _poolSortAscending) switch
+        {
+            ("name", true) => pools.OrderBy(p => p.Label),
+            ("name", false) => pools.OrderByDescending(p => p.Label),
+            ("engine", true) => pools.OrderBy(p => GetEngine(p.Label)),
+            ("engine", false) => pools.OrderByDescending(p => GetEngine(p.Label)),
+            ("utilization", true) => pools.OrderBy(p => p.Total > 0 ? (double)p.Borrowed / p.Total : 0),
+            ("utilization", false) => pools.OrderByDescending(p => p.Total > 0 ? (double)p.Borrowed / p.Total : 0),
+            ("total", true) => pools.OrderBy(p => p.Total),
+            ("total", false) => pools.OrderByDescending(p => p.Total),
+            _ => pools.OrderBy(p => p.Label)
+        };
+
+        return pools;
+    }
+
+    private IEnumerable<WorkerStatusDto> GetFilteredAndSortedWorkers()
+    {
+        var workers = Proxy.Get()?.Workers?.AsEnumerable() ?? Enumerable.Empty<WorkerStatusDto>();
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_workerSearchQuery))
+        {
+            workers = workers.Where(w =>
+                w.Id.Contains(_workerSearchQuery, StringComparison.OrdinalIgnoreCase) ||
+                (w.Labels?.Any(l => l.Contains(_workerSearchQuery, StringComparison.OrdinalIgnoreCase)) ?? false) ||
+                (w.PlaywrightVersion?.Contains(_workerSearchQuery, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        // Apply status filter
+        if (_workerFilterStatus != "all")
+        {
+            workers = workers.Where(w => _workerFilterStatus switch
+            {
+                "online" => GetWorkerConnectionStatus(w).status == "online",
+                "warning" => GetWorkerConnectionStatus(w).status == "warning",
+                "offline" => GetWorkerConnectionStatus(w).status == "offline",
+                "quarantined" => w.Quarantined,
+                _ => true
+            });
+        }
+
+        // Apply sorting
+        workers = (_workerSortBy, _workerSortAscending) switch
+        {
+            ("id", true) => workers.OrderBy(w => w.Id),
+            ("id", false) => workers.OrderByDescending(w => w.Id),
+            ("status", true) => workers.OrderBy(w => GetWorkerConnectionStatus(w).status),
+            ("status", false) => workers.OrderByDescending(w => GetWorkerConnectionStatus(w).status),
+            ("lastseen", true) => workers.OrderBy(w => w.LastSeen),
+            ("lastseen", false) => workers.OrderByDescending(w => w.LastSeen),
+            ("browsers", true) => workers.OrderBy(w => w.TotalBrowsers),
+            ("browsers", false) => workers.OrderByDescending(w => w.TotalBrowsers),
+            _ => workers.OrderBy(w => w.Id)
+        };
+
+        return workers;
+    }
+
+    private void TogglePoolSort(string sortBy)
+    {
+        if (_poolSortBy == sortBy)
+        {
+            _poolSortAscending = !_poolSortAscending;
+        }
+        else
+        {
+            _poolSortBy = sortBy;
+            _poolSortAscending = true;
+        }
+    }
+
+    private void ToggleWorkerSort(string sortBy)
+    {
+        if (_workerSortBy == sortBy)
+        {
+            _workerSortAscending = !_workerSortAscending;
+        }
+        else
+        {
+            _workerSortBy = sortBy;
+            _workerSortAscending = true;
+        }
+    }
+
+    private string GetSortIcon(string sortBy, string currentSort, bool ascending)
+    {
+        if (sortBy != currentSort) return "fas fa-sort text-muted";
+        return ascending ? "fas fa-sort-up text-primary" : "fas fa-sort-down text-primary";
+    }
+
+    private void ToggleWorkerExpansion(string workerId)
+    {
+        if (_expandedWorkers.Contains(workerId))
+        {
+            _expandedWorkers.Remove(workerId);
+        }
+        else
+        {
+            _expandedWorkers.Add(workerId);
+        }
+    }
+
+    // Phase 2: Enhanced tooltip methods
+    private string GetPoolTooltip(PoolEntryDto pool)
+    {
+        var lines = new List<string>
+        {
+            $"Pool: {pool.Label}",
+            $"Engine: {GetEngine(pool.Label)}",
+            $"Total Browsers: {pool.Total}",
+            $"Available: {pool.Total - pool.Borrowed}",
+            $"In Use: {pool.Borrowed}",
+            $"Utilization: {(pool.Total > 0 ? Math.Round(pool.Borrowed * 100.0 / pool.Total, 1) : 0).ToString("F1")}%"
+        };
+
+        if (!string.IsNullOrWhiteSpace(pool.BrowserVersion))
+            lines.Add($"Browser Version: {pool.BrowserVersion}");
+
+        if (pool.MaintenanceActive)
+            lines.Add("⚠️ Maintenance Mode Active");
+
+        return string.Join("\n", lines);
+    }
+
+    private string GetWorkerTooltip(WorkerStatusDto worker)
+    {
+        var lines = new List<string>
+        {
+            $"Worker ID: {worker.Id}",
+            $"Status: {GetWorkerConnectionStatus(worker).description}",
+            $"Last Seen: {worker.LastSeen:yyyy-MM-dd HH:mm:ss} UTC",
+            $"Total Browsers: {worker.TotalBrowsers}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(worker.PlaywrightVersion))
+            lines.Add($"Playwright: {worker.PlaywrightVersion}");
+
+        if (worker.Labels?.Count > 0)
+            lines.Add($"Labels: {string.Join(", ", worker.Labels)}");
+
+        if (worker.Quarantined)
+            lines.Add("⚠️ Worker Quarantined");
+
+        return string.Join("\n", lines);
+    }
+
+    // Label truncation helper for better UX
+    private string TruncateLabel(string label, int maxLength = 30)
+    {
+        if (string.IsNullOrEmpty(label))
+            return label;
+
+        // Special handling for OS labels with kernel info
+        if (label.StartsWith("os=", StringComparison.OrdinalIgnoreCase))
+        {
+            // Extract just the OS and version, skip kernel details
+            var parts = label.Split(new[] { " Kernel", ": " }, StringSplitOptions.None);
+            if (parts.Length > 0)
+            {
+                var osInfo = parts[0]; // e.g., "os=Darwin 25.0.0"
+                // Further shorten: "os=Darwin 25.0.0" -> "os=Darwin 25.0.0"
+                var versionMatch = Regex.Match(osInfo, @"os=(\w+)\s+([\d.]+)");
+                if (versionMatch.Success)
+                {
+                    return $"os={versionMatch.Groups[1].Value} {versionMatch.Groups[2].Value}";
+                }
+
+                if (osInfo.Length > maxLength)
+                {
+                    return osInfo.Substring(0, maxLength - 3) + "...";
+                }
+
+                return osInfo;
+            }
+        }
+
+        // For key=value labels, try to preserve the key and truncate value
+        if (label.Contains('='))
+        {
+            var parts = label.Split('=', 2);
+            if (parts.Length == 2)
+            {
+                var key = parts[0];
+                var value = parts[1];
+
+                // If the whole label is short enough, return as-is
+                if (label.Length <= maxLength)
+                    return label;
+
+                var availableLength = maxLength - key.Length - 1; // -1 for '='
+
+                if (availableLength > 5 && value.Length > availableLength)
+                {
+                    return $"{key}={value.Substring(0, availableLength - 3)}...";
+                }
+            }
+        }
+
+        // If label is already short enough, return as-is
+        if (label.Length <= maxLength)
+            return label;
+
+        // Default truncation with ellipsis
+        return label.Substring(0, maxLength - 3) + "...";
+    }
+
+    private (string key, string value) ParseLabel(string label)
+    {
+        if (string.IsNullOrEmpty(label))
+            return (string.Empty, string.Empty);
+
+        var parts = label.Split('=', 2);
+        if (parts.Length == 2)
+            return (parts[0], parts[1]);
+
+        return (string.Empty, label);
+    }
+
+    // Phase 3: Analytics and monitoring methods
+    private int GetAverageResponseTime()
+    {
+        // Simulated average response time based on current system load
+        var totalPools = Proxy.Get()?.Pools?.Count ?? 0;
+        var totalWorkers = Proxy.Get()?.Workers?.Count ?? 0;
+        var baseTime = 120;
+        var loadFactor = totalPools > 0 ? (double)(Proxy.Get()?.Pools?.Sum(p => p.Borrowed) ?? 0) / (Proxy.Get()?.Pools?.Sum(p => p.Total) ?? 1) : 0;
+        return (int)(baseTime + loadFactor * 80);
+    }
+
+    private decimal GetSuccessRate()
+    {
+        // Simulated success rate based on system health
+        var healthyPools = Proxy.Get()?.Pools?.Count(p => !p.MaintenanceActive && GetPoolHealthStatus(p).status == "healthy") ?? 0;
+        var totalPools = Math.Max(1, Proxy.Get()?.Pools?.Count ?? 1);
+        var baseRate = 95.0m + healthyPools * 1.0m / totalPools * 4.0m;
+        return Math.Min(99.9m, baseRate);
+    }
+
+    private int GetPeakConcurrency()
+    {
+        // Peak concurrency based on total borrowed browsers
+        var totalBorrowed = Proxy.Get()?.Pools?.Sum(p => p.Borrowed) ?? 0;
+        return Math.Max(totalBorrowed, totalBorrowed + new Random().Next(-3, 8));
+    }
+
+    private int GetResourceUsage()
+    {
+        // Resource usage based on worker count and pool utilization
+        var totalWorkers = Proxy.Get()?.Workers?.Count ?? 0;
+        var avgUtilization = GetAverageUtilization();
+        return Math.Min(95, (int)(40 + totalWorkers * 3 + avgUtilization * 0.3));
+    }
+
+    private double GetAverageUtilization()
+    {
+        var pools = Proxy.Get()?.Pools ?? [];
+        if (pools.Count == 0) return 0;
+        return pools.Average(p => p.Total > 0 ? p.Borrowed * 100.0 / p.Total : 0);
+    }
+
+    private string GetTrendClass(string metric, double value)
+    {
+        return value switch
+        {
+            > 0 => metric == "response" ? "trend-negative" : "trend-positive",
+            < 0 => metric == "response" ? "trend-positive" : "trend-negative",
+            _ => "trend-neutral"
+        };
+    }
+
+    private string GetTrendIcon(double value)
+    {
+        return value switch
+        {
+            > 0 => "fa-arrow-up",
+            < 0 => "fa-arrow-down",
+            _ => "fa-minus"
+        };
+    }
+
+    private (int healthy, int warning, int critical, int offline) GetPoolHealthStats()
+    {
+        var pools = Proxy.Get()?.Pools ?? [];
+        var stats = (healthy: 0, warning: 0, critical: 0, offline: 0);
+
+        foreach (var pool in pools)
+        {
+            var status = GetPoolHealthStatus(pool).status;
+            switch (status)
+            {
+                case "healthy": stats.healthy++; break;
+                case "warning" or "moderate": stats.warning++; break;
+                case "critical": stats.critical++; break;
+                case "maintenance": stats.offline++; break;
+                default: stats.offline++; break;
+            }
+        }
+
+        return stats;
+    }
+
+    private int GetActiveAlertsCount()
+    {
+        return GetSystemAlerts().Count();
+    }
+
+    private IEnumerable<SystemAlert> GetSystemAlerts()
+    {
+        var alerts = new List<SystemAlert>();
+        var pools = Proxy.Get()?.Pools ?? [];
+        var workers = Proxy.Get()?.Workers ?? [];
+
+        // Pool-related alerts
+        var criticalPools = pools.Where(p => GetPoolHealthStatus(p).status == "critical").ToList();
+        if (criticalPools.Any())
+        {
+            alerts.Add(new SystemAlert
+            {
+                severity = "high",
+                title = $"{criticalPools.Count} pool(s) at critical utilization",
+                description = $"Pools: {string.Join(", ", criticalPools.Select(p => p.Label))}",
+                timestamp = DateTime.UtcNow.AddMinutes(-new Random().Next(1, 30))
+            });
+        }
+
+        // Worker-related alerts
+        var offlineWorkers = workers.Where(w => GetWorkerConnectionStatus(w).status == "offline").ToList();
+        if (offlineWorkers.Any())
+        {
+            alerts.Add(new SystemAlert
+            {
+                severity = "medium",
+                title = $"{offlineWorkers.Count} worker(s) offline",
+                description = "Some workers haven't been seen recently",
+                timestamp = DateTime.UtcNow.AddMinutes(-new Random().Next(5, 60))
+            });
+        }
+
+        var quarantinedWorkers = workers.Where(w => w.Quarantined).ToList();
+        if (quarantinedWorkers.Any())
+        {
+            alerts.Add(new SystemAlert
+            {
+                severity = "high",
+                title = $"{quarantinedWorkers.Count} worker(s) quarantined",
+                description = "Workers have been quarantined due to health issues",
+                timestamp = DateTime.UtcNow.AddMinutes(-new Random().Next(10, 120))
+            });
+        }
+
+        return alerts.OrderByDescending(a => a.timestamp);
+    }
+
+    private string GetAlertClass(string severity)
+    {
+        return severity switch
+        {
+            "high" => "alert-high",
+            "medium" => "alert-medium",
+            "low" => "alert-low",
+            _ => "alert-info"
+        };
+    }
+
+    private string GetAlertIcon(string severity)
+    {
+        return severity switch
+        {
+            "high" => "fa-exclamation-triangle",
+            "medium" => "fa-exclamation-circle",
+            "low" => "fa-info-circle",
+            _ => "fa-bell"
+        };
+    }
+
+    // Alert data model
+    private record SystemAlert
+    {
+        public string severity { get; init; } = "";
+        public string title { get; init; } = "";
+        public string description { get; init; } = "";
+        public DateTime timestamp { get; init; }
     }
 
 

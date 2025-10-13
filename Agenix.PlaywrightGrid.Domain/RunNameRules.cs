@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -29,12 +29,11 @@ namespace Agenix.PlaywrightGrid.Domain;
 ///     - Maximum length: 128 characters after trimming.
 ///     - Allowed characters: ASCII letters and digits, space, dot (.), underscore (_), and hyphen (-).
 ///     - Control characters are rejected.
-///
 ///     Case policy: input casing is preserved; comparisons and searches should use case-insensitive
 ///     semantics where applicable (e.g., Dashboard search). This avoids surprising mutations
 ///     while keeping UX friendly.
 /// </summary>
-public static class RunNameRules
+public static partial class RunNameRules
 {
     /// <summary>
     ///     The maximum allowed length for a normalized <c>RunName</c>.
@@ -42,15 +41,14 @@ public static class RunNameRules
     public const int MaxLength = 128;
 
     // Regex: one or more of [A-Za-z0-9 ._-]
-    private static readonly Regex AllowedPattern = new(
-        pattern: "^[A-Za-z0-9 ._-]+$",
-        options: RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex AllowedPattern = MyRegex();
 
     /// <summary>
-    ///     Attempts to normalize and validate a provided <paramref name="input"/> according to the rules.
-    ///     On success, returns <c>true</c> and sets <paramref name="normalized"/> to the trimmed value.
-    ///     If the input is <c>null</c> or trims to empty, returns <c>true</c> with <paramref name="normalized"/> = <c>null</c>.
-    ///     On failure, returns <c>false</c> and provides a human-readable <paramref name="error"/>.
+    ///     Attempts to normalize and validate a provided <paramref name="input" /> according to the rules.
+    ///     On success, returns <c>true</c> and sets <paramref name="normalized" /> to the trimmed value.
+    ///     If the input is <c>null</c> or trims to empty, returns <c>true</c> with <paramref name="normalized" /> =
+    ///     <c>null</c>.
+    ///     On failure, returns <c>false</c> and provides a human-readable <paramref name="error" />.
     /// </summary>
     public static bool TryNormalize(string? input, out string? normalized, [NotNullWhen(false)] out string? error)
     {
@@ -88,11 +86,15 @@ public static class RunNameRules
 
         if (!AllowedPattern.IsMatch(trimmed))
         {
-            error = "RunName contains invalid characters. Allowed: letters, numbers, space, dot (.), underscore (_), hyphen (-).";
+            error =
+                "RunName contains invalid characters. Allowed: letters, numbers, space, dot (.), underscore (_), hyphen (-).";
             return false;
         }
 
         normalized = trimmed; // Preserve case as provided
         return true;
     }
+
+    [GeneratedRegex("^[A-Za-z0-9 ._-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant)]
+    private static partial Regex MyRegex();
 }

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Item Details Prototype</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="../css/test-item-components.css" rel="stylesheet">
+  <link href="../css/test-run-details.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f8f9fa;
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem 0;
+    }
+
+    .content-section {
+      background: white;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2rem;
+    }
+
+    .detail-item {
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+
+    .detail-label {
+      font-weight: 600;
+      color: #6c757d;
+      font-size: 0.875rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .detail-value {
+      font-size: 1rem;
+    }
+
+    @media (max-width: 768px) {
+      .details-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<!-- Header -->
+<div class="page-header">
+  <div class="container">
+    <div class="d-flex align-items-start mb-3">
+      <button class="btn btn-light me-3">
+        <i class="bi bi-arrow-left"></i> Back to Suite
+      </button>
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="item-type-icon" style="font-size: 1.5rem;">🧪</span>
+          <span class="badge bg-primary">Test</span>
+          <h1 class="mb-0">Login with valid credentials</h1>
+        </div>
+        <p class="mb-0 opacity-75">
+          Launch: Smoke Test #45 / Suite: Authentication Tests
+        </p>
+      </div>
+      <div class="text-end">
+                    <span class="badge bg-success mb-2" style="font-size: 1.25rem; padding: 0.75rem 1.5rem;">
+                        Passed
+                    </span>
+        <div>
+          <span class="badge bg-light text-dark">Session: Completed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container mt-4 mb-5">
+  <!-- Overview Section -->
+  <div class="content-section">
+    <h3 class="mb-4">Test Overview</h3>
+    <div class="details-grid">
+      <!-- Left Column -->
+      <div>
+        <div class="detail-item mb-3">
+          <div class="detail-label">TEST ITEM ID</div>
+          <div class="detail-value">
+            <code class="small">610b82f6-8144-406c-9791-0c0d24517ffa</code>
+            <button class="btn btn-sm btn-link p-0 ms-2">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="detail-item mb-3">
+          <div class="detail-label">ITEM TYPE</div>
+          <div class="detail-value">
+            <span class="badge bg-primary">Test</span>
+            <span class="badge bg-secondary ms-1">Has Statistics: Yes</span>
+          </div>
+        </div>
+
+        <div class="detail-item mb-3">
+          <div class="detail-label">DESCRIPTION</div>
+          <div class="detail-value">
+            Verifies that users can successfully log in with valid username and password and are redirected to the
+            dashboard
+          </div>
+        </div>
+
+        <div class="detail-item">
+          <div class="detail-label">ATTRIBUTES</div>
+          <div class="detail-value">
+            <span class="badge bg-light text-dark me-1">smoke</span>
+            <span class="badge bg-light text-dark me-1">critical</span>
+            <span class="badge bg-light text-dark me-1">priority:high</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div>
+        <div class="detail-item mb-3">
+          <div class="detail-label">TIMING</div>
+          <div class="detail-value">
+            <div><i class="bi bi-clock-history me-1"></i><strong>Duration:</strong> 12.5s</div>
+            <div class="small text-muted mt-1">Started: 2025-01-28 14:23:15</div>
+            <div class="small text-muted">Finished: 2025-01-28 14:23:27</div>
+          </div>
+        </div>
+
+        <div class="detail-item mb-3">
+          <div class="detail-label">BROWSER SESSION</div>
+          <div class="detail-value">
+            <div><strong>Type:</strong> <span class="badge bg-secondary">Chromium</span></div>
+            <div class="small text-muted mt-1">Browser ID: 4354b55e06ac49938b7807c38bb13ac4</div>
+            <div class="small text-muted">Worker: worker-1 (127.0.0.1:5200)</div>
+          </div>
+        </div>
+
+        <div class="detail-item">
+          <div class="detail-label">TEST FILE</div>
+          <div class="detail-value">
+            <code>tests/auth/login.spec.ts:42</code>
+            <button class="btn btn-sm btn-outline-primary mt-2">
+              <i class="bi bi-box-arrow-up-right"></i> Open in Editor
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test Aggregation Statistics -->
+  <div class="content-section">
+    <h3 class="mb-4">Test Statistics</h3>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="card border-primary">
+          <div class="card-body text-center">
+            <h2 class="mb-0">5</h2>
+            <small class="text-muted">Total Tests</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-success">
+          <div class="card-body text-center">
+            <h2 class="mb-0 text-success">4</h2>
+            <small class="text-muted">Passed</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-danger">
+          <div class="card-body text-center">
+            <h2 class="mb-0 text-danger">1</h2>
+            <small class="text-muted">Failed</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card border-warning">
+          <div class="card-body text-center">
+            <h2 class="mb-0 text-warning">0</h2>
+            <small class="text-muted">Skipped</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="mt-4">
+      <div class="progress" style="height: 30px;">
+        <div class="progress-bar bg-success" style="width: 80%" title="4 passed">
+          <span>4 Passed (80%)</span>
+        </div>
+        <div class="progress-bar bg-danger" style="width: 20%" title="1 failed">
+          <span>1 Failed (20%)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Child Test Items (Hierarchical Tree) -->
+  <div class="content-section">
+    <h3 class="mb-4">Child Test Items</h3>
+
+    <!-- Test Item Tree Component -->
+    <div class="test-item-tree">
+      <!-- Step 1 -->
+      <div class="test-item item-type-step status-passed">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">→ Step</span>
+          <span class="item-name text-success">Navigate to login page</span>
+          <span class="item-duration ms-2 text-muted">2.1s</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-success me-1">Passed</span>
+                        </span>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="test-item item-type-step status-passed">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">→ Step</span>
+          <span class="item-name text-success">Fill username field</span>
+          <span class="item-duration ms-2 text-muted">420ms</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-success me-1">Passed</span>
+                        </span>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="test-item item-type-step status-passed">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">→ Step</span>
+          <span class="item-name text-success">Fill password field</span>
+          <span class="item-duration ms-2 text-muted">380ms</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-success me-1">Passed</span>
+                        </span>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="test-item item-type-step status-passed">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">→ Step</span>
+          <span class="item-name text-success">Click submit button</span>
+          <span class="item-duration ms-2 text-muted">3.2s</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-success me-1">Passed</span>
+                        </span>
+        </div>
+      </div>
+
+      <!-- Step 5 -->
+      <div class="test-item item-type-step status-passed">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">→ Step</span>
+          <span class="item-name text-success">Verify dashboard is displayed</span>
+          <span class="item-duration ms-2 text-muted">1.4s</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-success me-1">Passed</span>
+                        </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attachments/Artifacts -->
+  <div class="content-section">
+    <h3 class="mb-4">Attachments & Artifacts</h3>
+    <div class="list-group">
+      <a class="list-group-item list-group-item-action" href="#">
+        <div class="d-flex w-100 justify-content-between">
+          <h6 class="mb-1">
+            <i class="bi bi-camera me-2"></i>screenshot-login-page.png
+          </h6>
+          <small>2.5 MB</small>
+        </div>
+        <small class="text-muted">Captured at 2.1s</small>
+      </a>
+      <a class="list-group-item list-group-item-action" href="#">
+        <div class="d-flex w-100 justify-content-between">
+          <h6 class="mb-1">
+            <i class="bi bi-film me-2"></i>test-recording.webm
+          </h6>
+          <small>8.2 MB</small>
+        </div>
+        <small class="text-muted">Full test execution video</small>
+      </a>
+      <a class="list-group-item list-group-item-action" href="#">
+        <div class="d-flex w-100 justify-content-between">
+          <h6 class="mb-1">
+            <i class="bi bi-file-earmark-code me-2"></i>trace.zip
+          </h6>
+          <small>1.1 MB</small>
+        </div>
+        <small class="text-muted">Playwright trace file for debugging</small>
+      </a>
+    </div>
+  </div>
+
+  <!-- Hierarchy Information -->
+  <div class="content-section">
+    <h3 class="mb-4">Hierarchy Information</h3>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title">
+              <i class="bi bi-rocket me-1"></i> Launch
+            </h6>
+            <p class="card-text">
+              <a href="#">Smoke Test Launch #45</a>
+            </p>
+            <code class="small">1a2a2784-0a22-4066-bb65...</code>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title">
+              <i class="bi bi-folder me-1"></i> Suite
+            </h6>
+            <p class="card-text">
+              <a href="#">Authentication Tests</a>
+            </p>
+            <code class="small">0ae50e07-df16-46f8-a589...</code>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title">
+              <i class="bi bi-diagram-2 me-1"></i> Parent Item
+            </h6>
+            <p class="card-text text-muted">
+              None (Root Test Item)
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="content-section">
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-primary">
+        <i class="bi bi-arrow-clockwise"></i> Retry Test
+      </button>
+      <button class="btn btn-outline-secondary">
+        <i class="bi bi-file-earmark-arrow-down"></i> Export JSON
+      </button>
+      <button class="btn btn-outline-secondary">
+        <i class="bi bi-clipboard"></i> Copy Test Item ID
+      </button>
+      <button class="btn btn-outline-secondary">
+        <i class="bi bi-share"></i> Share Link
+      </button>
+      <button class="btn btn-outline-danger ms-auto">
+        <i class="bi bi-trash"></i> Delete Test Item
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

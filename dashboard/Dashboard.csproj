@@ -9,15 +9,25 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <IsPackable>false</IsPackable>
+    <ScopedCssEnabled>true</ScopedCssEnabled>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+    <Version>1.0.0</Version>
+    <InformationalVersion>1.0.0+$(SourceRevisionId)</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.19"/>
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.19"/>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.19"/>
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.8.1"/>
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.8.1"/>
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.8.1"/>
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.8.1"/>
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.8.1"/>
+    <PackageReference Include="Polly" Version="8.4.1"/>
+    <PackageReference Include="Polly.Extensions" Version="8.4.1"/>
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3"/>
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0"/>
   </ItemGroup>
   <ItemGroup>
     <AdditionalFiles Include="Pages\_Host.cshtml"/>

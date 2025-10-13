@@ -117,6 +117,13 @@ Practical troubleshooting tips for tests
 
 ## Development and debugging practices
 
+Mandatory Submission Steps
+Before submitting any task, you MUST:
+1. **Reformat Code**: Run `dotnet format --severity warn` to ensure the codebase remains consistent.
+2. **Add License Headers**: Run `bash scripts/add-license-headers.sh` if new files were created.
+3. **Verify Build**: Run `dotnet build PlaywrightGrid.sln -c Debug`.
+4. **Verify Tests**: Run relevant tests (at least unit tests) to ensure no regressions.
+
 Code style and conventions
 - Nullable reference types are enabled in core projects (Hub, Worker, HubClient). Favor explicit nullability annotations.
 - Prefer async/await end-to-end; avoid sync-over-async in Hub/Worker request paths.

@@ -1,0 +1,204 @@
+# ==============================================================================
+# Traefik Static Configuration - Agenix Playwright Grid
+# ==============================================================================
+# This file configures Traefik's core behavior: entrypoints, providers, API/dashboard.
+# Changes require Traefik restart.
+#
+# Documentation: https://doc.traefik.io/traefik/
+# Inspiration: ReportPortal's Traefik configuration
+# ==============================================================================
+
+# ==============================================================================
+# Global Configuration
+# ==============================================================================
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+# ==============================================================================
+# Entrypoints (Ports that Traefik listens on)
+# ==============================================================================
+entryPoints:
+  # HTTP entrypoint (port 80)
+  web:
+    address: ":80"
+    # Production: Redirect HTTP → HTTPS (uncomment below)
+    # http:
+    #   redirections:
+    #     entryPoint:
+    #       to: websecure
+    #       scheme: https
+    #       permanent: true
+
+  # HTTPS entrypoint (port 443) - production only
+  websecure:
+    address: ":443"
+    # Enable HTTP/3 (experimental, requires QUIC)
+    # http3: {}
+
+  # Traefik dashboard and API (port 8080)
+  traefik:
+    address: ":8080"
+
+# ==============================================================================
+# Providers (Service discovery sources)
+# ==============================================================================
+providers:
+  # Docker provider: Automatic service discovery via Docker labels
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false  # Only expose services with traefik.enable=true
+    network: "agenix-playwright-grid_default"  # Docker Compose network
+    constraints: "Label(`traefik.enable`, `true`)"  # Additional filter
+    watch: true  # Watch for Docker events (service start/stop)
+    # useBindPortIP: false  # Use container IP instead of host IP
+
+  # File provider: Load dynamic configuration from files (middleware, TLS)
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true  # Hot-reload on file changes
+
+# ==============================================================================
+# API & Dashboard
+# ==============================================================================
+api:
+  dashboard: true  # Enable web dashboard at http://traefik.localhost:8080
+  insecure: true   # Allow dashboard without authentication (dev only!)
+  # Production: Disable insecure and use middleware authentication
+  # insecure: false
+  debug: false     # Enable debug endpoints (/debug/vars, /debug/pprof)
+
+# ==============================================================================
+# Health Check
+# ==============================================================================
+ping:
+  entryPoint: "traefik"  # Expose /ping on port 8080
+  # Access via: http://localhost:8080/ping
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+log:
+  level: INFO  # DEBUG, INFO, WARN, ERROR, FATAL, PANIC
+  format: json  # json or common (Apache Combined Log Format)
+  # filePath: "/var/log/traefik/traefik.log"  # Log to file (optional)
+  # noColor: false  # Disable colored output (terminal only)
+
+# Access logs: HTTP request/response logging
+accessLog:
+  format: json  # json or common
+  # filePath: "/var/log/traefik/access.log"  # Log to file (optional)
+  bufferingSize: 100  # Buffer size before writing to disk
+  filters:
+    statusCodes:
+      - "200-299"  # Success responses
+      - "400-499"  # Client errors
+      - "500-599"  # Server errors
+    retryAttempts: true  # Log retry attempts
+    minDuration: "10ms"  # Only log requests taking >= 10ms
+  fields:
+    defaultMode: keep  # Keep all fields by default
+    names:
+      # Anonymize sensitive headers (GDPR compliance)
+      # Authorization: drop
+      # Cookie: drop
+    headers:
+      defaultMode: keep  # Keep headers by default
+      names:
+        User-Agent: keep
+        Authorization: drop  # Drop sensitive header
+        Cookie: drop         # Drop sensitive header
+
+# ==============================================================================
+# Metrics (Prometheus)
+# ==============================================================================
+metrics:
+  prometheus:
+    addEntryPointsLabels: true   # Add entrypoint labels to metrics
+    addRoutersLabels: true        # Add router labels to metrics
+    addServicesLabels: true       # Add service labels to metrics
+    entryPoint: traefik           # Expose metrics on /metrics endpoint
+    # buckets:                    # Custom histogram buckets
+    #   - 0.1
+    #   - 0.3
+    #   - 1.2
+    #   - 5.0
+
+# ==============================================================================
+# Certificate Resolvers (HTTPS / Let's Encrypt) - Production Only
+# ==============================================================================
+# Uncomment for production HTTPS with Let's Encrypt
+
+# certificateResolvers:
+#   # Production Let's Encrypt
+#   letsencrypt:
+#     acme:
+#       email: "admin@your-domain.com"  # REQUIRED: Your email for certificate expiry notifications
+#       storage: "/letsencrypt/acme.json"  # Certificate storage (must be writable, chmod 600)
+#       # caServer: "https://acme-v02.api.letsencrypt.org/directory"  # Production (default)
+#       httpChallenge:
+#         entryPoint: web  # Use HTTP-01 challenge on port 80
+#       # tlsChallenge: {}  # Alternative: TLS-ALPN-01 challenge on port 443
+#       # dnsChallenge:     # Alternative: DNS-01 challenge (supports wildcards)
+#       #   provider: route53  # DNS provider (cloudflare, route53, gcp, etc.)
+#       #   delayBeforeCheck: 0
+#
+#   # Staging Let's Encrypt (for testing)
+#   letsencrypt-staging:
+#     acme:
+#       email: "admin@your-domain.com"
+#       storage: "/letsencrypt/acme-staging.json"
+#       caServer: "https://acme-staging-v02.api.letsencrypt.org/directory"  # Staging server
+#       httpChallenge:
+#         entryPoint: web
+
+# ==============================================================================
+# Tracing (OpenTelemetry, Jaeger, Zipkin) - Optional
+# ==============================================================================
+# Uncomment to enable distributed tracing
+
+# tracing:
+#   otlp:
+#     http:
+#       endpoint: "http://localhost:4318"  # OpenTelemetry Collector
+#   serviceName: "traefik"
+#   sampleRate: 1.0  # Sample 100% of traces (0.0-1.0)
+
+# ==============================================================================
+# Pilot (Traefik Cloud) - Optional
+# ==============================================================================
+# Uncomment to enable Traefik Pilot integration
+
+# pilot:
+#   token: "your-pilot-token-here"
+#   dashboard: true
+
+# ==============================================================================
+# ServersTransport (Backend connection settings) - Advanced
+# ==============================================================================
+# serversTransport:
+#   insecureSkipVerify: false  # Skip TLS verification (insecure!)
+#   rootCAs:                    # Custom CA certificates
+#     - /path/to/ca.crt
+#   maxIdleConnsPerHost: 200    # Connection pooling
+#   forwardingTimeouts:
+#     dialTimeout: "30s"
+#     responseHeaderTimeout: "0s"
+#     idleConnTimeout: "90s"
+
+# ==============================================================================
+# Experimental Features
+# ==============================================================================
+# experimental:
+#   plugins:
+#     example:
+#       moduleName: "github.com/example/plugin"
+#       version: "v1.0.0"
+
+# ==============================================================================
+# Host Resolver - Optional
+# ==============================================================================
+# hostResolver:
+#   cnameFlattening: true
+#   resolvConfig: "/etc/resolv.conf"
+#   resolvDepth: 5
