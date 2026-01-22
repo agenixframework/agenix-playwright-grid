@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -61,6 +61,7 @@ public class NodeRegistrarTests
                     It.IsAny<IEnumerable<string>>(),
                     It.IsAny<int>(),
                     It.IsAny<IReadOnlyDictionary<string, string>>(),
+                    It.IsAny<string>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
@@ -76,6 +77,7 @@ public class NodeRegistrarTests
                     apps.OrderBy(x => x).SequenceEqual(options.PoolConfig.Keys.OrderBy(x => x))),
                 It.Is<int>(cap => cap == options.PoolConfig.Values.Sum()),
                 It.Is<IReadOnlyDictionary<string, string>>(lbl => lbl["region"] == "eu"),
+                It.IsAny<string>(),
                 It.IsAny<CancellationToken>()), Times.Once);
         }
         finally
@@ -101,6 +103,7 @@ public class NodeRegistrarTests
                     It.IsAny<IEnumerable<string>>(),
                     It.IsAny<int>(),
                     It.IsAny<IReadOnlyDictionary<string, string>>(),
+                    It.IsAny<string>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
@@ -115,6 +118,7 @@ public class NodeRegistrarTests
                 It.IsAny<IEnumerable<string>>(),
                 It.Is<int>(cap => cap == 3),
                 It.Is<IReadOnlyDictionary<string, string>>(lbl => lbl["region"] == "eu"),
+                It.IsAny<string>(),
                 It.IsAny<CancellationToken>()), Times.Once);
         }
         finally

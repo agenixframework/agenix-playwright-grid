@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Step Tree Prototype</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="../css/test-step-tree.css" rel="stylesheet">
+  <style>
+    body {
+      padding: 2rem;
+      background: #f8f9fa;
+    }
+
+    .container {
+      max-width: 1000px;
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .test-step-tree {
+      font-family: 'Courier New', monospace;
+    }
+
+    .test-step {
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      border-left: 2px solid #e9ecef;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .step-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      font-size: 0.8rem;
+      width: 1.5rem;
+    }
+
+    .step-bullet {
+      display: inline-block;
+      width: 1.5rem;
+      text-align: center;
+      color: #6c757d;
+    }
+
+    .step-title {
+      flex-grow: 1;
+    }
+
+    .step-duration {
+      font-size: 0.875rem;
+    }
+
+    .step-error {
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+    }
+
+    .step-code {
+      margin-top: 0.5rem;
+    }
+
+    .step-code summary {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .step-code pre {
+      background: #f8f9fa;
+      padding: 0.5rem;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1 class="mb-4">Test Step Tree Component</h1>
+  <p class="text-muted">Hierarchical test step display with execution details</p>
+
+  <hr class="my-4">
+
+  <!-- Test Step Tree -->
+  <div class="test-step-tree">
+    <!-- Root Step -->
+    <div class="test-step" style="margin-left: 0px">
+      <div class="step-header">
+        <button class="step-toggle" title="Collapse">
+          <span>▼</span>
+        </button>
+        <span class="step-category badge bg-secondary me-2">test</span>
+        <span class="step-title">Login with valid credentials</span>
+        <span class="step-duration ms-2 text-muted">12.5s</span>
+      </div>
+    </div>
+
+    <!-- Child Step 1 -->
+    <div class="test-step" style="margin-left: 20px">
+      <div class="step-header">
+        <button class="step-toggle" title="Expand">
+          <span>▶</span>
+        </button>
+        <span class="step-category badge bg-secondary me-2">hook</span>
+        <span class="step-title">Before each hook</span>
+        <span class="step-duration ms-2 text-muted">850ms</span>
+      </div>
+    </div>
+
+    <!-- Child Step 2 -->
+    <div class="test-step" style="margin-left: 20px">
+      <div class="step-header">
+        <button class="step-toggle" title="Collapse">
+          <span>▼</span>
+        </button>
+        <span class="step-category badge bg-secondary me-2">action</span>
+        <span class="step-title">Navigate to login page</span>
+        <span class="step-duration ms-2 text-muted">2.1s</span>
+      </div>
+
+      <details class="step-code mt-1">
+        <summary class="text-muted small">Show code</summary>
+        <pre class="small mb-0"><code>await page.goto('https://example.com/login');</code></pre>
+      </details>
+
+      <!-- Nested Steps -->
+      <div class="test-step" style="margin-left: 40px">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">navigation</span>
+          <span class="step-title">page.goto</span>
+          <span class="step-duration ms-2 text-muted">1.8s</span>
+        </div>
+      </div>
+
+      <div class="test-step" style="margin-left: 40px">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">wait</span>
+          <span class="step-title">waitForLoadState('networkidle')</span>
+          <span class="step-duration ms-2 text-muted">300ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Child Step 3 -->
+    <div class="test-step" style="margin-left: 20px">
+      <div class="step-header">
+        <button class="step-toggle" title="Expand">
+          <span>▶</span>
+        </button>
+        <span class="step-category badge bg-secondary me-2">action</span>
+        <span class="step-title">Fill username field</span>
+        <span class="step-duration ms-2 text-muted">420ms</span>
+      </div>
+    </div>
+
+    <!-- Child Step 4 -->
+    <div class="test-step" style="margin-left: 20px">
+      <div class="step-header">
+        <button class="step-toggle" title="Expand">
+          <span>▶</span>
+        </button>
+        <span class="step-category badge bg-secondary me-2">action</span>
+        <span class="step-title">Fill password field</span>
+        <span class="step-duration ms-2 text-muted">380ms</span>
+      </div>
+    </div>
+
+    <!-- Child Step 5 -->
+    <div class="test-step" style="margin-left: 20px">
+      <div class="step-header">
+        <button class="step-toggle" title="Collapse">
+          <span>▼</span>
+        </button>
+        <span class="step-category badge bg-secondary me-2">action</span>
+        <span class="step-title">Click submit button</span>
+        <span class="step-duration ms-2 text-muted">3.2s</span>
+      </div>
+
+      <details class="step-code mt-1 open">
+        <summary class="text-muted small">Show code</summary>
+        <pre class="small mb-0"><code>await page.click('button[type="submit"]');</code></pre>
+      </details>
+
+      <!-- Nested Steps -->
+      <div class="test-step" style="margin-left: 40px">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">click</span>
+          <span class="step-title">page.click</span>
+          <span class="step-duration ms-2 text-muted">150ms</span>
+        </div>
+      </div>
+
+      <div class="test-step" style="margin-left: 40px">
+        <div class="step-header">
+          <span class="step-bullet">•</span>
+          <span class="step-category badge bg-secondary me-2">navigation</span>
+          <span class="step-title">page.waitForNavigation</span>
+          <span class="step-duration ms-2 text-muted">3.0s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Child Step 6 - With Error -->
+    <div class="test-step" style="margin-left: 20px">
+      <div class="step-header">
+        <span class="step-bullet">•</span>
+        <span class="step-category badge bg-secondary me-2">assertion</span>
+        <span class="step-title text-danger">Verify dashboard is displayed</span>
+        <span class="step-duration ms-2 text-muted">5.4s</span>
+      </div>
+
+      <div class="step-error alert alert-danger mt-1 mb-0 small">
+        <strong>Error:</strong> Timeout 5000ms exceeded waiting for locator('.dashboard-header')
+      </div>
+
+      <details class="step-code mt-1">
+        <summary class="text-muted small">Show code</summary>
+        <pre class="small mb-0"><code>await expect(page.locator('.dashboard-header')).toBeVisible();</code></pre>
+      </details>
+    </div>
+
+    <!-- Child Step 7 -->
+    <div class="test-step" style="margin-left: 20px">
+      <div class="step-header">
+        <span class="step-bullet">•</span>
+        <span class="step-category badge bg-secondary me-2">hook</span>
+        <span class="step-title">After each hook</span>
+        <span class="step-duration ms-2 text-muted">620ms</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-4">
+
+  <h3 class="mb-3">Different Step Categories</h3>
+  <div class="test-step-tree">
+    <div class="test-step">
+      <div class="step-header">
+        <span class="step-bullet">•</span>
+        <span class="step-category badge bg-primary me-2">setup</span>
+        <span class="step-title">Initialize test data</span>
+        <span class="step-duration ms-2 text-muted">1.2s</span>
+      </div>
+    </div>
+
+    <div class="test-step">
+      <div class="step-header">
+        <span class="step-bullet">•</span>
+        <span class="step-category badge bg-info me-2">api</span>
+        <span class="step-title">POST /api/users</span>
+        <span class="step-duration ms-2 text-muted">320ms</span>
+      </div>
+    </div>
+
+    <div class="test-step">
+      <div class="step-header">
+        <span class="step-bullet">•</span>
+        <span class="step-category badge bg-success me-2">assertion</span>
+        <span class="step-title">Verify response status 201</span>
+        <span class="step-duration ms-2 text-muted">45ms</span>
+      </div>
+    </div>
+
+    <div class="test-step">
+      <div class="step-header">
+        <span class="step-bullet">•</span>
+        <span class="step-category badge bg-warning text-dark me-2">teardown</span>
+        <span class="step-title">Clean up test data</span>
+        <span class="step-duration ms-2 text-muted">890ms</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Toggle functionality
+  document.querySelectorAll('.step-toggle').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const span = this.querySelector('span');
+      span.textContent = span.textContent === '▼' ? '▶' : '▼';
+      this.title = span.textContent === '▼' ? 'Collapse' : 'Expand';
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+@* Component for rendering hierarchical test steps *@
+
+<div class="test-step-tree">
+    @foreach (var step in Steps)
+    {
+        <div class="test-step" style="margin-left: @(Level * 20)px">
+            <div class="step-header">
+                @if (step.Steps.Count > 0)
+                {
+                    <button class="step-toggle" @onclick="() => ToggleStep(step)">
+                        @if (IsExpanded(step))
+                        {
+                            <span>▼</span>
+                        }
+                        else
+                        {
+                            <span>▶</span>
+                        }
+                    </button>
+                }
+                else
+                {
+                    <span class="step-bullet">•</span>
+                }
+
+                <span class="step-category badge bg-secondary me-2">@step.Category</span>
+                <span class="step-title @(step.Error != null ? "text-danger" : "")">@step.Title</span>
+                <span class="step-duration ms-2 text-muted">@FormatDuration(step.DurationMs)</span>
+            </div>
+
+            @if (step.Error != null)
+            {
+                <div class="step-error alert alert-danger mt-1 mb-0 small">
+                    <strong>Error:</strong> @step.Error
+                </div>
+            }
+
+            @if (step.CodeSnippet != null)
+            {
+                <details class="step-code mt-1">
+                    <summary class="text-muted small">Show code</summary>
+                    <pre class="small mb-0"><code>@step.CodeSnippet</code></pre>
+                </details>
+            }
+
+            @if (IsExpanded(step) && step.Steps.Count > 0)
+            {
+                <TestStepTree Steps="step.Steps" Level="@(Level + 1)"/>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<TestStepDto> Steps { get; set; } = new();
+    [Parameter] public int Level { get; set; }
+
+    private readonly HashSet<string> _expandedSteps = new();
+
+    private bool IsExpanded(TestStepDto step)
+    {
+        var key = $"{step.Title}:{step.StartTime:O}";
+        return _expandedSteps.Contains(key);
+    }
+
+    private void ToggleStep(TestStepDto step)
+    {
+        var key = $"{step.Title}:{step.StartTime:O}";
+        if (_expandedSteps.Contains(key))
+            _expandedSteps.Remove(key);
+        else
+            _expandedSteps.Add(key);
+    }
+
+    private static string FormatDuration(double ms)
+    {
+        if (ms < 1000)
+            return $"{ms:F0}ms";
+        return $"{ms / 1000:F2}s";
+    }
+
+}

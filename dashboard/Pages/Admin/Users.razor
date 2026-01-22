@@ -1,0 +1,2951 @@
+@page "/admin/users"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@using Agenix.PlaywrightGrid.Domain
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ToastService Toasts
+@inject IHttpContextAccessor Accessor
+
+<Dashboard.Shared.AdminTabs/>
+
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                <path
+                    d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+                <path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+            </svg>
+        </div>
+        <div>
+            <h3>All Users</h3>
+            <div class="subtitle">Manage user accounts and permissions</div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-center">
+            <div class="col-12 col-md-4">
+                <Dashboard.Shared.SearchBox Id="usersSearch" Placeholder="Search by name, login, email"
+                                            AriaLabel="Search users" Value="@Search"
+                                            ValueChanged="@((string? v) => Search = v ?? string.Empty)"
+                                            OnSearch="@LoadAsync"/>
+            </div>
+            <div class="col-6 col-md-3">
+                <select class="form-select form-select-sm" aria-label="Filter by role" @bind="RoleFilter">
+                    <option value="">All roles</option>
+                    <option value="Admin">Administrator</option>
+                    <option value="Viewer">User</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <select class="form-select form-select-sm" aria-label="Filter by status" @bind="StatusFilter">
+                    <option value="">All statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="Archived">Archived</option>
+                    <option value="Disabled">Disabled</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2 ms-md-auto text-end">
+                <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-primary" @onclick="ShowAddUser">Add User</button>
+                    <button class="btn btn-outline-secondary" @onclick="ShowInvite">Invite User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <Dashboard.Shared.ValidationPanel Error="@Error" AriaLive="assertive"/>
+}
+
+@if (CreateOpen)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5>Add User</h5>
+            <EditForm Model="CreateModel" OnValidSubmit="CreateSimpleUserAsync" OnInvalidSubmit="InvalidSubmitFocus">
+                <DataAnnotationsValidator/>
+                <ValidationSummary/>
+                <div class="row g-2">
+                    <div class="col-12 col-md-3">
+                        <label for="createUserId" class="form-label">Id</label>
+                        <InputText id="createUserId" class="form-control" @bind-Value="CreateModel.Id" maxlength="64"/>
+                        <ValidationMessage For="() => CreateModel.Id"/>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label for="createUsername" class="form-label">Username</label>
+                        <InputText id="createUsername" class="form-control" @bind-Value="CreateModel.Username"
+                                   maxlength="128"/>
+                        <ValidationMessage For="() => CreateModel.Username"/>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="createEmail" class="form-label">Email (optional)</label>
+                        <InputText id="createEmail" class="form-control" @bind-Value="CreateModel.Email"/>
+                        <ValidationMessage For="() => CreateModel.Email"/>
+                    </div>
+                    <div class="col-12 col-md-2">
+                        <label for="createAccountRole" class="form-label">Account Role</label>
+                        <InputSelect id="createAccountRole" class="form-select" @bind-Value="CreateModel.AccountRole">
+                            <option value="User">User</option>
+                            <option value="Administrator">Administrator</option>
+                        </InputSelect>
+                        <ValidationMessage For="() => CreateModel.AccountRole"/>
+                    </div>
+                    <div class="col-12 d-flex align-items-end justify-content-end">
+                        <button type="button" class="btn btn-secondary me-2" @onclick="() => CreateOpen = false">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-success" disabled="@_busy">
+                            @if (_busy)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"
+                                      aria-hidden="true"></span>
+                                <span>Adding…</span>
+                            }
+                            else
+                            {
+                                <span>Add User</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+                <Dashboard.Shared.ValidationPanel Error="@CreateError"/>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (InviteOpen)
+{
+    <div class="modal-backdrop fade show" @onclick="() => InviteOpen = false"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+         aria-labelledby="inviteUserTitle">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document"
+             @onkeydown="OnInviteKeyDown" style="max-width: 540px;">
+            <div class="modal-content elegant-modal compact-modal">
+                <div class="elegant-modal-header compact-header">
+                    <div class="modal-icon compact-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                            <path fill-rule="evenodd"
+                                  d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5z"/>
+                        </svg>
+                    </div>
+                    <h5 class="modal-title" id="inviteUserTitle">Invite User</h5>
+                    <button type="button" class="elegant-close compact-close" aria-label="Close"
+                            @onclick="() => InviteOpen = false">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                        </svg>
+                    </button>
+                </div>
+                <EditForm Model="InviteModel" OnValidSubmit="CreateInviteAsync" OnInvalidSubmit="InvalidSubmitFocus">
+                    <DataAnnotationsValidator/>
+                    <div class="modal-body elegant-modal-body compact-body">
+                        <div class="invite-subtitle compact-subtitle">Invite user to the project</div>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="inviteLogin" class="elegant-label compact-label">
+                                    Login or email <span class="label-required">*</span>
+                                </label>
+                                <Dashboard.Shared.AutoComplete Id="inviteLogin" Class="elegant-input compact-input"
+                                                               Placeholder="Enter login or email"
+                                                               @bind-Value="InviteModel.LoginOrEmail"
+                                                               Search="SearchUsersForAutoComplete"/>
+                                <small class="elegant-hint compact-hint">Search for an existing user</small>
+                                <ValidationMessage For="() => InviteModel.LoginOrEmail"/>
+                            </div>
+                            <div class="col-12">
+                                <label for="inviteProject" class="elegant-label compact-label">
+                                    Project <span class="label-required">*</span>
+                                </label>
+                                <Dashboard.Shared.AutoComplete Id="inviteProject" Class="elegant-input compact-input"
+                                                               Placeholder="Select project"
+                                                               @bind-Value="InviteModel.ProjectKey"
+                                                               Search="SearchProjectsForAutoComplete"/>
+                                <small class="elegant-hint compact-hint">Project to invite user to</small>
+                                <ValidationMessage For="() => InviteModel.ProjectKey"/>
+                            </div>
+                            <div class="col-12">
+                                <label for="inviteRole" class="elegant-label compact-label">Project role</label>
+                                <InputSelect id="inviteRole" class="elegant-input compact-input"
+                                             @bind-Value="InviteModel.ProjectRole">
+                                    @foreach (var role in Enum.GetValues<ProjectRole>())
+                                    {
+                                        <option value="@role">@GetProjectRoleDisplayName(role)</option>
+                                    }
+                                </InputSelect>
+                                <small class="elegant-hint compact-hint">User's role in the project</small>
+                            </div>
+                        </div>
+                        <Dashboard.Shared.ValidationPanel Error="@InviteError"/>
+                        @if (!string.IsNullOrEmpty(InviteToken))
+                        {
+                            <div class="alert alert-success mt-2" role="status" aria-live="polite"
+                                 style="font-size: 0.85rem; padding: 0.625rem 0.875rem;">
+                                <div class="fw-semibold" style="font-size: 0.875rem;">Invite created</div>
+                                <div style="font-size: 0.8rem;">Token: <code>@InviteToken</code></div>
+                                @if (InviteExpiresUtc is not null)
+                                {
+                                    <div style="font-size: 0.8rem;">Expires: <span
+                                            title="@InviteExpiresUtc?.ToUniversalTime().ToString("u")">@FormatAgo(InviteExpiresUtc!.Value)</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="elegant-modal-footer compact-footer">
+                        <button type="button" class="elegant-btn elegant-btn-secondary compact-btn"
+                                @onclick="() => InviteOpen = false">
+                            Cancel
+                        </button>
+                        <button type="submit" class="elegant-btn elegant-btn-primary compact-btn" disabled="@_busy">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                 viewBox="0 0 16 16">
+                                <path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                                <path fill-rule="evenodd"
+                                      d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5z"/>
+                            </svg>
+                            @if (_busy)
+                            {
+                                <span>Inviting...</span>
+                            }
+                            else
+                            {
+                                <span>Invite User</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ProjectManagementOpen)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+         aria-labelledby="projectManagementTitle" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog modal-dialog-centered" role="document" @onkeydown="OnProjectManagementKeyDown">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="projectManagementTitle">@SelectedUserName - Projects</h5>
+                    <button type="button" class="btn-close" aria-label="Close"
+                            @onclick="() => ProjectManagementOpen = false"></button>
+                </div>
+                <div class="modal-body">
+                    @if (SelectedUserProjects?.Any() == true)
+                    {
+                        @foreach (var projectAssignment in SelectedUserProjects)
+                        {
+                            <div class="row g-2 align-items-center mb-3">
+                                <div class="col-6">
+                                    <span class="projectsAndRolesColumn__project">@projectAssignment.ProjectKey</span>
+                                </div>
+                                <div class="col-4">
+                                    <select class="form-select form-select-sm"
+                                            @onchange="@(e => UpdateProjectRole(projectAssignment.ProjectKey, e.Value?.ToString()))"
+                                            value="@projectAssignment.Role">
+                                        @foreach (var role in Enum.GetValues<ProjectRole>())
+                                        {
+                                            <option value="@role">@GetProjectRoleDisplayName(role)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-2">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Remove project"
+                                            @onclick="() => RemoveProjectAssignment(projectAssignment.ProjectKey)">
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
+
+                    @if (NewProjectAssignment != null)
+                    {
+                        <div class="row g-2 align-items-center mb-3 border-top pt-3">
+                            <div class="col-6">
+                                <Dashboard.Shared.AutoComplete Class="form-control form-control-sm"
+                                                               Placeholder="Project" Value="@NewProjectKey"
+                                                               ValueChanged="@OnNewProjectKeyChanged"
+                                                               Search="SearchAvailableProjectsForAutoComplete"/>
+                                @if (!string.IsNullOrWhiteSpace(NewProjectValidationError))
+                                {
+                                    <div class="text-danger small mt-1">@NewProjectValidationError</div>
+                                }
+                            </div>
+                            <div class="col-4">
+                                <select class="form-select form-select-sm" @bind="NewProjectRole">
+                                    @foreach (var role in Enum.GetValues<ProjectRole>())
+                                    {
+                                        <option value="@role">@GetProjectRoleDisplayName(role)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-2">
+                                <button type="button" class="btn btn-sm btn-success" title="Add project"
+                                        @onclick="ConfirmNewProjectAssignment"
+                                        disabled="@(string.IsNullOrWhiteSpace(NewProjectKey) || !string.IsNullOrWhiteSpace(NewProjectValidationError))">
+                                    ✓
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => ProjectManagementOpen = false">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="AddNewProjectRow"
+                            disabled="@(NewProjectAssignment != null)">+ Add Project
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (AddUserOpen)
+{
+    <div class="modal-backdrop fade show" @onclick="() => AddUserOpen = false"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="addUserTitle">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document"
+             @onkeydown="OnAddUserKeyDown" style="max-width: 540px;">
+            <div class="modal-content elegant-modal compact-modal">
+                <div class="elegant-modal-header compact-header">
+                    <div class="modal-icon compact-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                            <path fill-rule="evenodd"
+                                  d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5z"/>
+                        </svg>
+                    </div>
+                    <h5 class="modal-title" id="addUserTitle">Add User</h5>
+                    <button type="button" class="elegant-close compact-close" aria-label="Close"
+                            @onclick="() => AddUserOpen = false">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                        </svg>
+                    </button>
+                </div>
+                <EditForm Model="AddUserModel" OnValidSubmit="CreateUserAsync" OnInvalidSubmit="InvalidSubmitFocus">
+                    <div class="modal-body elegant-modal-body compact-body">
+                        <div class="invite-subtitle compact-subtitle">Add new user to the project</div>
+                        <DataAnnotationsValidator/>
+                        <ValidationSummary class="elegant-validation-summary"/>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="addUserLogin" class="elegant-label compact-label">
+                                    Username (ID) <span class="label-required">*</span>
+                                </label>
+                                <InputText id="addUserLogin" class="elegant-input compact-input"
+                                           Value="@AddUserModel.Login" ValueChanged="@OnAddUserLoginChanged"
+                                           ValueExpression="@(() => AddUserModel.Login)" placeholder="e.g., john.doe"/>
+                                <ValidationMessage For="() => AddUserModel.Login" class="elegant-validation"/>
+                                @if (!string.IsNullOrWhiteSpace(AddUserLoginValidationError))
+                                {
+                                    <div class="elegant-validation">@AddUserLoginValidationError</div>
+                                }
+                            </div>
+
+                            <div class="col-12">
+                                <label for="addUserFullName" class="elegant-label compact-label">
+                                    Full name <span class="label-required">*</span>
+                                </label>
+                                <InputText id="addUserFullName" class="elegant-input compact-input"
+                                           @bind-Value="AddUserModel.FullName" placeholder="e.g., John Doe"/>
+                                <ValidationMessage For="() => AddUserModel.FullName" class="elegant-validation"/>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="addUserEmail" class="elegant-label compact-label">Email</label>
+                                <InputText id="addUserEmail" class="elegant-input compact-input"
+                                           @bind-Value="AddUserModel.Email" placeholder="e.g., john.doe@example.com"/>
+                                <ValidationMessage For="() => AddUserModel.Email" class="elegant-validation"/>
+                            </div>
+
+                            <div class="col-6">
+                                <label for="addUserAccountRole" class="elegant-label compact-label">
+                                    Account role <span class="label-required">*</span>
+                                </label>
+                                <InputSelect id="addUserAccountRole" class="elegant-input compact-input"
+                                             @bind-Value="AddUserModel.AccountRole">
+                                    <option value="User">User</option>
+                                    <option value="Administrator">Administrator</option>
+                                </InputSelect>
+                                <ValidationMessage For="() => AddUserModel.AccountRole" class="elegant-validation"/>
+                            </div>
+
+                            <div class="col-6">
+                                <label for="addUserProjectRole" class="elegant-label compact-label">
+                                    Project role <span class="label-required">*</span>
+                                </label>
+                                <InputSelect id="addUserProjectRole" class="elegant-input compact-input"
+                                             @bind-Value="AddUserModel.ProjectRole">
+                                    @foreach (var role in Enum.GetValues<ProjectRole>())
+                                    {
+                                        <option value="@role">@GetProjectRoleDisplayName(role)</option>
+                                    }
+                                </InputSelect>
+                                <ValidationMessage For="() => AddUserModel.ProjectRole" class="elegant-validation"/>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="addUserProject" class="elegant-label compact-label">
+                                    Project <span class="label-required">*</span>
+                                </label>
+                                <Dashboard.Shared.AutoComplete Id="addUserProject" Class="elegant-input compact-input"
+                                                               Placeholder="Enter project name"
+                                                               @bind-Value="AddUserModel.ProjectKey"
+                                                               Search="SearchProjectsForAutoComplete"/>
+                                <ValidationMessage For="() => AddUserModel.ProjectKey" class="elegant-validation"/>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="addUserPassword" class="elegant-label compact-label">
+                                    Password <span class="label-required">*</span>
+                                </label>
+                                <InputText id="addUserPassword" class="elegant-input compact-input"
+                                           @bind-Value="AddUserModel.Password" placeholder="Enter password"/>
+                                <button type="button" class="btn-generate-password" @onclick="GeneratePassword">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                         viewBox="0 0 16 16">
+                                        <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                                        <path
+                                            d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                                    </svg>
+                                    Generate
+                                </button>
+                                <ValidationMessage For="() => AddUserModel.Password" class="elegant-validation"/>
+                            </div>
+                        </div>
+
+                        <Dashboard.Shared.ValidationPanel Error="@AddUserError"/>
+                    </div>
+                    <div class="elegant-modal-footer compact-footer">
+                        <button type="button" class="elegant-btn elegant-btn-secondary compact-btn"
+                                @onclick="() => AddUserOpen = false">Cancel
+                        </button>
+                        <button type="submit" class="elegant-btn elegant-btn-primary compact-btn"
+                                disabled="@(_busy || !string.IsNullOrWhiteSpace(AddUserLoginValidationError))">
+                            @if (_busy)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"
+                                      aria-hidden="true"></span>
+                                <span>Adding...</span>
+                            }
+                            else
+                            {
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                     viewBox="0 0 16 16" class="me-1">
+                                    <path
+                                        d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8.5 4.5a.5.5 0 0 0-1 0v3h-3a.5.5 0 0 0 0 1h3v3a.5.5 0 0 0 1 0v-3h3a.5.5 0 0 0 0-1h-3v-3z"/>
+                                </svg>
+                                <span>Add User</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@if (PasswordResetModalOpen)
+{
+    <div class="modal-backdrop fade show" @onclick="() => PasswordResetModalOpen = false"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+         aria-labelledby="passwordResetTitle">
+        <div class="modal-dialog modal-dialog-centered" role="document" @onkeydown="OnPasswordResetKeyDown"
+             style="max-width: 540px;">
+            <div class="modal-content elegant-modal compact-modal">
+                <div class="elegant-modal-header compact-header">
+                    <div class="modal-icon compact-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                        </svg>
+                    </div>
+                    <h5 class="modal-title" id="passwordResetTitle">Password Reset</h5>
+                    <button type="button" class="elegant-close compact-close" aria-label="Close"
+                            @onclick="() => PasswordResetModalOpen = false">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body elegant-modal-body compact-body">
+                    <div class="password-reset-content">
+                        <div class="alert alert-info" role="alert" style="font-size: 0.875rem; margin-bottom: 1.25rem;">
+                            <strong>Password reset for '@ResetPasswordUserDisplayName'</strong>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label class="elegant-label compact-label">New Password</label>
+                            <div class="password-display-container">
+                                <code class="password-display">@ResetPasswordValue</code>
+                                <button type="button" class="btn-copy-password" @onclick="CopyPasswordToClipboard"
+                                        title="Copy password to clipboard">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                         viewBox="0 0 16 16">
+                                        <path
+                                            d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                        <path
+                                            d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                    </svg>
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning" role="alert" style="font-size: 0.8rem;">
+                            <strong>Note:</strong> The password has been reset successfully. Please share this password
+                            with the user securely. They should change it after their first login.
+                        </div>
+                    </div>
+                </div>
+                <div class="elegant-modal-footer compact-footer">
+                    <button type="button" class="elegant-btn elegant-btn-primary compact-btn"
+                            @onclick="() => PasswordResetModalOpen = false">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
+                        </svg>
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2rem 0 1.5rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .header-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .page-header h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .subtitle {
+        color: var(--brand-muted);
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+
+    /* Elegant Modal Base Styles */
+    .elegant-modal {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .elegant-modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem 2rem;
+        border-radius: 12px 12px 0 0;
+        border: none;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        position: relative;
+    }
+
+    .modal-icon {
+        width: 48px;
+        height: 48px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .modal-icon svg {
+        color: white;
+    }
+
+    .elegant-modal-header .modal-title {
+        color: white;
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0;
+        flex: 1;
+    }
+
+    .elegant-close {
+        position: absolute;
+        right: 1.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 36px;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        padding: 0;
+    }
+
+    .elegant-close:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateY(-50%) rotate(90deg);
+    }
+
+    .elegant-close svg {
+        color: white;
+    }
+
+    .elegant-modal-body {
+        padding: 2rem;
+    }
+
+    .invite-subtitle {
+        font-size: 0.95rem;
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .elegant-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .label-required {
+        color: #ef4444;
+        margin-left: 2px;
+    }
+
+    .elegant-input {
+        width: 100%;
+        padding: 0.625rem 0.875rem;
+        font-size: 0.938rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .elegant-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .elegant-hint {
+        display: block;
+        font-size: 0.813rem;
+        color: #9ca3af;
+        margin-top: 0.375rem;
+    }
+
+    .elegant-form-group {
+        margin-bottom: 1.25rem;
+    }
+
+    .elegant-modal-footer {
+        padding: 1.5rem 2rem;
+        background: #f9fafb;
+        border-top: 1px solid #e5e7eb;
+        border-radius: 0 0 12px 12px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    .elegant-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.938rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .elegant-btn-secondary {
+        background: white;
+        color: #6b7280;
+        border: 2px solid #e5e7eb;
+    }
+
+    .elegant-btn-secondary:hover:not(:disabled) {
+        background: #f9fafb;
+        border-color: #d1d5db;
+    }
+
+    .elegant-btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .elegant-btn-primary:hover:not(:disabled) {
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        transform: translateY(-1px);
+    }
+
+    .elegant-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .elegant-btn svg {
+        flex-shrink: 0;
+    }
+
+    /* Compact Modal Overrides */
+    .compact-modal {
+        max-height: 90vh;
+    }
+
+    .compact-header {
+        padding: 1rem 1.5rem !important;
+    }
+
+    .compact-icon {
+        width: 36px !important;
+        height: 36px !important;
+    }
+
+    .compact-close {
+        width: 28px !important;
+        height: 28px !important;
+    }
+
+    .compact-body {
+        padding: 1.25rem 1.5rem !important;
+        max-height: calc(90vh - 140px);
+        overflow-y: auto;
+    }
+
+    .compact-subtitle {
+        margin-bottom: 1rem !important;
+        padding-bottom: 0.75rem !important;
+        font-size: 0.875rem !important;
+    }
+
+    .compact-label {
+        font-size: 0.8rem !important;
+        margin-bottom: 0.375rem !important;
+    }
+
+    .compact-input {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.875rem !important;
+    }
+
+    .compact-footer {
+        padding: 1rem 1.5rem !important;
+    }
+
+    .compact-btn {
+        padding: 0.5rem 1rem !important;
+        font-size: 0.875rem !important;
+    }
+
+    .btn-generate-password {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin-top: 0.375rem;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #667eea;
+        background: transparent;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-generate-password:hover {
+        background: #f3f4f6;
+        border-color: #667eea;
+    }
+
+    .btn-generate-password svg {
+        flex-shrink: 0;
+    }
+
+    /* Compact scrollbar */
+    .compact-body::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .compact-body::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+
+    .compact-body::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+
+    .compact-body::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+
+    /* Password Reset Modal Styles */
+    .password-reset-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .password-display-container {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        background: #f9fafb;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+    }
+
+    .password-display {
+        flex: 1;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #374151;
+        background: white;
+        padding: 0.625rem 0.875rem;
+        border-radius: 6px;
+        font-family: 'Courier New', Courier, monospace;
+        letter-spacing: 0.5px;
+        word-break: break-all;
+    }
+
+    .btn-copy-password {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.625rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-copy-password:hover {
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        transform: translateY(-1px);
+    }
+
+    .btn-copy-password:active {
+        transform: translateY(0);
+    }
+
+    .btn-copy-password svg {
+        flex-shrink: 0;
+    }
+</style>
+
+<div class="users-table-container">
+    <table class="table users-table">
+        <caption class="visually-hidden">All Users</caption>
+        <thead>
+        <tr>
+            @SortableHeader("Login", "username")
+            @SortableHeader("Email", "email")
+            <th>Projects and Roles</th>
+            @SortableHeader("Last Login", "lastlogin")
+            @SortableHeader("Status", "status")
+            <th class="text-end">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        @if (Items is null)
+        {
+            <tr>
+                <td colspan="6" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="mt-3 text-muted">Loading users...</div>
+                </td>
+            </tr>
+        }
+        else if (Items.Length == 0)
+        {
+            <tr>
+                <td colspan="6" class="empty-state">
+                    <div class="empty-state-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor"
+                             viewBox="0 0 16 16" class="empty-icon">
+                            <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                            <path
+                                d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+                            <path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                        </svg>
+                        <h4 class="empty-title">No users found</h4>
+                        <p class="empty-description">There are no users to display yet.</p>
+                    </div>
+                </td>
+            </tr>
+        }
+        else
+        {
+            @foreach (var u in Items)
+            {
+                <tr class="user-row">
+                    <td class="user-cell">
+                        <div class="user-info-wrapper">
+                            <img src="@GetAvatarUrl(u)" alt="Avatar" class="user-avatar"/>
+                            <div class="user-details">
+                                <div class="user-name-line">
+                                    @if (!string.IsNullOrWhiteSpace(u.FullName))
+                                    {
+                                        <span class="user-name">@u.FullName</span>
+                                        <span
+                                            class="user-login">(@u.Username@(u.Username != u.Id ? $" / {u.Id}" : ""))</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="user-name">@u.Username</span>
+                                        @if (u.Username != u.Id)
+                                        {
+                                            <span class="user-login">(@u.Id)</span>
+                                        }
+                                    }
+                                </div>
+                                <div class="user-badges">
+                                    @if (IsSelf(u.Id))
+                                    {
+                                        <span class="user-badge badge-you">you</span>
+                                    }
+                                    @if (u.AccountRole == AccountRole.Administrator)
+                                    {
+                                        @if (IsSelf(u.Id))
+                                        {
+                                            <span class="user-badge badge-admin">admin</span>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="user-badge badge-admin badge-clickable"
+                                                    @onclick="() => MakeUserAsync(u.Id, u.Username)">admin
+                                            </button>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="user-badge badge-make-admin badge-clickable"
+                                                disabled="@IsSelf(u.Id)"
+                                                @onclick="() => MakeAdminAsync(u.Id, u.Username)">make admin
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>@(string.IsNullOrWhiteSpace(u.Email) ? (MarkupString)"<span class='text-muted'>—</span>" : u.Email)</td>
+                    <td>
+                        @if (GetUserProjects(u.Id) is var projects && projects.Any())
+                        {
+                            <div class="projects-chips">
+                                @foreach (var project in projects)
+                                {
+                                    <span class="project-chip"
+                                          title="@($"{project.ProjectKey} - {GetProjectRoleDisplayName(project.Role)}")"
+                                          @onclick="() => ShowProjectManagementPopup(u.Id, u.Username)">@project.ProjectKey</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted project-chip-empty"
+                                  @onclick="() => ShowProjectManagementPopup(u.Id, u.Username)">—</span>
+                        }
+                    </td>
+                    <td>@(u.LastLoginUtc is null ? (MarkupString)"<span class='text-muted'>—</span>" : (MarkupString)$"<span title='{u.LastLoginUtc:u}'>{FormatAgo(u.LastLoginUtc.Value)}</span>")</td>
+                    <td>@UserStatusBadge(u.Status)</td>
+                    <td class="text-end text-nowrap">
+                        <div class="dropdown d-inline">
+                            <button class="btn-actions" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                    title="@(IsSelf(u.Id) ? "No actions available for your own account" : "User actions")"
+                                    disabled="@IsSelf(u.Id)">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                     viewBox="0 0 16 16">
+                                    <path
+                                        d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                                </svg>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                @if (u.Status == UserStatus.Active)
+                                {
+                                    <li>
+                                        <button class="dropdown-item" disabled="@IsSelf(u.Id)"
+                                                @onclick="() => ResetPasswordAsync(u.Id, u.Username)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                 fill="currentColor" viewBox="0 0 16 16">
+                                                <path
+                                                    d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                                            </svg>
+                                            Reset Password
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider"/>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item text-warning" disabled="@IsSelf(u.Id)"
+                                                @onclick="() => DeactivateAsync(u.Id)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                 fill="currentColor" viewBox="0 0 16 16">
+                                                <path
+                                                    d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                                <path
+                                                    d="M11.354 4.646a.5.5 0 0 0-.708 0l-6 6a.5.5 0 0 0 .708.708l6-6a.5.5 0 0 0 0-.708z"/>
+                                            </svg>
+                                            Deactivate
+                                        </button>
+                                    </li>
+                                }
+                                else if (u.Status == UserStatus.Disabled || u.Status == UserStatus.Archived)
+                                {
+                                    <li>
+                                        <button class="dropdown-item text-success" disabled="@IsSelf(u.Id)"
+                                                @onclick="() => ActivateAsync(u.Id)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                 fill="currentColor" viewBox="0 0 16 16">
+                                                <path
+                                                    d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
+                                            </svg>
+                                            Activate
+                                        </button>
+                                    </li>
+                                    @if (u.Status == UserStatus.Disabled)
+                                    {
+                                        <li>
+                                            <hr class="dropdown-divider"/>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item text-danger" disabled="@IsSelf(u.Id)"
+                                                    @onclick="() => DeleteAsync(u.Id, u.Username)">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                     fill="currentColor" viewBox="0 0 16 16">
+                                                    <path
+                                                        d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                                    <path fill-rule="evenodd"
+                                                          d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                                </svg>
+                                                Delete
+                                            </button>
+                                        </li>
+                                    }
+                                }
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            }
+        }
+        </tbody>
+    </table>
+</div>
+
+<style>
+    .users-table-container {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        overflow: visible;
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* Add responsive scroll wrapper inside if needed */
+    @@media (max-width: 1200px) {
+        .users-table-container {
+            overflow-x: auto;
+        }
+    }
+
+    .users-table {
+        margin: 0;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .users-table thead {
+        background: var(--surface-alt);
+    }
+
+    .users-table thead th {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--brand-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .users-table thead th button {
+        background: transparent;
+        border: 0;
+        color: var(--brand-muted);
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        padding: 0;
+        transition: color var(--transition-fast);
+    }
+
+    .users-table thead th button:hover {
+        color: var(--brand-color);
+    }
+
+    .users-table tbody td {
+        padding: 1rem 1.25rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 0.9rem;
+    }
+
+    .user-row {
+        transition: background var(--transition-fast);
+    }
+
+    .user-row:hover {
+        background-color: #f8f9fa;
+    }
+
+    .user-row:last-child td {
+        border-bottom: none;
+    }
+
+    /* User cell with avatar */
+    .user-info-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .user-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 2px solid #e5e7eb;
+        flex-shrink: 0;
+    }
+
+    .user-details {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .user-name-line {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .user-name {
+        font-weight: 600;
+        color: var(--brand-text);
+        font-size: 0.95rem;
+    }
+
+    .user-login {
+        color: var(--brand-muted);
+        font-size: 0.85rem;
+    }
+
+    .user-badges {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .user-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        border-radius: 12px;
+        border: none;
+        transition: all var(--transition-fast);
+    }
+
+    .badge-you {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .badge-admin {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .badge-make-admin {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .badge-clickable {
+        cursor: pointer;
+    }
+
+    .badge-clickable:hover:not(:disabled) {
+        opacity: 0.8;
+        transform: translateY(-1px);
+    }
+
+    .badge-clickable:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Project chips */
+    .projects-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .project-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.625rem;
+        background: #f3f4f6;
+        color: var(--brand-text);
+        font-size: 0.8rem;
+        font-weight: 500;
+        border-radius: var(--radius);
+        border: 1px solid #e5e7eb;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .project-chip:hover {
+        background: #e5e7eb;
+        border-color: var(--brand-color);
+        color: var(--brand-color);
+    }
+
+    .project-chip-empty {
+        cursor: pointer;
+    }
+
+    .project-chip-empty:hover {
+        color: var(--brand-color);
+    }
+
+    /* Action button */
+    .btn-actions {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.375rem 0.5rem;
+        color: var(--brand-muted);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-actions:hover:not(:disabled) {
+        background: var(--surface-alt);
+        border-color: var(--brand-color);
+        color: var(--brand-color);
+    }
+
+    .btn-actions:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    /* Dropdown menu */
+    .dropdown-menu {
+        border-radius: var(--radius-lg);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, .12), 0 2px 8px rgba(0, 0, 0, .08);
+        border: 1px solid #e5e7eb;
+        padding: 0.5rem;
+        z-index: 1050;
+        min-width: 200px;
+    }
+
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.625rem 0.875rem;
+        border-radius: var(--radius);
+        font-size: 0.875rem;
+        transition: all var(--transition-fast);
+    }
+
+    .dropdown-item svg {
+        opacity: 0.7;
+        flex-shrink: 0;
+    }
+
+    .dropdown-item:hover:not(:disabled) svg {
+        opacity: 1;
+    }
+
+    .dropdown-item:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem !important;
+    }
+
+    .empty-state-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .empty-icon {
+        color: var(--brand-muted);
+        opacity: 0.3;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .empty-description {
+        font-size: 0.95rem;
+        color: var(--brand-muted);
+        margin: 0;
+    }
+</style>
+
+<Dashboard.Shared.Pager Total="@Total" Skip="@_skip" Take="@_take" OnPrev="@PrevPage" OnNext="@NextPage"/>
+
+<Dashboard.Shared.ConfirmDialog @ref="_confirmDialog"/>
+
+@code {
+
+    private record ListResponse(int total, User[] items);
+
+    private string? Search
+    {
+        get => _search;
+        set
+        {
+            _search = value ?? string.Empty;
+            _skip = 0;
+            _ = LoadAsync();
+        }
+    }
+
+    private string _search = string.Empty;
+
+    private string? RoleFilter
+    {
+        get => _role;
+        set
+        {
+            _role = value ?? string.Empty;
+            _skip = 0;
+            _ = LoadAsync();
+        }
+    }
+
+    private string _role = string.Empty;
+
+    private string? StatusFilter
+    {
+        get => _status;
+        set
+        {
+            _status = value ?? string.Empty;
+            _skip = 0;
+            _ = LoadAsync();
+        }
+    }
+
+    private string _status = string.Empty;
+
+    private string _sort = "username";
+    private string _order = "asc";
+    private int _skip;
+    private readonly int _take = 20;
+
+    private int Total { get; set; }
+    private User[]? Items { get; set; }
+    private string? Error { get; set; }
+
+    private string? CurrentUserId { get; set; }
+
+    private bool IsSelf(string? id)
+    {
+        return !string.IsNullOrWhiteSpace(CurrentUserId) && !string.IsNullOrWhiteSpace(id) && string.Equals(CurrentUserId, id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Avatar cache for All Users list; values are either data: URLs or a fallback static path
+    private readonly Dictionary<string, string> _avatarUrls = new();
+    private string DefaultAvatar => "images/no-avatar.png"; // fallback shown when no user photo uploaded
+
+    private string GetAvatarUrl(User u)
+    {
+        return _avatarUrls.TryGetValue(u.Id, out var url) && !string.IsNullOrWhiteSpace(url) ? url : DefaultAvatar;
+    }
+
+    // User projects cache
+    private readonly Dictionary<string, List<UserProject>> _userProjects = new();
+
+    private record UserProject(string ProjectKey, string ProjectName, ProjectRole Role);
+
+    private List<UserProject> GetUserProjects(string userId)
+    {
+        return _userProjects.TryGetValue(userId, out var projects) ? projects : new List<UserProject>();
+    }
+
+    private bool CreateOpen { get; set; }
+    private bool InviteOpen { get; set; }
+    private bool ProjectManagementOpen { get; set; }
+    private bool AddUserOpen { get; set; }
+    private bool PasswordResetModalOpen { get; set; }
+    private string ResetPasswordValue { get; set; } = string.Empty;
+    private string ResetPasswordUserDisplayName { get; set; } = string.Empty;
+    private string SelectedUserId { get; set; } = string.Empty;
+    private string SelectedUserName { get; set; } = string.Empty;
+    private List<UserProject>? SelectedUserProjects { get; set; }
+    private UserProject? NewProjectAssignment { get; set; }
+    private string NewProjectKey { get; set; } = string.Empty;
+    private ProjectRole NewProjectRole { get; set; } = ProjectRole.Member;
+    private string NewProjectValidationError { get; set; } = string.Empty;
+
+    private sealed class CreateUserForm
+    {
+        [Required]
+        [RegularExpression("^[A-Za-z0-9._-]{1,64}$", ErrorMessage = "Id allows letters/digits/._- up to 64")]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [RegularExpression("^[A-Za-z0-9 ._\\-]{1,64}$", ErrorMessage = "Username allows letters/digits/space/._- up to 64")]
+        public string Username { get; set; } = string.Empty;
+
+        [EmailAddress(ErrorMessage = "Invalid email")]
+        public string? Email { get; set; }
+
+        [Required] public string AccountRole { get; set; } = nameof(Agenix.PlaywrightGrid.Domain.AccountRole.User);
+    }
+
+    private CreateUserForm CreateModel { get; set; } = new();
+    private string? CreateError { get; set; }
+
+    private sealed class InviteForm
+    {
+        [Required(ErrorMessage = "Login or email is required")]
+        public string LoginOrEmail { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Project is required")]
+        public string ProjectKey { get; set; } = string.Empty;
+
+        public ProjectRole ProjectRole { get; set; } = ProjectRole.Member;
+    }
+
+    private InviteForm InviteModel { get; set; } = new();
+    private string? InviteToken { get; set; }
+    private DateTime? InviteExpiresUtc { get; set; }
+    private string? InviteError { get; set; }
+
+    private sealed class AddUserForm
+    {
+        [Required(ErrorMessage = "Login is required")]
+        [RegularExpression("^[A-Za-z0-9._-]{1,128}$", ErrorMessage = "User name may contain only Latin, numeric characters, hyphen, underscore, dot (from 1 to 128 symbols)")]
+        public string Login { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Full name is required")]
+        [RegularExpression("^[A-Za-z0-9А-Яа-я ._-]{3,256}$", ErrorMessage = "Full name may contain only Latin, Cyrillic, numeric characters, symbols: hyphen, underscore, dot. Space is permitted (from 3 to 256 symbols)")]
+        public string FullName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Email is incorrect. Please enter correct email.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required] public string AccountRole { get; set; } = nameof(Agenix.PlaywrightGrid.Domain.AccountRole.User);
+
+        [Required(ErrorMessage = "Select a project is required")]
+        public string ProjectKey { get; set; } = string.Empty;
+
+        public ProjectRole ProjectRole { get; set; } = ProjectRole.Member;
+
+        [Required(ErrorMessage = "Password is required")]
+        [RegularExpression("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^\\w\\s]).{8,}$", ErrorMessage = "Minimum 8 characters: at least one digit, one special symbol, one uppercase, and one lowercase letter")]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private AddUserForm AddUserModel { get; set; } = new();
+    private string? AddUserError { get; set; }
+    private string AddUserLoginValidationError { get; set; } = string.Empty;
+
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var principal = Accessor?.HttpContext?.User;
+            var name = principal?.Identity?.Name;
+            CurrentUserId = principal?.FindFirst("preferred_username")?.Value
+                            ?? principal?.FindFirst(ClaimTypes.Email)?.Value
+                            ?? name
+                            ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+        catch
+        {
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            Error = null;
+            Items = null;
+            _avatarUrls.Clear();
+            _userProjects.Clear();
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var url = $"/admin/users?skip={_skip}&take={_take}&sort={Uri.EscapeDataString(_sort)}&order={Uri.EscapeDataString(_order)}";
+            if (!string.IsNullOrWhiteSpace(_search)) url += $"&q={Uri.EscapeDataString(_search)}";
+            if (!string.IsNullOrWhiteSpace(_role)) url += $"&role={Uri.EscapeDataString(_role)}";
+            if (!string.IsNullOrWhiteSpace(_status)) url += $"&status={Uri.EscapeDataString(_status)}";
+            var resp = await client.GetAsync(url);
+            var json = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+            {
+                Error = $"Failed to load users: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                Items = Array.Empty<User>();
+                Total = 0;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            var data = JsonSerializer.Deserialize<ListResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            Total = data?.total ?? 0;
+            Items = data?.items ?? Array.Empty<User>();
+
+            // Preload avatars and projects asynchronously; UI will update as they arrive
+            _ = PreloadAvatarsAsync();
+            _ = PreloadUserProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            Items = Array.Empty<User>();
+            Total = 0;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Fetch avatar images for the currently loaded page of users.
+    private async Task PreloadAvatarsAsync()
+    {
+        try
+        {
+            var list = Items;
+            if (list is null || list.Length == 0) return;
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var tasks = new List<Task>();
+            foreach (var u in list)
+            {
+                if (string.IsNullOrWhiteSpace(u.Id)) continue;
+                tasks.Add(LoadAvatarForAsync(client, u.Id));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            try
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private async Task LoadAvatarForAsync(HttpClient client, string id)
+    {
+        try
+        {
+            using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(id)}/photo");
+            if (resp.IsSuccessStatusCode)
+            {
+                var ct = resp.Content.Headers.ContentType?.MediaType ?? "image/png";
+                var bytes = await resp.Content.ReadAsByteArrayAsync();
+                if (bytes is { Length: > 0 })
+                {
+                    var dataUrl = $"data:{ct};base64,{Convert.ToBase64String(bytes)}";
+                    lock (_avatarUrls)
+                    {
+                        _avatarUrls[id] = dataUrl;
+                    }
+
+                    return;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        lock (_avatarUrls)
+        {
+            _avatarUrls[id] = DefaultAvatar;
+        }
+    }
+
+    // Fetch project memberships for the currently loaded page of users.
+    private async Task PreloadUserProjectsAsync()
+    {
+        try
+        {
+            var list = Items;
+            if (list is null || list.Length == 0) return;
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var tasks = new List<Task>();
+            foreach (var u in list)
+            {
+                if (string.IsNullOrWhiteSpace(u.Id)) continue;
+                tasks.Add(LoadProjectsForUserAsync(client, u.Id));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            try
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private async Task LoadProjectsForUserAsync(HttpClient client, string userId)
+    {
+        try
+        {
+            using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(userId)}/projects");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("items", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
+                {
+                    var projects = new List<UserProject>();
+                    foreach (var item in itemsElement.EnumerateArray())
+                    {
+                        try
+                        {
+                            // Deserialize as Membership object (API returns Membership records)
+                            var membership = JsonSerializer.Deserialize<Membership>(item.GetRawText(),
+                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            if (membership != null && !string.IsNullOrWhiteSpace(membership.ProjectKey))
+                            {
+                                projects.Add(new UserProject(membership.ProjectKey, membership.ProjectKey, membership.Role));
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+                    lock (_userProjects)
+                    {
+                        _userProjects[userId] = projects;
+                    }
+
+                    return;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        lock (_userProjects)
+        {
+            _userProjects[userId] = new List<UserProject>();
+        }
+    }
+
+    private RenderFragment SortableHeader(string title, string field, bool alignEnd = false)
+    {
+        return builder =>
+        {
+            var isActive = string.Equals(_sort, field, StringComparison.OrdinalIgnoreCase);
+            var thClass = "sortable " + (isActive ? "sort-active " : "") + (alignEnd ? "text-end" : "text-start");
+
+            builder.OpenElement(0, "th");
+            builder.AddAttribute(1, "class", thClass);
+            builder.AddAttribute(2, "style", "cursor: pointer;");
+            builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => ToggleSort(field)));
+            builder.AddAttribute(4, "title", $"Sort by {title}");
+
+            // th-content wrapper
+            builder.OpenElement(5, "div");
+            builder.AddAttribute(6, "class", "th-content");
+
+            // Title span
+            builder.OpenElement(7, "span");
+            builder.AddContent(8, title);
+            builder.CloseElement();
+
+            // Sort icon
+            builder.OpenElement(9, "svg");
+            builder.AddAttribute(10, "class", "sort-icon");
+            builder.AddAttribute(11, "xmlns", "http://www.w3.org/2000/svg");
+            builder.AddAttribute(12, "width", "14");
+            builder.AddAttribute(13, "height", "14");
+            builder.AddAttribute(14, "fill", "currentColor");
+            builder.AddAttribute(15, "viewBox", "0 0 16 16");
+
+            if (isActive && _order == "asc")
+            {
+                // Up arrow
+                builder.OpenElement(16, "path");
+                builder.AddAttribute(17, "fill-rule", "evenodd");
+                builder.AddAttribute(18, "d", "M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z");
+                builder.CloseElement();
+            }
+            else
+            {
+                // Down arrow (default)
+                builder.OpenElement(16, "path");
+                builder.AddAttribute(17, "fill-rule", "evenodd");
+                builder.AddAttribute(18, "d", "M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z");
+                builder.CloseElement();
+            }
+
+            builder.CloseElement(); // svg
+            builder.CloseElement(); // th-content div
+            builder.CloseElement(); // th
+        };
+    }
+
+    private void ToggleSort(string field)
+    {
+        if (string.Equals(_sort, field, StringComparison.OrdinalIgnoreCase))
+        {
+            _order = _order == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            _sort = field;
+            _order = "asc";
+        }
+
+        _skip = 0;
+        _ = LoadAsync();
+    }
+
+    private void NextPage()
+    {
+        _skip += _take;
+        _ = LoadAsync();
+    }
+
+    private void PrevPage()
+    {
+        _skip = Math.Max(0, _skip - _take);
+        _ = LoadAsync();
+    }
+
+    private void ShowCreate()
+    {
+        CreateError = null;
+        CreateModel = new CreateUserForm();
+        CreateOpen = true;
+        InviteOpen = false;
+    }
+
+    private void ShowInvite()
+    {
+        InviteError = null;
+        InviteToken = null;
+        InviteExpiresUtc = null;
+        InviteModel = new InviteForm();
+        InviteOpen = true;
+        CreateOpen = false;
+    }
+
+    private async Task CreateSimpleUserAsync()
+    {
+        if (_busy) return;
+        CreateError = null;
+        if (string.IsNullOrWhiteSpace(CreateModel.Id) || string.IsNullOrWhiteSpace(CreateModel.Username))
+        {
+            CreateError = "Id and Username are required.";
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var accountRole = Enum.Parse<AccountRole>(CreateModel.AccountRole);
+            var payload = new
+            {
+                Id = CreateModel.Id.Trim(),
+                Username = CreateModel.Username.Trim(),
+                Email = string.IsNullOrWhiteSpace(CreateModel.Email) ? null : CreateModel.Email!.Trim(),
+                AccountRole = accountRole, // Use uppercase and enum value
+                Status = UserStatus.Active
+            };
+            using var resp = await client.PostAsJsonAsync("/admin/users", payload);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                CreateError = ParseErrorMessage(text) ?? $"Create failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            CreateOpen = false;
+            _skip = 0;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            CreateError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnInviteKeyDown(KeyboardEventArgs e)
+    {
+        if (e?.Key == "Escape")
+        {
+            InviteOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateInviteAsync()
+    {
+        if (_busy) return;
+        InviteError = null;
+        InviteToken = null;
+        InviteExpiresUtc = null;
+        if (string.IsNullOrWhiteSpace(InviteModel.LoginOrEmail))
+        {
+            InviteError = "Login or email is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(InviteModel.ProjectKey))
+        {
+            InviteError = "Project is required.";
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var input = InviteModel.LoginOrEmail.Trim();
+
+            // Always assign user to project regardless of input type
+            var role = InviteModel.ProjectRole.ToString();
+            using var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(InviteModel.ProjectKey)}/members/{Uri.EscapeDataString(input)}", new { role });
+            var text = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+            {
+                InviteError = ParseErrorMessage(text) ?? $"Add to project failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            // Get username for toast message
+            var username = await GetUsernameForToast(client, input);
+            try
+            {
+                Toasts.Success($"Member '{username}' was assigned to the project");
+            }
+            catch
+            {
+            }
+
+            InviteOpen = false;
+        }
+        catch (Exception ex)
+        {
+            InviteError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ActivateAsync(string id)
+    {
+        var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+        using var resp = await client.PostAsync($"/admin/users/{Uri.EscapeDataString(id)}/activate", new StringContent(string.Empty));
+        await LoadAsync();
+    }
+
+    private async Task DeactivateAsync(string id)
+    {
+        var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+        using var resp = await client.PostAsync($"/admin/users/{Uri.EscapeDataString(id)}/deactivate", new StringContent(string.Empty));
+        await LoadAsync();
+    }
+
+    private async Task MakeAdminAsync(string id, string? username)
+    {
+        if (_busy) return;
+        if (IsSelf(id)) return; // do not allow self-change via this quick action
+        try
+        {
+            var displayName = string.IsNullOrWhiteSpace(username) ? id : username!.Trim();
+            var confirmed = false;
+            if (_confirmDialog is not null)
+            {
+                confirmed = await _confirmDialog.Show($"Are you sure you want to change the account role for the \"{displayName}\"?", "Change Account Role", "Change", "Cancel");
+            }
+            else
+            {
+                confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to change the account role for the '{displayName}'?");
+            }
+
+            if (!confirmed) return;
+
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var content = JsonContent.Create(new Dictionary<string, string> { ["accountRole"] = "Administrator" });
+            using var resp = await client.PatchAsync($"/admin/users/{Uri.EscapeDataString(id)}", content);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                Error = ParseErrorMessage(text) ?? $"Role change failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+            }
+            else
+            {
+                try
+                {
+                    Toasts.Success($"User role for '{displayName}' was changed.");
+                }
+                catch
+                {
+                }
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task MakeUserAsync(string id, string? username)
+    {
+        if (_busy) return;
+        if (IsSelf(id)) return; // do not allow self-change via this quick action
+        try
+        {
+            var displayName = string.IsNullOrWhiteSpace(username) ? id : username!.Trim();
+            var confirmed = false;
+            if (_confirmDialog is not null)
+            {
+                confirmed = await _confirmDialog.Show($"Are you sure you want to change the account role for the \"{displayName}\"?", "Change Account Role", "Change", "Cancel");
+            }
+            else
+            {
+                confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to change the account role for the '{displayName}'?");
+            }
+
+            if (!confirmed) return;
+
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var content = JsonContent.Create(new Dictionary<string, string> { ["accountRole"] = "User" });
+            using var resp = await client.PatchAsync($"/admin/users/{Uri.EscapeDataString(id)}", content);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                Error = ParseErrorMessage(text) ?? $"Role change failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+            }
+            else
+            {
+                try
+                {
+                    Toasts.Success($"User role for '{displayName}' was changed.");
+                }
+                catch
+                {
+                }
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private ConfirmDialog? _confirmDialog;
+
+    private async Task DeleteAsync(string id, string? username)
+    {
+        if (_busy) return;
+        try
+        {
+            var displayName = string.IsNullOrWhiteSpace(username) ? id : username!.Trim();
+            var confirmed = false;
+            if (_confirmDialog is not null)
+            {
+                confirmed = await _confirmDialog.Show($"Delete user '{displayName}'? This action cannot be undone.", "Delete user", "Delete", "Cancel");
+            }
+            else
+            {
+                // Fallback to browser confirm if dialog not available for any reason
+                confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete user '{displayName}'? This action cannot be undone.");
+            }
+
+            if (!confirmed) return;
+
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.DeleteAsync($"/admin/users/{Uri.EscapeDataString(id)}");
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                Error = ParseErrorMessage(text) ?? $"Delete failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ResetPasswordAsync(string id, string? username)
+    {
+        if (_busy) return;
+        try
+        {
+            var displayName = string.IsNullOrWhiteSpace(username) ? id : username!.Trim();
+            var confirmed = false;
+            if (_confirmDialog is not null)
+            {
+                confirmed = await _confirmDialog.Show($"Reset password for '{displayName}'? This will generate a new password.", "Reset Password", "Reset", "Cancel");
+            }
+            else
+            {
+                confirmed = await JS.InvokeAsync<bool>("confirm", $"Reset password for '{displayName}'? This will generate a new password.");
+            }
+
+            if (!confirmed) return;
+
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+
+            // Generate a new password
+            var newPassword = GenerateSecurePassword();
+
+            // Call the API to reset the password
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new { newPassword };
+            using var resp = await client.PostAsJsonAsync($"/admin/users/{Uri.EscapeDataString(id)}/reset-password", payload);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                Error = ParseErrorMessage(text) ?? $"Password reset failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            // Show the password reset modal
+            ResetPasswordValue = newPassword;
+            ResetPasswordUserDisplayName = displayName;
+            PasswordResetModalOpen = true;
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GenerateSecurePassword()
+    {
+        // Generate a password that meets the validation requirements
+        const string lowercase = "abcdefghijklmnopqrstuvwxyz";
+        const string uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const string digits = "0123456789";
+        const string specials = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+        const string allChars = lowercase + uppercase + digits + specials;
+
+        var random = new Random();
+        var password = new char[12];
+
+        // Ensure at least one character from each required category
+        password[0] = lowercase[random.Next(lowercase.Length)];
+        password[1] = uppercase[random.Next(uppercase.Length)];
+        password[2] = digits[random.Next(digits.Length)];
+        password[3] = specials[random.Next(specials.Length)];
+
+        // Fill the rest with random characters
+        for (var i = 4; i < password.Length; i++)
+        {
+            password[i] = allChars[random.Next(allChars.Length)];
+        }
+
+        // Shuffle the password to randomize positions
+        for (var i = password.Length - 1; i > 0; i--)
+        {
+            var j = random.Next(i + 1);
+            (password[i], password[j]) = (password[j], password[i]);
+        }
+
+        return new string(password);
+    }
+
+    private static MarkupString UserStatusBadge(UserStatus status)
+    {
+        var (cls, text) = status switch
+        {
+            UserStatus.Active => ("bg-success", "Active"),
+            UserStatus.Archived => ("bg-warning text-dark", "Archived"),
+            UserStatus.Disabled => ("bg-secondary", "Disabled"),
+            _ => ("bg-light text-dark", status.ToString())
+        };
+        return (MarkupString)$"<span class='badge {cls}'>{text}</span>";
+    }
+
+    private static string FormatAgo(DateTime dt)
+    {
+        var utc = dt.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(dt, DateTimeKind.Utc) : dt.ToUniversalTime();
+        var span = DateTime.UtcNow - utc;
+        if (span.TotalSeconds < 0) span = TimeSpan.Zero;
+        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s ago";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        return $"{(int)span.TotalDays}d ago";
+    }
+
+    private static string? ParseErrorMessage(string text)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.String)
+                return err.GetString();
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
+
+    private async Task InvalidSubmitFocus(EditContext _)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("focusFirstInvalid");
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task<IEnumerable<AutoComplete.Option>> SearchUsersForAutoComplete(string query)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(query)) return Array.Empty<AutoComplete.Option>();
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.GetAsync($"/admin/users?q={Uri.EscapeDataString(query)}&take=10");
+            if (!resp.IsSuccessStatusCode) return Array.Empty<AutoComplete.Option>();
+            var json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("items", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
+            {
+                var options = new List<AutoComplete.Option>();
+                foreach (var item in itemsElement.EnumerateArray())
+                {
+                    if (item.TryGetProperty("id", out var id) && item.TryGetProperty("username", out var username))
+                    {
+                        var userId = id.GetString() ?? string.Empty;
+                        var userName = username.GetString() ?? string.Empty;
+                        var email = item.TryGetProperty("email", out var emailProp) ? emailProp.GetString() ?? string.Empty : string.Empty;
+                        var label = string.IsNullOrEmpty(email) ? $"{userName} ({userId})" : $"{userName} ({userId}) - {email}";
+                        options.Add(new AutoComplete.Option(userId, label));
+                    }
+                }
+
+                return options;
+            }
+
+            return Array.Empty<AutoComplete.Option>();
+        }
+        catch
+        {
+            return Array.Empty<AutoComplete.Option>();
+        }
+    }
+
+    private async Task OnNewProjectKeyChanged(string? newValue)
+    {
+        NewProjectKey = newValue ?? string.Empty;
+        ValidateNewProjectKey();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ValidateNewProjectKey()
+    {
+        NewProjectValidationError = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(NewProjectKey))
+            return;
+
+        // Check if project is already assigned
+        var assignedProjectKeys = SelectedUserProjects?.Select(p => p.ProjectKey).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
+
+        if (assignedProjectKeys.Contains(NewProjectKey))
+        {
+            NewProjectValidationError = "This project is already assigned to the user";
+        }
+    }
+
+    private async Task OnAddUserLoginChanged(string? newValue)
+    {
+        AddUserModel.Login = newValue ?? string.Empty;
+        await ValidateAddUserLogin();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ValidateAddUserLogin()
+    {
+        AddUserLoginValidationError = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(AddUserModel.Login))
+            return;
+
+        // Basic format validation first
+        if (!Regex.IsMatch(AddUserModel.Login, "^[A-Za-z0-9._-]{1,128}$"))
+        {
+            return; // Let the regular validation attribute handle format errors
+        }
+
+        try
+        {
+            // Check if username already exists
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.GetAsync($"/admin/users?q={Uri.EscapeDataString(AddUserModel.Login)}&take=10");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("items", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in itemsElement.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var id) && item.TryGetProperty("username", out var username))
+                        {
+                            var userId = id.GetString() ?? string.Empty;
+                            var userName = username.GetString() ?? string.Empty;
+
+                            // Check for exact match (case-insensitive)
+                            if (string.Equals(userId, AddUserModel.Login, StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(userName, AddUserModel.Login, StringComparison.OrdinalIgnoreCase))
+                            {
+                                AddUserLoginValidationError = "This username is already taken";
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // If validation check fails, we'll let the server handle it during submission
+        }
+    }
+
+    private async Task<IEnumerable<AutoComplete.Option>> SearchProjectsForAutoComplete(string query)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(query)) return Array.Empty<AutoComplete.Option>();
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.GetAsync($"/admin/projects?q={Uri.EscapeDataString(query)}&take=10");
+            if (!resp.IsSuccessStatusCode) return Array.Empty<AutoComplete.Option>();
+            var json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("items", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
+            {
+                var options = new List<AutoComplete.Option>();
+                foreach (var item in itemsElement.EnumerateArray())
+                {
+                    if (item.TryGetProperty("key", out var key) && item.TryGetProperty("name", out var name))
+                    {
+                        var projectKey = key.GetString() ?? string.Empty;
+                        var projectName = name.GetString() ?? string.Empty;
+                        var label = $"{projectKey} - {projectName}";
+                        options.Add(new AutoComplete.Option(projectKey, label));
+                    }
+                }
+
+                return options;
+            }
+
+            return Array.Empty<AutoComplete.Option>();
+        }
+        catch
+        {
+            return Array.Empty<AutoComplete.Option>();
+        }
+    }
+
+    private static string GetProjectRoleDisplayName(ProjectRole role)
+    {
+        return role switch
+        {
+            ProjectRole.ProjectLead => "Project Lead",
+            ProjectRole.Member => "Member",
+            ProjectRole.Client => "Client",
+            ProjectRole.Maintainer => "Maintainer",
+            _ => role.ToString()
+        };
+    }
+
+    private async Task<string> GetUsernameForToast(HttpClient client, string userIdOrEmail)
+    {
+        try
+        {
+            // Try to get user details to extract username
+            var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(userIdOrEmail)}");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("username", out var username))
+                {
+                    return username.GetString() ?? userIdOrEmail;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return userIdOrEmail; // Fallback to input if we can't get username
+    }
+
+    private async Task<IEnumerable<AutoComplete.Option>> SearchAvailableProjectsForAutoComplete(string query)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(query)) return Array.Empty<AutoComplete.Option>();
+
+            // Get all projects
+            var allProjects = await SearchProjectsForAutoComplete(query);
+
+            // Get currently assigned project keys for this user
+            var assignedProjectKeys = SelectedUserProjects?.Select(p => p.ProjectKey).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
+
+            // Filter out already assigned projects
+            var availableProjects = allProjects.Where(p => !assignedProjectKeys.Contains(p.Value)).ToList();
+
+            return availableProjects;
+        }
+        catch
+        {
+            return Array.Empty<AutoComplete.Option>();
+        }
+    }
+
+    private void ShowProjectManagementPopup(string userId, string username)
+    {
+        SelectedUserId = userId;
+        SelectedUserName = username;
+        SelectedUserProjects = GetUserProjects(userId).ToList();
+        NewProjectAssignment = null;
+        NewProjectKey = string.Empty;
+        NewProjectRole = ProjectRole.Member;
+        NewProjectValidationError = string.Empty;
+        ProjectManagementOpen = true;
+    }
+
+    private void OnProjectManagementKeyDown(KeyboardEventArgs e)
+    {
+        if (e?.Key == "Escape")
+        {
+            ProjectManagementOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    private void AddNewProjectRow()
+    {
+        if (NewProjectAssignment == null)
+        {
+            NewProjectAssignment = new UserProject(string.Empty, string.Empty, ProjectRole.Member);
+            NewProjectKey = string.Empty;
+            NewProjectRole = ProjectRole.Member;
+            NewProjectValidationError = string.Empty;
+        }
+    }
+
+    private async Task ConfirmNewProjectAssignment()
+    {
+        if (string.IsNullOrWhiteSpace(NewProjectKey) || string.IsNullOrWhiteSpace(SelectedUserId))
+            return;
+
+        // Double-check for duplicates as a safety net
+        var assignedProjectKeys = SelectedUserProjects?.Select(p => p.ProjectKey).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
+        if (assignedProjectKeys.Contains(NewProjectKey))
+        {
+            try
+            {
+                Toasts.Error("This project is already assigned to the user");
+            }
+            catch
+            {
+            }
+
+            return;
+        }
+
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var role = NewProjectRole.ToString();
+            using var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(NewProjectKey)}/members/{Uri.EscapeDataString(SelectedUserId)}", new { role });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                // Add to local cache
+                if (SelectedUserProjects == null) SelectedUserProjects = new List<UserProject>();
+                SelectedUserProjects.Add(new UserProject(NewProjectKey, NewProjectKey, NewProjectRole));
+
+                // Update main cache
+                lock (_userProjects)
+                {
+                    if (!_userProjects.ContainsKey(SelectedUserId))
+                        _userProjects[SelectedUserId] = new List<UserProject>();
+                    _userProjects[SelectedUserId].Add(new UserProject(NewProjectKey, NewProjectKey, NewProjectRole));
+                }
+
+                NewProjectAssignment = null;
+                NewProjectKey = string.Empty;
+                NewProjectRole = ProjectRole.Member;
+                NewProjectValidationError = string.Empty;
+                try
+                {
+                    Toasts.Success("Project assignment added successfully");
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                var error = ParseErrorMessage(text) ?? $"Failed to add project: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                try
+                {
+                    Toasts.Error(error);
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                Toasts.Error($"Error: {ex.Message}");
+            }
+            catch
+            {
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task UpdateProjectRole(string projectKey, string? newRoleStr)
+    {
+        if (string.IsNullOrWhiteSpace(projectKey) || string.IsNullOrWhiteSpace(newRoleStr) || !Enum.TryParse<ProjectRole>(newRoleStr, out var newRole))
+            return;
+
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(projectKey)}/members/{Uri.EscapeDataString(SelectedUserId)}", new { role = newRole.ToString() });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                // Update local cache
+                if (SelectedUserProjects != null)
+                {
+                    var existingProject = SelectedUserProjects.FirstOrDefault(p => p.ProjectKey == projectKey);
+                    if (existingProject != null)
+                    {
+                        SelectedUserProjects.Remove(existingProject);
+                        SelectedUserProjects.Add(new UserProject(projectKey, existingProject.ProjectName, newRole));
+                    }
+                }
+
+                // Update main cache
+                lock (_userProjects)
+                {
+                    if (_userProjects.ContainsKey(SelectedUserId))
+                    {
+                        var existingProject = _userProjects[SelectedUserId].FirstOrDefault(p => p.ProjectKey == projectKey);
+                        if (existingProject != null)
+                        {
+                            _userProjects[SelectedUserId].Remove(existingProject);
+                            _userProjects[SelectedUserId].Add(new UserProject(projectKey, existingProject.ProjectName, newRole));
+                        }
+                    }
+                }
+
+                try
+                {
+                    Toasts.Success("Role updated successfully");
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                var error = ParseErrorMessage(text) ?? $"Failed to update role: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                try
+                {
+                    Toasts.Error(error);
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                Toasts.Error($"Error: {ex.Message}");
+            }
+            catch
+            {
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RemoveProjectAssignment(string projectKey)
+    {
+        if (string.IsNullOrWhiteSpace(projectKey))
+            return;
+
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.DeleteAsync($"/admin/projects/{Uri.EscapeDataString(projectKey)}/members/{Uri.EscapeDataString(SelectedUserId)}");
+
+            if (resp.IsSuccessStatusCode)
+            {
+                // Remove from local cache
+                if (SelectedUserProjects != null)
+                {
+                    SelectedUserProjects.RemoveAll(p => p.ProjectKey == projectKey);
+                }
+
+                // Remove from main cache
+                lock (_userProjects)
+                {
+                    if (_userProjects.ContainsKey(SelectedUserId))
+                    {
+                        _userProjects[SelectedUserId].RemoveAll(p => p.ProjectKey == projectKey);
+                    }
+                }
+
+                try
+                {
+                    Toasts.Success("Project assignment removed successfully");
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                var error = ParseErrorMessage(text) ?? $"Failed to remove project: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                try
+                {
+                    Toasts.Error(error);
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                Toasts.Error($"Error: {ex.Message}");
+            }
+            catch
+            {
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ShowAddUser()
+    {
+        AddUserError = null;
+        AddUserModel = new AddUserForm();
+        AddUserOpen = true;
+        CreateOpen = false;
+        InviteOpen = false;
+        ProjectManagementOpen = false;
+    }
+
+    private void OnAddUserKeyDown(KeyboardEventArgs e)
+    {
+        if (e?.Key == "Escape")
+        {
+            AddUserOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPasswordResetKeyDown(KeyboardEventArgs e)
+    {
+        if (e?.Key == "Escape")
+        {
+            PasswordResetModalOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyPasswordToClipboard()
+    {
+        try
+        {
+            var success = await JS.InvokeAsync<bool>("copyText", ResetPasswordValue);
+            if (success)
+            {
+                try
+                {
+                    Toasts.Success("Password copied to clipboard");
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                try
+                {
+                    Toasts.Error("Failed to copy password");
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                Toasts.Error($"Copy failed: {ex.Message}");
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private void GeneratePassword()
+    {
+        // Generate a password that meets the validation requirements
+        const string lowercase = "abcdefghijklmnopqrstuvwxyz";
+        const string uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const string digits = "0123456789";
+        const string specials = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+        const string allChars = lowercase + uppercase + digits + specials;
+
+        var random = new Random();
+        var password = new char[12]; // Generate 12 character password
+
+        // Ensure at least one character from each required category
+        password[0] = lowercase[random.Next(lowercase.Length)];
+        password[1] = uppercase[random.Next(uppercase.Length)];
+        password[2] = digits[random.Next(digits.Length)];
+        password[3] = specials[random.Next(specials.Length)];
+
+        // Fill the rest with random characters
+        for (var i = 4; i < password.Length; i++)
+        {
+            password[i] = allChars[random.Next(allChars.Length)];
+        }
+
+        // Shuffle the password to randomize positions
+        for (var i = password.Length - 1; i > 0; i--)
+        {
+            var j = random.Next(i + 1);
+            (password[i], password[j]) = (password[j], password[i]);
+        }
+
+        AddUserModel.Password = new string(password);
+    }
+
+    private async Task CreateUserAsync()
+    {
+        if (_busy) return;
+        AddUserError = null;
+
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+
+            // Send proper enum values that match the User record
+            var accountRole = Enum.Parse<AccountRole>(AddUserModel.AccountRole);
+            var payload = new
+            {
+                Id = AddUserModel.Login.Trim(),
+                Username = AddUserModel.Login.Trim(), // Use Login for Username (for authentication)
+                FullName = string.IsNullOrWhiteSpace(AddUserModel.FullName) ? null : AddUserModel.FullName.Trim(), // Display name
+                Email = string.IsNullOrWhiteSpace(AddUserModel.Email) ? null : AddUserModel.Email!.Trim(),
+                AccountRole = accountRole, // Enum value, not string
+                Status = UserStatus.Active // Enum value, not string
+            };
+
+            using var resp = await client.PostAsJsonAsync("/admin/users", payload);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                AddUserError = ParseErrorMessage(text) ?? $"Create user failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            // Set the user password after successful creation
+            if (!string.IsNullOrWhiteSpace(AddUserModel.Password))
+            {
+                try
+                {
+                    var passwordPayload = new { AddUserModel.Password };
+                    using var passwordResp = await client.PatchAsJsonAsync($"/admin/users/{Uri.EscapeDataString(AddUserModel.Login)}", passwordPayload);
+                    if (!passwordResp.IsSuccessStatusCode)
+                    {
+                        // User was created but password setting failed - continue anyway
+                        try
+                        {
+                            Toasts.Warning("User created successfully, but password setting failed. Please set password manually.");
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+                catch
+                {
+                    // Password setting failed - continue anyway since user was created
+                    try
+                    {
+                        Toasts.Warning("User created successfully, but password setting failed. Please set password manually.");
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            // Then assign to project if specified
+            if (!string.IsNullOrWhiteSpace(AddUserModel.ProjectKey))
+            {
+                var projectRole = AddUserModel.ProjectRole.ToString();
+                using var projResp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(AddUserModel.ProjectKey)}/members/{Uri.EscapeDataString(AddUserModel.Login)}", new { role = projectRole });
+
+                if (!projResp.IsSuccessStatusCode)
+                {
+                    // User was created but project assignment failed
+                    var text = await projResp.Content.ReadAsStringAsync();
+                    var error = ParseErrorMessage(text) ?? $"Project assignment failed: {(int)projResp.StatusCode} {projResp.ReasonPhrase}";
+                    try
+                    {
+                        Toasts.Warning($"User created successfully, but project assignment failed: {error}");
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            AddUserOpen = false;
+            try
+            {
+                Toasts.Success("New Account has been created successfully.");
+            }
+            catch
+            {
+            }
+
+            await LoadAsync(); // Refresh the user list
+        }
+        catch (Exception ex)
+        {
+            AddUserError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+}

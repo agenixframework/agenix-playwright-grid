@@ -1,0 +1,28 @@
+@namespace Dashboard.Shared
+@inject NavigationManager Nav
+
+@if (!_navigated)
+{
+    <div class="container mt-3">
+        <div class="alert alert-info">Redirecting to sign-in…</div>
+    </div>
+}
+
+@code {
+    private bool _navigated;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_navigated) return;
+        var uri = new Uri(Nav.Uri);
+        // Avoid loop when already on /login
+        if (uri.AbsolutePath.Equals("/login", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var returnPart = Uri.EscapeDataString(uri.PathAndQuery + uri.Fragment);
+        _navigated = true;
+        // Full reload to ensure auth middleware kicks in post-login
+        Nav.NavigateTo($"/login?returnUrl={returnPart}", true);
+    }
+
+}

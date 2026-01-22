@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -32,10 +32,25 @@ public sealed record ConnectionStatus(
     int Attempt,
     string? LastError)
 {
-    public static ConnectionStatus Connecting() => new(ConnectionStateKind.Connecting, null, 0, null);
-    public static ConnectionStatus Connected() => new(ConnectionStateKind.Connected, null, 0, null);
-    public static ConnectionStatus Disconnected(string? error) => new(ConnectionStateKind.Disconnected, null, 0, error);
-    public static ConnectionStatus Retrying(DateTimeOffset nextRetryAt, int attempt, string? error) => new(ConnectionStateKind.Retrying, nextRetryAt, attempt, error);
+    public static ConnectionStatus Connecting()
+    {
+        return new ConnectionStatus(ConnectionStateKind.Connecting, null, 0, null);
+    }
+
+    public static ConnectionStatus Connected()
+    {
+        return new ConnectionStatus(ConnectionStateKind.Connected, null, 0, null);
+    }
+
+    public static ConnectionStatus Disconnected(string? error)
+    {
+        return new ConnectionStatus(ConnectionStateKind.Disconnected, null, 0, error);
+    }
+
+    public static ConnectionStatus Retrying(DateTimeOffset nextRetryAt, int attempt, string? error)
+    {
+        return new ConnectionStatus(ConnectionStateKind.Retrying, nextRetryAt, attempt, error);
+    }
 }
 
 public interface IConnectionStatusReader

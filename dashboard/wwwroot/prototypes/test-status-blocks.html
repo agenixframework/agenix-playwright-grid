@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Status Blocks Prototype</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      padding: 40px;
+      background-color: #fafafa;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      color: #333;
+    }
+
+    .status-section {
+      margin-bottom: 40px;
+    }
+
+    .status-section h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #666;
+      font-weight: 600;
+    }
+
+    .status-blocks-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    /* Main test status block styles */
+    .testStatusBlock-type-block {
+      background-color: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 100px;
+      box-sizing: border-box;
+      display: inline-block;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      height: 20px;
+      line-height: 18px;
+      margin: 4px 0;
+      position: relative;
+    }
+
+    .testStatusBlock__circle {
+      border-radius: 100%;
+      display: inline-block;
+      height: 12px;
+      margin: 0 5px 0 7px;
+      width: 12px;
+      vertical-align: middle;
+    }
+
+    .testStatusBlock__title {
+      color: #464547;
+      display: inline-block;
+      text-transform: uppercase;
+      vertical-align: middle;
+      font-weight: 600;
+    }
+
+    .testStatusBlock__stats {
+      background-color: #fff;
+      border: 1px solid;
+      border-radius: 100px;
+      box-sizing: border-box;
+      color: #464547;
+      display: inline-block;
+      height: 20px;
+      margin-left: 7px;
+      padding: 0 10px;
+      position: relative;
+      right: -1px;
+      top: -1px;
+      vertical-align: middle;
+    }
+
+    .testStatusBlock__value {
+      font-weight: 600;
+      line-height: 18px;
+    }
+
+    /* Color definitions */
+    .color-passed {
+      background-color: #4caf50;
+    }
+
+    .border-passed {
+      border-color: #4caf50;
+    }
+
+    .color-failed {
+      background-color: #d32f2f;
+    }
+
+    .border-failed {
+      border-color: #d32f2f;
+    }
+
+    .color-skipped {
+      background-color: #6b7280;
+    }
+
+    .border-skipped {
+      border-color: #6b7280;
+    }
+
+    .color-inprogress {
+      background-color: #3b82f6;
+    }
+
+    .border-inprogress {
+      border-color: #3b82f6;
+    }
+
+    .color-interrupted {
+      background-color: #f59e0b;
+    }
+
+    .border-interrupted {
+      border-color: #f59e0b;
+    }
+
+    .color-errored {
+      background-color: #dc2626;
+    }
+
+    .border-errored {
+      border-color: #dc2626;
+    }
+
+    /* Example usage section */
+    .code-example {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      margin-top: 20px;
+    }
+
+    .demo-section {
+      margin-bottom: 30px;
+    }
+
+    .label {
+      display: inline-block;
+      min-width: 120px;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Test Status Blocks Prototype</h1>
+
+  <div class="status-section">
+    <h2>Standard Test Status Blocks</h2>
+    <div class="status-blocks-row">
+      <!-- Passed -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-passed"></div>
+        <span class="testStatusBlock__title">P</span>
+        <div class="testStatusBlock__stats border-passed">
+          <span class="testStatusBlock__value">12</span>
+        </div>
+      </div>
+
+      <!-- Failed -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-failed"></div>
+        <span class="testStatusBlock__title">F</span>
+        <div class="testStatusBlock__stats border-failed">
+          <span class="testStatusBlock__value">3</span>
+        </div>
+      </div>
+
+      <!-- Errored -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-errored"></div>
+        <span class="testStatusBlock__title">E</span>
+        <div class="testStatusBlock__stats border-errored">
+          <span class="testStatusBlock__value">1</span>
+        </div>
+      </div>
+
+      <!-- Skipped -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-skipped"></div>
+        <span class="testStatusBlock__title">S</span>
+        <div class="testStatusBlock__stats border-skipped">
+          <span class="testStatusBlock__value">5</span>
+        </div>
+      </div>
+
+      <!-- In Progress -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-inprogress"></div>
+        <span class="testStatusBlock__title">IP</span>
+        <div class="testStatusBlock__stats border-inprogress">
+          <span class="testStatusBlock__value">2</span>
+        </div>
+      </div>
+
+      <!-- Interrupted -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-interrupted"></div>
+        <span class="testStatusBlock__title">I</span>
+        <div class="testStatusBlock__stats border-interrupted">
+          <span class="testStatusBlock__value">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-section">
+    <h2>Full Name Variants</h2>
+    <div class="status-blocks-row">
+      <!-- Passed -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-passed"></div>
+        <span class="testStatusBlock__title">Passed</span>
+        <div class="testStatusBlock__stats border-passed">
+          <span class="testStatusBlock__value">45</span>
+        </div>
+      </div>
+
+      <!-- Failed -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-failed"></div>
+        <span class="testStatusBlock__title">Failed</span>
+        <div class="testStatusBlock__stats border-failed">
+          <span class="testStatusBlock__value">8</span>
+        </div>
+      </div>
+
+      <!-- Skipped -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-skipped"></div>
+        <span class="testStatusBlock__title">Skipped</span>
+        <div class="testStatusBlock__stats border-skipped">
+          <span class="testStatusBlock__value">12</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-section">
+    <h2>Combined Status Blocks (F/E/I Pattern)</h2>
+    <div class="status-blocks-row">
+      <!-- Product Bug (PB) -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-failed"></div>
+        <span class="testStatusBlock__title">PB</span>
+        <div class="testStatusBlock__stats border-failed">
+          <span class="testStatusBlock__value">0</span>
+        </div>
+      </div>
+
+      <!-- Failed/Errored/Interrupted -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-failed"></div>
+        <span class="testStatusBlock__title">F/E/I</span>
+        <div class="testStatusBlock__stats border-failed">
+          <span class="testStatusBlock__value">4</span>
+        </div>
+      </div>
+
+      <!-- To Investigate (TI) -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-interrupted"></div>
+        <span class="testStatusBlock__title">TI</span>
+        <div class="testStatusBlock__stats border-interrupted">
+          <span class="testStatusBlock__value">2</span>
+        </div>
+      </div>
+
+      <!-- Automation Bug (AB) -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle" style="background-color: #9333ea;"></div>
+        <span class="testStatusBlock__title">AB</span>
+        <div class="testStatusBlock__stats" style="border-color: #9333ea;">
+          <span class="testStatusBlock__value">1</span>
+        </div>
+      </div>
+
+      <!-- System Issue (SI) -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle" style="background-color: #ea580c;"></div>
+        <span class="testStatusBlock__title">SI</span>
+        <div class="testStatusBlock__stats" style="border-color: #ea580c;">
+          <span class="testStatusBlock__value">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-section">
+    <h2>Different Sizes & Counts</h2>
+    <div class="demo-section">
+      <div class="label">Zero count:</div>
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-failed"></div>
+        <span class="testStatusBlock__title">F</span>
+        <div class="testStatusBlock__stats border-failed">
+          <span class="testStatusBlock__value">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div class="label">Single digit:</div>
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-passed"></div>
+        <span class="testStatusBlock__title">P</span>
+        <div class="testStatusBlock__stats border-passed">
+          <span class="testStatusBlock__value">5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div class="label">Double digit:</div>
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-passed"></div>
+        <span class="testStatusBlock__title">P</span>
+        <div class="testStatusBlock__stats border-passed">
+          <span class="testStatusBlock__value">42</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div class="label">Triple digit:</div>
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-passed"></div>
+        <span class="testStatusBlock__title">P</span>
+        <div class="testStatusBlock__stats border-passed">
+          <span class="testStatusBlock__value">127</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div class="label">Large number:</div>
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-passed"></div>
+        <span class="testStatusBlock__title">P</span>
+        <div class="testStatusBlock__stats border-passed">
+          <span class="testStatusBlock__value">1,234</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-section">
+    <h2>HTML Code Example</h2>
+    <div class="code-example">
+      &lt;div class="testStatusBlock-type-block"&gt;
+      &lt;div class="testStatusBlock__circle color-passed"&gt;&lt;/div&gt;
+      &lt;span class="testStatusBlock__title"&gt;P&lt;/span&gt;
+      &lt;div class="testStatusBlock__stats border-passed"&gt;
+      &lt;span class="testStatusBlock__value"&gt;12&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;!-- With inline styles --&gt;
+      &lt;div class="testStatusBlock-type-block"&gt;
+      &lt;div class="testStatusBlock__circle" style="background-color: #d32f2f;"&gt;&lt;/div&gt;
+      &lt;span class="testStatusBlock__title"&gt;PB&lt;/span&gt;
+      &lt;div class="testStatusBlock__stats" style="border-color: #d32f2f;"&gt;
+      &lt;span class="testStatusBlock__value"&gt;0&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;/div&gt;
+    </div>
+  </div>
+
+  <div class="status-section">
+    <h2>Usage in Row Layout</h2>
+    <div style="display: flex; gap: 10px; align-items: center; background: #f9f9f9; padding: 15px; border-radius: 4px;">
+      <div style="font-weight: 600; color: #666;">Total: <span style="color: #333;">23</span></div>
+
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-failed"></div>
+        <span class="testStatusBlock__title">F/E/I</span>
+        <div class="testStatusBlock__stats border-failed">
+          <span class="testStatusBlock__value">4</span>
+        </div>
+      </div>
+
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-inprogress"></div>
+        <span class="testStatusBlock__title">IP</span>
+        <div class="testStatusBlock__stats border-inprogress">
+          <span class="testStatusBlock__value">2</span>
+        </div>
+      </div>
+
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-skipped"></div>
+        <span class="testStatusBlock__title">S</span>
+        <div class="testStatusBlock__stats border-skipped">
+          <span class="testStatusBlock__value">5</span>
+        </div>
+      </div>
+
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle color-passed"></div>
+        <span class="testStatusBlock__title">P</span>
+        <div class="testStatusBlock__stats border-passed">
+          <span class="testStatusBlock__value">12</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-section">
+    <h2>ReportPortal-Style Status Categories</h2>
+    <div class="status-blocks-row">
+      <!-- Product Bug -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle" style="background-color: #d32f2f;"></div>
+        <span class="testStatusBlock__title">Product Bug</span>
+        <div class="testStatusBlock__stats" style="border-color: #d32f2f;">
+          <span class="testStatusBlock__value">3</span>
+        </div>
+      </div>
+
+      <!-- Automation Bug -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle" style="background-color: #9333ea;"></div>
+        <span class="testStatusBlock__title">Automation Bug</span>
+        <div class="testStatusBlock__stats" style="border-color: #9333ea;">
+          <span class="testStatusBlock__value">1</span>
+        </div>
+      </div>
+
+      <!-- System Issue -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle" style="background-color: #ea580c;"></div>
+        <span class="testStatusBlock__title">System Issue</span>
+        <div class="testStatusBlock__stats" style="border-color: #ea580c;">
+          <span class="testStatusBlock__value">2</span>
+        </div>
+      </div>
+
+      <!-- To Investigate -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle" style="background-color: #f59e0b;"></div>
+        <span class="testStatusBlock__title">To Investigate</span>
+        <div class="testStatusBlock__stats" style="border-color: #f59e0b;">
+          <span class="testStatusBlock__value">5</span>
+        </div>
+      </div>
+
+      <!-- No Defect -->
+      <div class="testStatusBlock-type-block">
+        <div class="testStatusBlock__circle" style="background-color: #4caf50;"></div>
+        <span class="testStatusBlock__title">No Defect</span>
+        <div class="testStatusBlock__stats" style="border-color: #4caf50;">
+          <span class="testStatusBlock__value">45</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

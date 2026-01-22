@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -91,6 +91,16 @@ public sealed record WorkerStatusDto
     public DateTime LastSeen { get; set; }
 
     /// <summary>
+    ///     True if this worker is currently quarantined (cooldown, no new sessions will be assigned).
+    /// </summary>
+    public bool Quarantined { get; set; }
+
+    /// <summary>
+    ///     When quarantine is expected to end (UTC). Null when not quarantined.
+    /// </summary>
+    public DateTime? QuarantineUntil { get; set; }
+
+    /// <summary>
     ///     Per-label capacity counts advertised by this worker.
     /// </summary>
     public Dictionary<string, PoolCounts> Pools { get; init; } = new();
@@ -132,6 +142,221 @@ public sealed record PoolCounts
     public int Borrowed { get; set; }
 }
 
+/// <summary>
+///     DTO for updating an existing launch.
+/// </summary>
+public sealed record UpdateLaunchRequest
+{
+    public string? Name { get; init; }
+    public string? Description { get; init; }
+    public string[]? Attributes { get; init; }
+    public bool? IsImportant { get; init; }
+    public int? RetentionOverrideDays { get; init; }
+    public string? Status { get; init; }
+}
+
+/// <summary>
+///     DTO for bulk updating multiple launches.
+/// </summary>
+public sealed record BulkUpdateLaunchesRequest
+{
+    /// <summary>
+    ///     List of launch IDs to update (max 10,000)
+    /// </summary>
+    public required Guid[] LaunchIds { get; init; }
+
+    /// <summary>
+    ///     Fields to update on all selected launches
+    /// </summary>
+    public UpdateLaunchRequest Updates { get; init; } = new();
+}
+
+/// <summary>
+///     DTO for bulk update response.
+/// </summary>
+public sealed record BulkUpdateLaunchesResponse
+{
+    public required int SuccessCount { get; init; }
+    public required int FailureCount { get; init; }
+    public required int TotalRequested { get; init; }
+    public string[]? Errors { get; init; }
+}
+
+/// <summary>
+///     DTO for launch response.
+/// </summary>
+public sealed record LaunchDto
+{
+    public required Guid Id { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public required string[] Attributes { get; init; }
+    public required string OwnerApiKey { get; init; }
+    public string? OwnerUsername { get; init; }
+    public required string ProjectKey { get; init; }
+    public required DateTimeOffset StartTime { get; init; }
+    public DateTimeOffset? FinishTime { get; init; }
+    public DateTimeOffset? LastActivity { get; init; }
+    public required int LaunchNumber { get; init; }
+    public long DbId { get; init; } // Globally unique sequential ID per project (optional for backward compatibility)
+    public long Number => DbId; // Alias for numeric URLs
+    public required int TotalTestRuns { get; init; }
+    public required int FinishedTestRuns { get; init; }
+    public required int RunningTestRuns { get; init; }
+    public required int StoppedTestRuns { get; init; }
+    public required int ErroredTestRuns { get; init; }
+    public bool IsImportant { get; init; }
+    public int? RetentionOverrideDays { get; init; }
+    public double? DurationSeconds { get; init; }
+    public required bool IsRunning { get; init; }
+    public required string Status { get; init; }
+
+    // Test result aggregations (Azure-style)
+    public int TotalTests { get; init; }
+    public int PassedTests { get; init; }
+    public int FailedTests { get; init; }
+    public int SkippedTests { get; init; }
+    public int TimedoutTests { get; init; }
+
+    /// <summary>
+    ///     Computed status based on test results (InProgress|Passed|Failed|Skipped|Timedout|Cancelled|Errored).
+    /// </summary>
+    public string? ComputedStatus { get; init; }
+}
+
+/// <summary>
+///     DTO for suite information.
+/// </summary>
+public sealed record SuiteDto
+{
+    public required Guid Id { get; init; }
+    public required Guid LaunchId { get; init; }
+    public Guid? ParentSuiteId { get; init; }
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public required string[] Attributes { get; init; }
+    public required string Status { get; init; }
+    public required DateTimeOffset StartTime { get; init; }
+    public DateTimeOffset? FinishTime { get; init; }
+    public required int TotalTestRuns { get; init; }
+    public required int PassedTestRuns { get; init; }
+    public required int FailedTestRuns { get; init; }
+    public required int StoppedTestRuns { get; init; }
+    public double? DurationSeconds { get; init; }
+
+    // Test result aggregations (Azure-style)
+    public int TotalTests { get; init; }
+    public int PassedTests { get; init; }
+    public int FailedTests { get; init; }
+    public int SkippedTests { get; init; }
+    public int TimedoutTests { get; init; }
+
+    /// <summary>
+    ///     Computed status based on test results (InProgress|Passed|Failed|Skipped|Timedout|Cancelled|Errored).
+    /// </summary>
+    public string? ComputedStatus { get; init; }
+}
+
+/// <summary>
+///     Request to generate stub/mock launch data.
+/// </summary>
+public sealed record GenerateStubLaunchRequest
+{
+    public required string ProjectKey { get; init; }
+    public string? BaseName { get; init; }
+}
+
+/// <summary>
+///     Request to generate stub/mock test runs for a launch.
+/// </summary>
+public sealed record GenerateStubTestRunsRequest
+{
+    public int? Count { get; init; }
+}
+
+/// <summary>
+///     Saved filter configuration for launches page
+/// </summary>
+public sealed record LaunchFilterDto
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public string ProjectKey { get; init; } = string.Empty;
+    public string UserId { get; init; } = string.Empty;
+    public List<FilterCriterionDto> Criteria { get; init; } = new();
+    public string SortBy { get; init; } = "start_time";
+    public bool IsShared { get; init; }
+    public bool DisplayOnLaunches { get; init; } = true;
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+}
+
+/// <summary>
+///     Single filter criterion (field, operator, value)
+/// </summary>
+public sealed record FilterCriterionDto
+{
+    public string Field { get; init; } = "name";
+    public string Operator { get; init; } = "contains";
+    public string Value { get; init; } = string.Empty;
+    public string LogicalOperator { get; init; } = "AND";
+    public string? DateRangePreset { get; init; }
+    public string? FromDate { get; init; }
+    public string? ToDate { get; init; }
+    public string? AttributeKey { get; init; }
+    public string? AttributeValue { get; init; }
+    public List<AttributePairDto>? Attributes { get; init; }
+}
+
+public sealed record AttributePairDto
+{
+    public string Key { get; init; } = string.Empty;
+    public string Value { get; init; } = string.Empty;
+}
+
+/// <summary>
+///     User's selected filter preference for a project
+/// </summary>
+public sealed record UserFilterPreferenceDto
+{
+    public string UserId { get; init; } = string.Empty;
+    public string ProjectKey { get; init; } = string.Empty;
+    public Guid? SelectedFilterId { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+}
+
+/// <summary>
+///     Request to create or update a launch filter
+/// </summary>
+public sealed record SaveLaunchFilterRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public string? Description { get; init; }
+    public string ProjectKey { get; init; } = string.Empty;
+    public List<FilterCriterionDto> Criteria { get; init; } = new();
+    public string SortBy { get; init; } = "start_time";
+    public bool IsShared { get; init; }
+    public bool DisplayOnLaunches { get; init; } = true;
+}
+
+/// <summary>
+///     Request to update user's filter preference
+/// </summary>
+public sealed record UpdateFilterPreferenceRequest
+{
+    public string ProjectKey { get; init; } = string.Empty;
+    public Guid? SelectedFilterId { get; init; }
+}
+
+/// <summary>
+///     Request to toggle display on launches for a filter (per-user setting)
+/// </summary>
+public sealed record ToggleFilterDisplayRequest
+{
+    public bool DisplayOnLaunches { get; init; }
+}
+
 // Diagnostics payloads
 /// <summary>
 ///     Effective configuration values the hub is running with.
@@ -164,6 +389,11 @@ public sealed record HubEffectiveConfigDto
     public int NodeTimeoutSeconds { get; init; }
 
     /// <summary>
+    ///     Quarantine cooldown duration (seconds) applied to failing/flapping nodes.
+    /// </summary>
+    public int NodeQuarantineSeconds { get; init; }
+
+    /// <summary>
     ///     Dashboard base URL.
     /// </summary>
     public string DashboardUrl { get; init; } = string.Empty;
@@ -172,6 +402,16 @@ public sealed record HubEffectiveConfigDto
     ///     Hub version string.
     /// </summary>
     public string Version { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Whether event publishing to RabbitMQ is enabled.
+    /// </summary>
+    public bool EventPublishingEnabled { get; init; }
+
+    /// <summary>
+    ///     RabbitMQ connection URL (if event publishing is enabled).
+    /// </summary>
+    public string? RabbitMqUrl { get; init; }
 }
 
 /// <summary>

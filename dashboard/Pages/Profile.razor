@@ -1,0 +1,1703 @@
+@page "/profile"
+@using System.ComponentModel.DataAnnotations
+@using System.Net
+@using System.Net.Http.Headers
+@using System.Security.Claims
+@using System.Security.Cryptography
+@using System.Text
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@using Agenix.PlaywrightGrid.Domain
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@inject IHttpClientFactory Http
+@inject NavigationManager Nav
+@inject IHttpContextAccessor Accessor
+@inject IConfiguration Configuration
+@inject AvatarState AvatarState
+@inject ToastService Toasts
+@inject IJSRuntime JS
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <Dashboard.Shared.ValidationPanel Error="@Error"/>
+}
+
+@if (!Loaded)
+{
+    <div class="text-muted">Loading…</div>
+}
+else
+{
+    <div class="pageLayout__page-layout--xB5hn">
+        <div class="profilePage__container--krCcS">
+            <div class="page-header">
+                <div class="header-content">
+                    <div class="header-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                            <path
+                                d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>User Profile</h3>
+                        <div class="subtitle">Manage your profile information and settings</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Header strip: avatar + identity + actions (styled like the screenshot) -->
+            <div class="d-flex align-items-start justify-content-between mb-3">
+                <div class="d-flex align-items-start gap-2">
+                    <!-- Avatar -->
+                    <img src="@AvatarUrl" alt="Avatar" class="rounded"
+                         style="width:96px;height:96px;object-fit:cover;border:1px solid #e0e0e0;"/>
+
+                    <!-- Identity details -->
+                    <div>
+                        <div class="text-uppercase fw-semibold mb-1 d-inline-flex align-items-center gap-2">
+                            <span>@DisplayName</span>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none" title="Edit user name"
+                                    @onclick="OpenEditModal" style="line-height:1;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                     viewBox="0 0 16 16" aria-hidden="true">
+                                    <path
+                                        d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l9.5-9.5zM11.207 2 14 4.793 14.793 4 12 1.207 11.207 2zM13.5 5.293 10.707 2.5 4 9.207V10h.793L13.5 5.293z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="mb-1">
+                            @if (!string.IsNullOrWhiteSpace(RoleLabel))
+                            {
+                                <span class="badge rounded-pill role-badge @GetRoleClass()"
+                                      title="Your access level">@RoleLabel</span>
+                            }
+                        </div>
+                        <div class="mb-2 d-inline-flex align-items-center gap-2">
+                            <span>@EmailDisplay</span>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none" title="Edit email"
+                                    @onclick="OpenEditModal" style="line-height:1;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                     viewBox="0 0 16 16" aria-hidden="true">
+                                    <path
+                                        d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-9.5 9.5a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l9.5-9.5zM11.207 2 14 4.793 14.793 4 12 1.207 11.207 2zM13.5 5.293 10.707 2.5 4 9.207V10h.793L13.5 5.293z"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="btn btn-sm btn-primary mb-0">
+                                Upload Photo
+                                <Microsoft.AspNetCore.Components.Forms.InputFile OnChange="OnAvatarFileSelected"
+                                                                                 accept="image/*" class="d-none"/>
+                            </label>
+                            <button class="btn btn-sm btn-outline-primary" type="button"
+                                    @onclick="OpenDeleteAvatarModal">Remove Photo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Change password on the far right -->
+                <div class="ms-auto" style="min-width: 200px;">
+                    <button class="btn btn-primary btn-sm w-100" @onclick="OpenChangePasswordModal">Change Password
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabs like in the screenshot (only Project Assignment enabled) -->
+            <ul class="nav nav-tabs mb-2">
+                <li class="nav-item">
+                    <button
+                        class="nav-link text-uppercase fw-semibold @(ActiveTab == Tab.ProjectAssignment ? "active" : null)"
+                        @onclick="() => ActiveTab = Tab.ProjectAssignment">Project Assignment
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link text-uppercase @(ActiveTab == Tab.ApiKeys ? "active" : null)"
+                            @onclick="() => ActiveTab = Tab.ApiKeys">API Keys
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link text-uppercase @(ActiveTab == Tab.ConfigurationExamples ? "active" : null)"
+                            disabled>Configuration Examples
+                    </button>
+                </li>
+            </ul>
+
+            <style>
+                .nav-tabs {
+                    border-bottom: 2px solid #e9ecef;
+                }
+
+                .nav-tabs .nav-link {
+                    border: none;
+                    border-bottom: 3px solid transparent;
+                    color: #6c757d;
+                    font-weight: 600;
+                    padding: 0.75rem 1.5rem;
+                    background: transparent;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    font-size: 0.8125rem;
+                    letter-spacing: 0.3px;
+                }
+
+                .nav-tabs .nav-link:hover:not(:disabled) {
+                    border-bottom-color: #b794f4;
+                    color: #764ba2;
+                }
+
+                .nav-tabs .nav-link.active {
+                    border: none;
+                    border-bottom: 3px solid #764ba2;
+                    color: #764ba2;
+                    font-weight: 600;
+                    background: transparent;
+                }
+
+                .nav-tabs .nav-link:disabled {
+                    color: #aaa;
+                    cursor: not-allowed;
+                }
+
+                /* Table header - violet accent */
+                .blockContainer__block-header--bOT4P {
+                    background-color: #f8f6fc !important;
+                    color: #764ba2 !important;
+                    border-bottom: 2px solid #e9e2f3 !important;
+                }
+
+                /* Project links - violet hover */
+                .assignedProjectsBlock__project-item a {
+                    color: #374151;
+                    font-weight: 600;
+                    transition: color 0.2s ease;
+                }
+
+                .assignedProjectsBlock__project-item a:hover {
+                    color: #764ba2;
+                }
+
+                /* Language section */
+                .language-display {
+                    border-color: #e9e2f3 !important;
+                    transition: all 0.2s ease;
+                }
+
+                .language-display:hover {
+                    border-color: #b794f4 !important;
+                }
+
+                /* Edit buttons - violet */
+                .btn-link {
+                    color: #764ba2;
+                    transition: color 0.2s ease;
+                }
+
+                .btn-link:hover {
+                    color: #667eea;
+                }
+
+                /* Upload/Remove buttons already using global btn-primary styles */
+            </style>
+
+            @if (ActiveTab == Tab.ProjectAssignment)
+            {
+                <!-- Projects table -->
+                <div class="table-responsive">
+                    <table class="table table-borderless align-middle mb-3" style="min-width: 620px;">
+                        <thead>
+                        <tr class="text-uppercase text-muted small">
+                            <th class="bg-light fw-semibold py-1 px-2 blockContainer__block-header--bOT4P"
+                                style="letter-spacing:.03em;">Projects (@(Memberships?.Length ?? 0))
+                            </th>
+                            <th class="bg-light fw-semibold text-end py-1 px-2 blockContainer__block-header--bOT4P text-nowrap"
+                                style="letter-spacing:.03em;">Project Role
+                            </th>
+                        </tr>
+                        </thead>
+                        <tbody class="small">
+                        @if (Memberships is null)
+                        {
+                            <tr>
+                                <td colspan="2" class="text-muted py-4">Loading…</td>
+                            </tr>
+                        }
+                        else if (Memberships.Length == 0)
+                        {
+                            <tr>
+                                <td colspan="2" class="text-muted py-4">No projects linked.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var m in Memberships)
+                            {
+                                <tr class="assignedProjectsBlock__project-item">
+                                    <td class="assignedProjectsBlock__project-item">
+                                        <a class="text-decoration-none"
+                                           href="/admin/projects/@Uri.EscapeDataString(m.ProjectKey ?? string.Empty)">@m.ProjectKey?.ToUpperInvariant()</a>
+                                    </td>
+                                    <td class="assignedProjectsBlock__project-item text-end text-nowrap">@Regex.Replace(m.Role.ToString(), "([a-z])([A-Z])", "$1 $2").ToUpperInvariant()</td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Language row (static display to mirror screenshot; no behavior change) -->
+                <div class="mt-3">
+                    <div class="text-muted mb-2" style="font-weight: 600; font-size: 0.9rem;">Language</div>
+                    <div class="d-inline-flex align-items-center gap-2 border rounded px-3 py-2 language-display">
+                        <span aria-hidden="true">🇺🇸</span>
+                        <span class="small">English (United States)</span>
+                    </div>
+                </div>
+            }
+            else if (ActiveTab == Tab.ApiKeys)
+            {
+                <div class="mb-3 text-muted small" style="max-width: 860px;">
+                    In order to provide security for your own domain password, you can use a user key — to verify your
+                    account to be able to log with hub.
+                </div>
+
+                @if (ApiKeys is null)
+                {
+                    <div class="text-muted">Loading…</div>
+                }
+                else if (ApiKeys.Count == 0)
+                {
+                    <div class="d-flex flex-column align-items-center text-center" style="padding: 40px 0;">
+                        <div class="mb-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120"
+                                 aria-hidden="true">
+                                <rect x="8" y="24" width="144" height="72" rx="6" fill="#F7F9FB" stroke="#E3E8EF"/>
+                                <circle cx="64" cy="60" r="18" stroke="#C7D0D9" stroke-width="3" fill="none"/>
+                                <path d="M82 60h52m-12-8v16m-10-12v8" stroke="#C7D0D9" stroke-width="3"
+                                      stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="h5 mb-2">No API Keys</div>
+                        <div class="text-muted small mb-3" style="max-width: 560px;">
+                            Generate your first API key to use with the hub.
+                        </div>
+                        <button class="btn btn-primary" @onclick="OnGenerateApiKey">Generate API Key</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-primary btn-sm" @onclick="OnGenerateApiKey">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                                 viewBox="0 0 16 16" class="me-1">
+                                <path
+                                    d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                            </svg>
+                            Generate API Key
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-borderless align-middle" style="min-width: 620px;">
+                            <thead>
+                            <tr class="text-uppercase text-muted small">
+                                <th class="bg-light fw-semibold py-1 px-2 blockContainer__block-header--bOT4P"
+                                    style="letter-spacing:.03em;">API Keys (@(ApiKeys?.Count ?? 0))
+                                </th>
+                                <th class="bg-light fw-semibold text-end py-1 px-2 blockContainer__block-header--bOT4P text-nowrap"
+                                    style="letter-spacing:.03em;">Created
+                                </th>
+                                <th class="bg-light fw-semibold text-end py-1 px-2 blockContainer__block-header--bOT4P"
+                                    style="letter-spacing:.03em;"></th>
+                            </tr>
+                            </thead>
+                            <tbody class="small">
+                            @foreach (var k in ApiKeys!)
+                            {
+                                <tr class="border-top">
+                                    <td class="py-2">@k.Name</td>
+                                    <td class="py-2 text-muted text-end text-nowrap">@FormatAgo(k.CreatedUtc)</td>
+                                    <td class="py-2 text-end">
+                                        <button class="btn btn-link p-0 text-danger"
+                                                @onclick="() => RevokeApiKeyWithConfirmAsync(k.Name)">Revoke
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+
+            @if (EditModalOpen)
+            {
+                <div class="pg-modal-backdrop" @onclick="CloseEditModal"></div>
+                <div class="pg-modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+                    <div class="pg-modal-header">
+                        <div id="editModalTitle" class="pg-modal-title">Edit Personal Information</div>
+                        <button type="button" class="btn btn-link text-muted p-0" title="Close"
+                                @onclick="CloseEditModal" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                 viewBox="0 0 16 16" aria-hidden="true">
+                                <path
+                                    d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="pg-modal-body">
+                        @if (!string.IsNullOrEmpty(ModalError))
+                        {
+                            <div class="alert alert-danger py-1 px-2 mb-2">@ModalError</div>
+                        }
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">User name</label>
+                            <input
+                                class="form-control @(string.IsNullOrEmpty(UsernameError) ? string.Empty : "is-invalid")"
+                                @bind="EditUsername" @bind:event="oninput"
+                                aria-invalid="@(!string.IsNullOrEmpty(UsernameError))"/>
+                            @if (!string.IsNullOrEmpty(UsernameError))
+                            {
+                                <div class="invalid-feedback d-block">@UsernameError</div>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Email</label>
+                            <input
+                                class="form-control @(string.IsNullOrEmpty(EmailError) ? string.Empty : "is-invalid")"
+                                type="email" @bind="EditEmail" @bind:event="oninput"
+                                aria-invalid="@(!string.IsNullOrEmpty(EmailError))"/>
+                            @if (!string.IsNullOrEmpty(EmailError))
+                            {
+                                <div class="invalid-feedback d-block">@EmailError</div>
+                            }
+                        </div>
+                    </div>
+                    <div class="pg-modal-footer d-flex justify-content-end gap-2">
+                        <button class="btn btn-secondary" disabled="@IsSaving" @onclick="CloseEditModal">Cancel</button>
+                        <button class="btn btn-primary" disabled="@IsSaving"
+                                @onclick="SubmitEdit">
+                            @(IsSaving ? "Saving…" : "Submit")
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (DeleteModalOpen)
+            {
+                <div class="pg-modal-backdrop" @onclick="CloseDeleteAvatarModal"></div>
+                <div class="pg-modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+                    <div class="pg-modal-header">
+                        <div id="deleteModalTitle" class="pg-modal-title">DELETE IMAGE</div>
+                        <button type="button" class="btn btn-link text-muted p-0" title="Close"
+                                @onclick="CloseDeleteAvatarModal" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                 viewBox="0 0 16 16" aria-hidden="true">
+                                <path
+                                    d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="pg-modal-body">
+                        <div>Are you sure you want to delete profile photo?</div>
+                    </div>
+                    <div class="pg-modal-footer d-flex justify-content-end gap-2">
+                        <button class="btn btn-secondary" disabled="@IsDeletingAvatar"
+                                @onclick="CloseDeleteAvatarModal">Cancel
+                        </button>
+                        <button class="btn btn-danger" disabled="@IsDeletingAvatar"
+                                @onclick="ConfirmDeleteAvatar">
+                            @(IsDeletingAvatar ? "Deleting…" : "Delete")
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (ChangePwdOpen)
+            {
+                <div class="pg-modal-backdrop" @onclick="CloseChangePasswordModal"></div>
+                <div class="pg-modal" role="dialog" aria-modal="true" aria-labelledby="pwdModalTitle">
+                    <div class="pg-modal-header">
+                        <div id="pwdModalTitle" class="pg-modal-title">CHANGE PASSWORD</div>
+                        <button type="button" class="btn btn-link text-muted p-0" title="Close"
+                                @onclick="CloseChangePasswordModal" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                 viewBox="0 0 16 16" aria-hidden="true">
+                                <path
+                                    d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="pg-modal-body">
+                        @if (!string.IsNullOrEmpty(PwdError))
+                        {
+                            <div class="alert alert-danger py-1 px-2 mb-2">@PwdError</div>
+                        }
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">Old password</label>
+                            <input
+                                class="form-control @(string.IsNullOrWhiteSpace(OldPwd) ? "is-invalid" : string.Empty)"
+                                type="@(ShowPwd ? "text" : "password")" @bind="OldPwd" @bind:event="oninput"/>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small text-muted">New password</label>
+                            <input class="form-control @(!IsNewPasswordValid ? "is-invalid" : string.Empty)"
+                                   type="@(ShowPwd ? "text" : "password")" @bind="NewPwd" @bind:event="oninput"/>
+                            <div class="form-text small">
+                                Minimum 8 characters, at least one digit, one special symbol, one uppercase, and one
+                                lowercase letter.
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small text-muted">Confirm</label>
+                            <input class="form-control @(!IsConfirmMatch ? "is-invalid" : string.Empty)"
+                                   type="@(ShowPwd ? "text" : "password")" @bind="ConfirmPwd" @bind:event="oninput"/>
+                        </div>
+                        <div class="form-check mb-1">
+                            <input id="showPwd" class="form-check-input" type="checkbox" @bind="ShowPwd"/>
+                            <label for="showPwd" class="form-check-label small">Show password</label>
+                        </div>
+                    </div>
+                    <div class="pg-modal-footer d-flex justify-content-end gap-2">
+                        <button class="btn btn-secondary" disabled="@IsChangingPwd" @onclick="CloseChangePasswordModal">
+                            Cancel
+                        </button>
+                        <button class="btn btn-primary" disabled="@(!CanSubmitPasswordChange())"
+                                @onclick="SubmitPasswordChange">
+                            @(IsChangingPwd ? "Saving…" : "Submit")
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (ApiKeyModalOpen)
+            {
+                <div class="pg-modal-backdrop" @onclick="CloseApiKeyModal"></div>
+                <div class="pg-modal" role="dialog" aria-modal="true" aria-labelledby="apiKeyModalTitle">
+                    <div class="pg-modal-header">
+                        <div id="apiKeyModalTitle" class="pg-modal-title">GENERATE API KEY</div>
+                        <button type="button" class="btn btn-link text-muted p-0" title="Close"
+                                @onclick="CloseApiKeyModal" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                 viewBox="0 0 16 16" aria-hidden="true">
+                                <path
+                                    d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="pg-modal-body">
+                        @if (!string.IsNullOrEmpty(ApiKeyError))
+                        {
+                            <div class="alert alert-danger py-1 px-2 mb-2">@ApiKeyError</div>
+                        }
+
+                        @if (!ApiKeyGenerated)
+                        {
+                            <div class="text-muted mb-2">A new API Key will be generated. Keep this Key safe. We do not
+                                recommend making this Key publicly available.
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small text-muted">API Key Name</label>
+                                <input
+                                    class="form-control @(string.IsNullOrWhiteSpace(ApiKeyName) || ApiKeyName!.Trim().Length > 40 ? "is-invalid" : string.Empty)"
+                                    @bind="ApiKeyName" @bind:event="oninput"/>
+                                @if (string.IsNullOrWhiteSpace(ApiKeyName))
+                                {
+                                    <div class="invalid-feedback d-block">The field is required</div>
+                                }
+                                else if (ApiKeyName!.Trim().Length > 40)
+                                {
+                                    <div class="invalid-feedback d-block">Maximum 40 characters</div>
+                                }
+                                <div class="form-text">Number of characters remaining: @ApiKeyRemaining</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-2">
+                                <label class="form-label small text-muted">Your new API Key (copy and store it
+                                    now)</label>
+                                <div class="input-group">
+                                    <input class="form-control" readonly value="@GeneratedApiKey"
+                                           aria-label="Generated API key"/>
+                                    <button class="btn btn-outline-secondary" type="button" title="Copy to clipboard"
+                                            @onclick="CopyGeneratedApiKeyAsync">Copy
+                                    </button>
+                                </div>
+                                <div class="form-text">Prefix is based on the name: spaces and underscores are replaced
+                                    with hyphens.
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="pg-modal-footer d-flex justify-content-end gap-2">
+                        <button class="btn btn-secondary" disabled="@IsGeneratingApiKey"
+                                @onclick="CloseApiKeyModal">
+                            @(ApiKeyGenerated ? "Close" : "Cancel")
+                        </button>
+                        @if (!ApiKeyGenerated)
+                        {
+                            <button class="btn btn-primary" disabled="@(!CanGenerateApiKey)"
+                                    @onclick="SubmitGenerateApiKey">
+                                @(IsGeneratingApiKey ? "Generating…" : "Generate")
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (RevokeConfirmModalOpen)
+            {
+                <div class="pg-modal-backdrop" @onclick="CloseRevokeConfirmModal"></div>
+                <div class="pg-modal" role="dialog" aria-modal="true" aria-labelledby="revokeModalTitle">
+                    <div class="pg-modal-header">
+                        <div id="revokeModalTitle" class="pg-modal-title">REVOKE API KEY</div>
+                        <button type="button" class="btn btn-link text-muted p-0" title="Close"
+                                @onclick="CloseRevokeConfirmModal" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                 viewBox="0 0 16 16" aria-hidden="true">
+                                <path
+                                    d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="pg-modal-body">
+                        <div class="mb-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor"
+                                 viewBox="0 0 16 16" class="text-warning">
+                                <path
+                                    d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                            </svg>
+                        </div>
+                        <p class="mb-2">Are you sure you want to revoke API key <strong>'@ApiKeyToRevoke'</strong>?</p>
+                        <p class="text-danger mb-0"><strong>This action cannot be undone.</strong></p>
+                    </div>
+                    <div class="pg-modal-footer d-flex justify-content-end gap-2">
+                        <button class="btn btn-secondary" disabled="@IsRevokingApiKey"
+                                @onclick="CloseRevokeConfirmModal">Cancel
+                        </button>
+                        <button class="btn btn-danger" disabled="@IsRevokingApiKey" @onclick="ConfirmRevokeApiKey">
+                            @if (IsRevokingApiKey)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"
+                                      aria-hidden="true"></span>
+                                <span>Revoking...</span>
+                            }
+                            else
+                            {
+                                <span>Revoke</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <style>
+                /* Elegant violet modal styles */
+                .pg-modal-backdrop {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    z-index: 1050;
+                }
+
+                .pg-modal {
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: min(560px, 94vw);
+                    background: #fff;
+                    border: none;
+                    border-radius: 12px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    z-index: 1060;
+                    overflow: hidden;
+                }
+
+                .pg-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 1.25rem 1.5rem;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-bottom: none;
+                }
+
+                .pg-modal-title {
+                    font-weight: 700;
+                    font-size: 1.125rem;
+                    text-transform: uppercase;
+                    color: white;
+                    letter-spacing: 0.5px;
+                    margin: 0;
+                }
+
+                .pg-modal-header .btn-link {
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    border-radius: 8px;
+                    width: 36px;
+                    height: 36px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0;
+                    transition: background 0.2s ease;
+                    color: white !important;
+                }
+
+                .pg-modal-header .btn-link:hover {
+                    background: rgba(255, 255, 255, 0.3);
+                }
+
+                .pg-modal-body {
+                    padding: 1.5rem;
+                }
+
+                .pg-modal-footer {
+                    padding: 1rem 1.5rem;
+                    background: #f8f9fa;
+                    border-top: 1px solid #e9ecef;
+                }
+
+                /* Form styling within modals */
+                .pg-modal .form-label {
+                    font-weight: 600;
+                    color: #374151;
+                    font-size: 0.875rem;
+                    margin-bottom: 0.5rem;
+                }
+
+                .pg-modal .form-control:focus {
+                    border-color: #b794f4;
+                    box-shadow: 0 0 0 0.25rem rgba(118, 75, 162, 0.25);
+                }
+
+                .pg-modal .form-text {
+                    color: #6c757d;
+                    font-size: 0.8125rem;
+                }
+            </style>
+
+        </div>
+    </div>
+}
+
+<style>
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2rem 0 1.5rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .header-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .page-header h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .subtitle {
+        color: var(--brand-muted);
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
+@code {
+    private string? UserId;
+    private string DisplayName = "";
+    private string RoleLabel = "";
+    private string? EmailDisplay;
+    private string AvatarUrl = "images/avatar.svg";
+    private bool AvatarLoaded; // true when fetched from Hub
+    private Membership[]? Memberships;
+    private bool Loaded;
+    private string Error = string.Empty;
+
+    // Tabs state
+    private Tab ActiveTab = Tab.ProjectAssignment;
+
+    private enum Tab
+    {
+        ProjectAssignment,
+        ApiKeys,
+        ConfigurationExamples
+    }
+
+    // Edit modal state
+    private bool EditModalOpen;
+    private string EditUsername = string.Empty;
+    private string? EditEmail = string.Empty;
+    private string ModalError = string.Empty;
+    private bool IsSaving;
+
+    // Delete avatar confirmation modal state
+    private bool DeleteModalOpen;
+    private bool IsDeletingAvatar;
+
+    // Change password modal state
+    private bool ChangePwdOpen;
+    private bool IsChangingPwd;
+    private bool ShowPwd;
+    private string PwdError = string.Empty;
+    private string OldPwd = string.Empty;
+    private string NewPwd = string.Empty;
+    private string ConfirmPwd = string.Empty;
+
+    // API key generate modal state
+    private bool ApiKeyModalOpen;
+    private string? ApiKeyName = string.Empty;
+    private string ApiKeyError = string.Empty;
+    private bool IsGeneratingApiKey;
+    private bool ApiKeyGenerated;
+    private string? GeneratedApiKey;
+    private int ApiKeyRemaining => Math.Max(0, 40 - (ApiKeyName?.Trim().Length ?? 0));
+    private bool CanGenerateApiKey => !IsGeneratingApiKey && !string.IsNullOrWhiteSpace(ApiKeyName) && ApiKeyName!.Trim().Length <= 40;
+
+    // API keys table state
+    private sealed class ApiKeyRow
+    {
+        public string Name { get; set; } = string.Empty;
+        public DateTime? CreatedUtc { get; set; }
+    }
+
+    private List<ApiKeyRow>? ApiKeys;
+
+    // Revoke API key confirmation modal
+    private bool RevokeConfirmModalOpen;
+    private string? ApiKeyToRevoke;
+    private bool IsRevokingApiKey;
+
+    // Inline UX validation
+    private string UsernameError => string.IsNullOrWhiteSpace(EditUsername)
+        ? "User name is required"
+        : EditUsername.Length > 128
+            ? "User name is too long (max 128)"
+            : string.Empty;
+
+    private string EmailError
+    {
+        get
+        {
+            var val = EditEmail;
+            if (string.IsNullOrWhiteSpace(val)) return "Email is required";
+            try
+            {
+                var attr = new EmailAddressAttribute();
+                if (!attr.IsValid(val)) return "Enter a valid email address";
+                if (val!.Length > 254) return "Email is too long (max 254)";
+            }
+            catch
+            {
+            }
+
+            return string.Empty;
+        }
+    }
+
+    // Track if user changed anything (trim-aware)
+    private bool IsEditDirty =>
+        !string.Equals((EditUsername ?? string.Empty).Trim(), (DisplayName ?? string.Empty).Trim(), StringComparison.Ordinal)
+        || !string.Equals((EditEmail ?? string.Empty).Trim(), (EmailDisplay ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private void OnGenerateApiKey()
+    {
+        ApiKeyError = string.Empty;
+        ApiKeyName = string.Empty;
+        ApiKeyGenerated = false;
+        GeneratedApiKey = string.Empty;
+        IsGeneratingApiKey = false;
+        ApiKeyModalOpen = true;
+    }
+
+    private async Task CloseApiKeyModal()
+    {
+        if (!IsGeneratingApiKey)
+        {
+            ApiKeyModalOpen = false;
+            if (ApiKeyGenerated)
+            {
+                try
+                {
+                    await LoadApiKeysAsync();
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    private async Task SubmitGenerateApiKey()
+    {
+        if (IsGeneratingApiKey) return;
+        ApiKeyError = string.Empty;
+        var name = (ApiKeyName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(UserId))
+        {
+            ApiKeyError = "Unable to resolve current user id.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 40)
+        {
+            ApiKeyError = "Please provide a valid API key name (1–40 characters).";
+            return;
+        }
+
+        IsGeneratingApiKey = true;
+        try
+        {
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.PostAsJsonAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/api-keys", new { name });
+            var text = await resp.Content.ReadAsStringAsync();
+            if ((int)resp.StatusCode == 201 || resp.IsSuccessStatusCode)
+            {
+                string apiKey;
+                try
+                {
+                    using var doc = JsonDocument.Parse(text);
+                    apiKey = doc.RootElement.TryGetProperty("apiKey", out var k) ? k.GetString() ?? string.Empty : string.Empty;
+                }
+                catch
+                {
+                    apiKey = text;
+                }
+
+                if (string.IsNullOrWhiteSpace(apiKey)) apiKey = "<generated>";
+                GeneratedApiKey = apiKey;
+                ApiKeyGenerated = true;
+                try
+                {
+                    Toasts.Success("API key has been generated.");
+                }
+                catch
+                {
+                }
+            }
+            else if (resp.StatusCode == HttpStatusCode.Conflict)
+            {
+                ApiKeyError = "Duplicate API key name";
+                try
+                {
+                    Toasts.Warning(ApiKeyError);
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                string msg;
+                try
+                {
+                    using var doc = JsonDocument.Parse(text);
+                    msg = doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() ?? resp.ReasonPhrase ?? "Generation failed" : resp.ReasonPhrase ?? "Generation failed";
+                }
+                catch
+                {
+                    msg = resp.ReasonPhrase ?? "Generation failed";
+                }
+
+                ApiKeyError = msg;
+                try
+                {
+                    Toasts.Error(msg);
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ApiKeyError = ex.Message;
+            try
+            {
+                Toasts.Error(ex.Message);
+            }
+            catch
+            {
+            }
+        }
+        finally
+        {
+            IsGeneratingApiKey = false;
+        }
+    }
+
+    private async Task CopyGeneratedApiKeyAsync()
+    {
+        try
+        {
+            var text = GeneratedApiKey ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) return;
+            var ok = await JS.InvokeAsync<bool>("copyText", text);
+            try
+            {
+                if (ok) Toasts.Success("API key copied to clipboard");
+                else Toasts.Warning("Failed to copy API key");
+            }
+            catch
+            {
+            }
+        }
+        catch
+        {
+            try
+            {
+                Toasts.Warning("Failed to copy API key");
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private async Task LoadApiKeysAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(UserId))
+            {
+                ApiKeys = new List<ApiKeyRow>();
+                return;
+            }
+
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/api-keys");
+            var list = new List<ApiKeyRow>();
+            if (resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                try
+                {
+                    using var doc = JsonDocument.Parse(text);
+                    if (doc.RootElement.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in arr.EnumerateArray())
+                        {
+                            var name = el.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() ?? string.Empty : string.Empty;
+                            DateTime? created = null;
+                            if (el.TryGetProperty("createdUtc", out var cu))
+                            {
+                                if (cu.ValueKind == JsonValueKind.String && DateTime.TryParse(cu.GetString(), out var d1)) created = DateTime.SpecifyKind(d1, DateTimeKind.Utc);
+                                else if (cu.ValueKind == JsonValueKind.Number)
+                                {
+                                    try
+                                    {
+                                        created = cu.GetDateTime();
+                                    }
+                                    catch
+                                    {
+                                    }
+                                }
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(name)) list.Add(new ApiKeyRow { Name = name, CreatedUtc = created });
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            ApiKeys = list;
+        }
+        catch
+        {
+            ApiKeys = new List<ApiKeyRow>();
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RevokeApiKeyAsync(string name)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(UserId)) return;
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            var slug = (name ?? string.Empty).Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(slug)) return;
+            using var resp = await client.DeleteAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/api-keys/{Uri.EscapeDataString(slug)}");
+            try
+            {
+                if (resp.IsSuccessStatusCode) Toasts.Success("API key revoked");
+                else Toasts.Warning("Failed to revoke API key");
+            }
+            catch
+            {
+            }
+        }
+        catch
+        {
+        }
+        finally
+        {
+            await LoadApiKeysAsync();
+        }
+    }
+
+    private void RevokeApiKeyWithConfirmAsync(string name)
+    {
+        ApiKeyToRevoke = name;
+        RevokeConfirmModalOpen = true;
+    }
+
+    private void CloseRevokeConfirmModal()
+    {
+        RevokeConfirmModalOpen = false;
+        ApiKeyToRevoke = null;
+        IsRevokingApiKey = false;
+    }
+
+    private async Task ConfirmRevokeApiKey()
+    {
+        if (string.IsNullOrEmpty(ApiKeyToRevoke)) return;
+
+        try
+        {
+            IsRevokingApiKey = true;
+            StateHasChanged();
+            await RevokeApiKeyAsync(ApiKeyToRevoke);
+            CloseRevokeConfirmModal();
+        }
+        catch
+        {
+            IsRevokingApiKey = false;
+        }
+    }
+
+    private static string FormatAgo(DateTime? dt)
+    {
+        if (!dt.HasValue) return string.Empty;
+        var utc = dt.Value.Kind == DateTimeKind.Utc ? dt.Value : DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc);
+        var diff = DateTime.UtcNow - utc;
+        if (diff.TotalSeconds < 60) return "a few seconds ago";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} minute{((int)diff.TotalMinutes == 1 ? "" : "s")} ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} hour{((int)diff.TotalHours == 1 ? "" : "s")} ago";
+        return $"{(int)diff.TotalDays} day{((int)diff.TotalDays == 1 ? "" : "s")} ago";
+    }
+
+    private async Task OnAvatarFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(UserId))
+            {
+                Error = "Unable to resolve current user id.";
+                return;
+            }
+
+            var file = e.File;
+            if (file is null) return;
+
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            using var form = new MultipartFormDataContent();
+            await using var stream = file.OpenReadStream(1024 * 1024); // allow up to 1MB; server enforces stricter limit
+            using var sc = new StreamContent(stream);
+            var ct = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
+            sc.Headers.ContentType = new MediaTypeHeaderValue(ct);
+            form.Add(sc, "file", string.IsNullOrWhiteSpace(file.Name) ? "avatar" : file.Name);
+
+            using var resp = await client.PostAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/photo", form);
+            if (resp.IsSuccessStatusCode)
+            {
+                await FetchAndSetAvatarAsync();
+                try
+                {
+                    Toasts.Success("Changes have been saved successfully");
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                try
+                {
+                    var text = await resp.Content.ReadAsStringAsync();
+                    string msg;
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(text);
+                        msg = doc.RootElement.TryGetProperty("error", out var e1) ? e1.GetString() ?? resp.ReasonPhrase ?? "Upload failed" : resp.ReasonPhrase ?? "Upload failed";
+                    }
+                    catch
+                    {
+                        msg = resp.ReasonPhrase ?? "Upload failed";
+                    }
+
+                    Error = msg;
+                    try
+                    {
+                        Toasts.Error(msg);
+                    }
+                    catch
+                    {
+                    }
+                }
+                catch
+                {
+                    Error = resp.ReasonPhrase ?? "Upload failed";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            try
+            {
+                Toasts.Error(ex.Message);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private void OpenEditModal()
+    {
+        ModalError = string.Empty;
+        EditUsername = DisplayName ?? string.Empty;
+        EditEmail = EmailDisplay ?? string.Empty;
+        EditModalOpen = true;
+    }
+
+    private void CloseEditModal()
+    {
+        EditModalOpen = false;
+    }
+
+    // Delete avatar modal handlers
+    private void OpenDeleteAvatarModal()
+    {
+        DeleteModalOpen = true;
+    }
+
+    private void CloseDeleteAvatarModal()
+    {
+        if (!IsDeletingAvatar)
+            DeleteModalOpen = false;
+    }
+
+    private async Task ConfirmDeleteAvatar()
+    {
+        if (IsDeletingAvatar) return;
+        IsDeletingAvatar = true;
+        try
+        {
+            await RemoveAvatar();
+        }
+        finally
+        {
+            IsDeletingAvatar = false;
+        }
+    }
+
+    // Change password modal handlers
+    private void OpenChangePasswordModal()
+    {
+        PwdError = string.Empty;
+        OldPwd = string.Empty;
+        NewPwd = string.Empty;
+        ConfirmPwd = string.Empty;
+        ShowPwd = false;
+        ChangePwdOpen = true;
+    }
+
+    private void CloseChangePasswordModal()
+    {
+        if (!IsChangingPwd) ChangePwdOpen = false;
+    }
+
+    private bool IsNewPasswordValid
+    {
+        get
+        {
+            var s = NewPwd ?? string.Empty;
+            if (s.Length < 8) return false;
+            bool u = false, l = false, d = false, sym = false;
+            foreach (var ch in s)
+            {
+                if (char.IsUpper(ch)) u = true;
+                else if (char.IsLower(ch)) l = true;
+                else if (char.IsDigit(ch)) d = true;
+                else sym = true; // any non-alnum considered special
+            }
+
+            return u && l && d && sym;
+        }
+    }
+
+    private bool IsConfirmMatch => string.Equals(NewPwd ?? string.Empty, ConfirmPwd ?? string.Empty, StringComparison.Ordinal);
+
+    private bool CanSubmitPasswordChange()
+    {
+        return !IsChangingPwd && !string.IsNullOrWhiteSpace(OldPwd) && IsNewPasswordValid && IsConfirmMatch;
+    }
+
+    private async Task SubmitPasswordChange()
+    {
+        if (IsChangingPwd) return;
+        if (string.IsNullOrWhiteSpace(UserId))
+        {
+            PwdError = "Unable to resolve current user id.";
+            return;
+        }
+
+        if (!CanSubmitPasswordChange())
+        {
+            PwdError = "Please satisfy all password requirements.";
+            return;
+        }
+
+        IsChangingPwd = true;
+        PwdError = string.Empty;
+        try
+        {
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.PostAsJsonAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/password", new { oldPassword = OldPwd, newPassword = NewPwd });
+            if (resp.IsSuccessStatusCode)
+            {
+                ChangePwdOpen = false;
+                try
+                {
+                    Toasts.Success("The password has been changed successfully.");
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                try
+                {
+                    var txt = await resp.Content.ReadAsStringAsync();
+                    string msg;
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(txt);
+                        msg = doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() ?? resp.ReasonPhrase ?? "Password change failed" : resp.ReasonPhrase ?? "Password change failed";
+                    }
+                    catch
+                    {
+                        msg = resp.StatusCode == HttpStatusCode.Unauthorized ? "Old password is incorrect" : resp.ReasonPhrase ?? "Password change failed";
+                    }
+
+                    PwdError = msg;
+                    try
+                    {
+                        Toasts.Error(msg);
+                    }
+                    catch
+                    {
+                    }
+                }
+                catch
+                {
+                    PwdError = resp.ReasonPhrase ?? "Password change failed";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            PwdError = ex.Message;
+            try
+            {
+                Toasts.Error(ex.Message);
+            }
+            catch
+            {
+            }
+        }
+        finally
+        {
+            IsChangingPwd = false;
+        }
+    }
+
+    private bool CanSubmitEdit()
+    {
+        // Must be valid
+        if (!string.IsNullOrEmpty(UsernameError)) return false;
+        if (!string.IsNullOrEmpty(EmailError)) return false;
+        return true;
+    }
+
+    private async Task SubmitEdit()
+    {
+        if (!CanSubmitEdit())
+        {
+            ModalError = "Please provide a valid user name and email.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(UserId))
+        {
+            ModalError = "Unable to resolve current user id.";
+            return;
+        }
+
+        IsSaving = true;
+        ModalError = string.Empty;
+        try
+        {
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            var payload = new Dictionary<string, object?>
+            {
+                ["username"] = EditUsername.Trim(),
+                ["email"] = string.IsNullOrWhiteSpace(EditEmail) ? null : EditEmail!.Trim()
+            };
+            using var req = new HttpRequestMessage(HttpMethod.Patch, $"/admin/users/{Uri.EscapeDataString(UserId)}")
+            {
+                Content = JsonContent.Create(payload)
+            };
+            using var resp = await client.SendAsync(req);
+            if (resp.IsSuccessStatusCode)
+            {
+                DisplayName = EditUsername.Trim();
+                EmailDisplay = string.IsNullOrWhiteSpace(EditEmail) ? null : EditEmail!.Trim();
+                AvatarUrl = ComputeAvatarUrl(EmailDisplay, DisplayName, RoleLabel);
+                try
+                {
+                    AvatarState.Set(AvatarUrl);
+                }
+                catch
+                {
+                }
+
+                EditModalOpen = false;
+                try
+                {
+                    Toasts.Success("Changes have been saved successfully");
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                try
+                {
+                    var txt = await resp.Content.ReadAsStringAsync();
+                    string msg;
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(txt);
+                        msg = doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() ?? resp.ReasonPhrase ?? "Update failed" : resp.ReasonPhrase ?? "Update failed";
+                    }
+                    catch
+                    {
+                        msg = resp.ReasonPhrase ?? "Update failed";
+                    }
+
+                    ModalError = msg;
+                    try
+                    {
+                        Toasts.Error(msg);
+                    }
+                    catch
+                    {
+                    }
+                }
+                catch
+                {
+                    ModalError = resp.ReasonPhrase ?? "Update failed";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ModalError = ex.Message;
+            try
+            {
+                Toasts.Error(ex.Message);
+            }
+            catch
+            {
+            }
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private async Task RemoveAvatar()
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(UserId))
+            {
+                var client = Http.CreateClient(HttpClientNames.Hub);
+                using var resp = await client.DeleteAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/photo");
+                // ignore errors; fall back to default avatar regardless
+            }
+        }
+        catch
+        {
+        }
+
+        AvatarUrl = ComputeAvatarUrl(EmailDisplay, DisplayName, RoleLabel);
+        try
+        {
+            AvatarState.Set(AvatarUrl);
+        }
+        catch
+        {
+        }
+
+        DeleteModalOpen = false;
+        try
+        {
+            Toasts.Success("The avatar has been successfully deleted.");
+        }
+        catch
+        {
+        }
+    }
+
+    private void ChangePassword()
+    {
+        try
+        {
+            var url = Configuration["OIDC_FORGOT_PASSWORD_URL"];
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                Nav.NavigateTo(url!, true);
+            }
+            else
+            {
+                Nav.NavigateTo("/auth/login?changePassword=1", true);
+            }
+        }
+        catch
+        {
+            Nav.NavigateTo("/auth/login", true);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Resolve user from ClaimsPrincipal via injected IHttpContextAccessor or Cascading Auth state
+            var principal = Accessor?.HttpContext?.User;
+            if ((principal is null || principal.Identity is null || !principal.Identity.IsAuthenticated) && AuthStateTask is not null)
+            {
+                try
+                {
+                    var state = await AuthStateTask;
+                    principal = state.User;
+                }
+                catch
+                {
+                }
+            }
+
+            var name = principal?.Identity?.Name;
+            var id = principal?.FindFirst("preferred_username")?.Value
+                     ?? principal?.FindFirst(ClaimTypes.Email)?.Value
+                     ?? name
+                     ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            UserId = id;
+            DisplayName = string.IsNullOrWhiteSpace(name) ? id ?? "User" : name!;
+            EmailDisplay = principal?.FindFirst(ClaimTypes.Email)?.Value;
+            RoleLabel = principal?.FindFirst("role")?.Value ?? principal?.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(RoleLabel)) RoleLabel = "user";
+
+            // Try enrich from Hub user record
+            if (!string.IsNullOrWhiteSpace(UserId))
+            {
+                var client = Http.CreateClient(HttpClientNames.Hub);
+                using (var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(UserId)}"))
+                {
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        var json = await resp.Content.ReadAsStringAsync();
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(json);
+                            var root = doc.RootElement;
+                            if (string.IsNullOrWhiteSpace(DisplayName) || string.Equals(DisplayName, "User", StringComparison.Ordinal))
+                            {
+                                if (root.TryGetProperty("username", out var un) || root.TryGetProperty("Username", out un))
+                                    DisplayName = un.GetString() ?? DisplayName;
+                            }
+
+                            if (string.IsNullOrWhiteSpace(EmailDisplay))
+                            {
+                                if (root.TryGetProperty("email", out var em) || root.TryGetProperty("Email", out em))
+                                    EmailDisplay = em.ValueKind == JsonValueKind.String ? em.GetString() : EmailDisplay;
+                            }
+
+                            if (string.IsNullOrWhiteSpace(RoleLabel) || string.Equals(RoleLabel, "user", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (root.TryGetProperty("accountRole", out var ar) || root.TryGetProperty("AccountRole", out ar))
+                                {
+                                    if (ar.ValueKind == JsonValueKind.Number)
+                                    {
+                                        if (ar.GetInt32() == 1) RoleLabel = "admin";
+                                        else RoleLabel = "user";
+                                    }
+                                    else if (ar.ValueKind == JsonValueKind.String)
+                                    {
+                                        var s = (ar.GetString() ?? string.Empty).Trim().ToLowerInvariant();
+                                        if (s == "administrator" || s == "admin") RoleLabel = "admin";
+                                        else RoleLabel = "user";
+                                    }
+                                }
+                                else if (root.TryGetProperty("role", out var r) || root.TryGetProperty("Role", out r))
+                                {
+                                    if (r.ValueKind == JsonValueKind.Number && r.GetInt32() == 1) RoleLabel = "admin";
+                                    else if (r.ValueKind == JsonValueKind.String)
+                                    {
+                                        var s = (r.GetString() ?? string.Empty).Trim().ToLowerInvariant();
+                                        if (s == "admin" || s == "administrator") RoleLabel = "admin";
+                                        else RoleLabel = "user";
+                                    }
+                                }
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+
+                // Load project memberships
+                using var resp2 = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/projects");
+                if (resp2.IsSuccessStatusCode)
+                {
+                    var payload = await resp2.Content.ReadAsStringAsync();
+                    try
+                    {
+                        using var doc2 = JsonDocument.Parse(payload);
+                        if (doc2.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+                        {
+                            var list = new List<Membership>();
+                            foreach (var el in items.EnumerateArray())
+                            {
+                                var pk = el.TryGetProperty("projectKey", out var pkEl) || el.TryGetProperty("ProjectKey", out pkEl) ? pkEl.GetString() ?? string.Empty : string.Empty;
+                                var roleVal = el.TryGetProperty("role", out var rEl) || el.TryGetProperty("Role", out rEl) ? rEl.ValueKind == JsonValueKind.Number ? rEl.GetInt32() : Enum.TryParse<ProjectRole>(rEl.GetString() ?? string.Empty, true, out var parsed) ? (int)parsed : 2 : 2;
+                                var role = roleVal switch { 0 => ProjectRole.ProjectLead, 1 => ProjectRole.Member, 2 => ProjectRole.Client, 3 => ProjectRole.Maintainer, _ => ProjectRole.Client };
+                                if (!string.IsNullOrWhiteSpace(pk)) list.Add(new Membership { ProjectKey = pk, UserId = UserId!, Role = role, CreatedUtc = DateTime.UtcNow, UpdatedUtc = DateTime.UtcNow });
+                            }
+
+                            Memberships = list.OrderBy(m => m.ProjectKey).ToArray();
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            // Try load custom avatar from Hub; fall back to generated/default if absent
+            await FetchAndSetAvatarAsync();
+
+            // Compute avatar URL (fallback only)
+            if (!AvatarLoaded)
+                AvatarUrl = ComputeAvatarUrl(EmailDisplay, DisplayName, RoleLabel);
+
+            // Load API keys for the current user
+            await LoadApiKeysAsync();
+        }
+        finally
+        {
+            Loaded = true;
+        }
+    }
+
+    private async Task FetchAndSetAvatarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(UserId)) return;
+        try
+        {
+            var client = Http.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync($"/admin/users/{Uri.EscapeDataString(UserId)}/photo");
+            if (resp.IsSuccessStatusCode)
+            {
+                var ct = resp.Content.Headers.ContentType?.MediaType ?? "image/png";
+                var bytes = await resp.Content.ReadAsByteArrayAsync();
+                if (bytes is { Length: > 0 })
+                {
+                    var b64 = Convert.ToBase64String(bytes);
+                    AvatarUrl = $"data:{ct};base64,{b64}";
+                    try
+                    {
+                        AvatarState.Set(AvatarUrl);
+                    }
+                    catch
+                    {
+                    }
+
+                    AvatarLoaded = true;
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private string GetRoleClass()
+    {
+        var s = RoleLabel ?? string.Empty;
+        if (string.Equals(s, "admin", StringComparison.OrdinalIgnoreCase)) return "bg-danger";
+        if (string.Equals(s, "member", StringComparison.OrdinalIgnoreCase)) return "bg-primary";
+        return "bg-success";
+    }
+
+    private static string ComputeAvatarUrl(string? email, string? name, string? roleLabel)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                var md5 = MD5.HashData(Encoding.UTF8.GetBytes(email.Trim().ToLowerInvariant()));
+                var hash = string.Concat(md5.Select(b => b.ToString("x2")));
+                return $"https://www.gravatar.com/avatar/{hash}?s=128&d=identicon";
+            }
+        }
+        catch
+        {
+        }
+
+        if (!string.IsNullOrWhiteSpace(roleLabel) && roleLabel.Equals("admin", StringComparison.OrdinalIgnoreCase))
+            return "images/logo.svg"; // default admin avatar
+        return "images/avatar.svg";
+    }
+
+}

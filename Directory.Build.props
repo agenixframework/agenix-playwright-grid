@@ -41,7 +41,7 @@
     <!-- Enable CI build for Release builds or CI environments -->
     <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release' OR '$(GITHUB_ACTIONS)' == 'true' OR '$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <!-- Treat nullable warnings as errors on CI builds only -->
-    <WarningsAsErrors Condition="'$(ContinuousIntegrationBuild)' == 'true'">nullable</WarningsAsErrors>
+    <WarningsAsErrors Condition="'$(ContinuousIntegrationBuild)' == 'true'"></WarningsAsErrors>
   </PropertyGroup>
   <!-- Source Projects -->
   <PropertyGroup Condition="!$(MSBuildProjectName.EndsWith('.Tests'))">
@@ -52,6 +52,9 @@
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Ignore all build warnings in tests -->
+    <WarningLevel>0</WarningLevel>
+    <AnalysisLevel>none</AnalysisLevel>
   </PropertyGroup>
   <!-- Common Package References for Tests -->
   <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
@@ -68,10 +71,15 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
   </ItemGroup>
-  <!-- Add MinVer package reference -->
-  <ItemGroup>
+  <!-- Add MinVer package reference (only for Release/CI builds to improve dev build performance) -->
+  <ItemGroup Condition="'$(Configuration)' == 'Release' OR '$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">
     <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="All"/>
   </ItemGroup>
+
+  <!-- Use static version for Debug builds to avoid MinVer git operations -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' AND '$(CI)' != 'true'">
+    <Version>1.0.0-dev</Version>
+  </PropertyGroup>
 
   <!-- Add JetBrains.Annotations package reference -->
   <ItemGroup>

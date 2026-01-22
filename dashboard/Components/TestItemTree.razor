@@ -1,0 +1,327 @@
+@* Component for rendering hierarchical test items (ReportPortal-style) *@
+
+<div class="test-item-tree">
+    @if (Items != null && Items.Count > 0)
+    {
+        @foreach (var item in FilteredItems)
+        {
+            <div class="test-item @GetItemCssClass(item)" style="margin-left: @(Level * 24)px">
+                <div class="item-header">
+                    @* Toggle button for items with children *@
+                    @if (item.Children != null && item.Children.Count > 0)
+                    {
+                        <button class="item-toggle" @onclick="() => ToggleItem(item)"
+                                title="@(IsExpanded(item) ? "Collapse" : "Expand")">
+                            @if (IsExpanded(item))
+                            {
+                                <span>▼</span>
+                            }
+                            else
+                            {
+                                <span>▶</span>
+                            }
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="item-bullet">•</span>
+                    }
+
+                    @* Item type badge *@
+                    <span class="item-type-badge badge @GetItemTypeBadgeClass(item.ItemType) me-2">
+                        @GetItemTypeIcon(item.ItemType) @item.ItemType
+                    </span>
+
+                    @* Item name with status indicator *@
+                    <span class="item-name @GetStatusTextClass(item)" title="@item.Name">
+                        @item.Name
+                    </span>
+
+                    @* Duration *@
+                    @if (item.DurationMs.HasValue)
+                    {
+                        <span class="item-duration ms-2 text-muted">
+                            @FormatDuration(item.DurationMs.Value)
+                        </span>
+                    }
+
+                    @* Status badges *@
+                    <span class="item-status-indicators ms-auto">
+                        @if (!string.IsNullOrEmpty(item.ComputedStatus))
+                        {
+                            <span class="badge @GetComputedStatusBadgeClass(item.ComputedStatus) me-1">
+                                @item.ComputedStatus
+                            </span>
+                        }
+                        @if (!string.IsNullOrEmpty(item.SessionStatus) && item.SessionStatus != "Completed")
+                        {
+                            <span class="badge @GetSessionStatusBadgeClass(item.SessionStatus)"
+                                  title="@GetSessionStatusTooltip(item.SessionStatus)">
+                                Session: @item.SessionStatus
+                            </span>
+                        }
+                    </span>
+
+                    @* Actions *@
+                    @if (ShowActions && OnItemClick.HasDelegate)
+                    {
+                        <button class="btn btn-sm btn-outline-primary ms-2"
+                                @onclick="() => OnItemClick.InvokeAsync(item)" title="View details">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    }
+                </div>
+
+                @* Item metadata *@
+                @if (ShowMetadata && IsExpanded(item))
+                {
+                    <div class="item-metadata">
+                        @if (!string.IsNullOrEmpty(item.Description))
+                        {
+                            <div class="metadata-field">
+                                <strong>Description:</strong> @item.Description
+                            </div>
+                        }
+                        @if (item.Attributes != null && item.Attributes.Length > 0)
+                        {
+                            <div class="metadata-field">
+                                <strong>Attributes:</strong>
+                                @foreach (var attr in item.Attributes)
+                                {
+                                    <span class="badge bg-light text-dark me-1">@attr</span>
+                                }
+                            </div>
+                        }
+                        @if (item.Tags != null && item.Tags.Length > 0)
+                        {
+                            <div class="metadata-field">
+                                <strong>Tags:</strong>
+                                @foreach (var tag in item.Tags)
+                                {
+                                    <span class="badge bg-info me-1">@tag</span>
+                                }
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(item.CodeRef))
+                        {
+                            <div class="metadata-field">
+                                <strong>Code:</strong> <code class="small">@item.CodeRef</code>
+                            </div>
+                        }
+                        @if (item.Parameters != null && item.Parameters.Count > 0)
+                        {
+                            <div class="metadata-field">
+                                <strong>Parameters:</strong>
+                                @foreach (var param in item.Parameters)
+                                {
+                                    <code class="small me-2">@param.Key=@param.Value</code>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @* Error display *@
+                @if (!string.IsNullOrEmpty(item.ErrorMessage) && IsExpanded(item))
+                {
+                    <div class="item-error alert alert-danger mt-2 mb-0">
+                        <strong>Error:</strong> @item.ErrorMessage
+                        @if (!string.IsNullOrEmpty(item.ErrorStack) && ShowErrorStack)
+                        {
+                            <details class="mt-1">
+                                <summary class="small">Show stack trace</summary>
+                                <pre class="small mb-0 mt-1">@item.ErrorStack</pre>
+                            </details>
+                        }
+                    </div>
+                }
+
+                @* Test aggregations for parent items *@
+                @if (item.TotalTests > 0 && IsExpanded(item))
+                {
+                    <div class="item-stats mt-1">
+                        <small class="text-muted">
+                            <span class="me-2">Total: <strong>@item.TotalTests</strong></span>
+                            @if (item.PassedTests > 0)
+                            {
+                                <span class="text-success me-2">✓ @item.PassedTests</span>
+                            }
+                            @if (item.FailedTests > 0)
+                            {
+                                <span class="text-danger me-2">✗ @item.FailedTests</span>
+                            }
+                            @if (item.SkippedTests > 0)
+                            {
+                                <span class="text-warning me-2">⊝ @item.SkippedTests</span>
+                            }
+                            @if (item.TimedoutTests > 0)
+                            {
+                                <span class="text-secondary me-2">⏱ @item.TimedoutTests</span>
+                            }
+                        </small>
+                    </div>
+                }
+
+                @* Recursive rendering of children *@
+                @if (IsExpanded(item) && item.Children != null && item.Children.Count > 0)
+                {
+                    <TestItemTree
+                        Items="item.Children"
+                        Level="@(Level + 1)"
+                        FilterItemType="@FilterItemType"
+                        ShowMetadata="@ShowMetadata"
+                        ShowActions="@ShowActions"
+                        ShowErrorStack="@ShowErrorStack"
+                        ExpandAll="@ExpandAll"
+                        OnItemClick="@OnItemClick"/>
+                }
+            </div>
+        }
+    }
+    else if (Level == 0)
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No test items to display.
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<TestItemDto>? Items { get; set; }
+    [Parameter] public int Level { get; set; }
+    [Parameter] public string? FilterItemType { get; set; }
+    [Parameter] public bool ShowMetadata { get; set; } = true;
+    [Parameter] public bool ShowActions { get; set; }
+    [Parameter] public bool ShowErrorStack { get; set; } = true;
+    [Parameter] public bool ExpandAll { get; set; }
+    [Parameter] public EventCallback<TestItemDto> OnItemClick { get; set; }
+
+    private readonly HashSet<Guid> _expandedItems = new();
+
+    private List<TestItemDto> FilteredItems =>
+        string.IsNullOrEmpty(FilterItemType)
+            ? Items ?? new List<TestItemDto>()
+            : Items?.Where(i => i.ItemType == FilterItemType).ToList() ?? new List<TestItemDto>();
+
+    private bool IsExpanded(TestItemDto item)
+    {
+        if (ExpandAll) return true;
+        return _expandedItems.Contains(item.Id);
+    }
+
+    private void ToggleItem(TestItemDto item)
+    {
+        if (_expandedItems.Contains(item.Id))
+            _expandedItems.Remove(item.Id);
+        else
+            _expandedItems.Add(item.Id);
+    }
+
+    private static string GetItemCssClass(TestItemDto item)
+    {
+        var classes = new List<string> { "item-type-" + item.ItemType.ToLowerInvariant() };
+
+        if (!string.IsNullOrEmpty(item.ComputedStatus))
+            classes.Add("status-" + item.ComputedStatus.ToLowerInvariant());
+
+        return string.Join(" ", classes);
+    }
+
+    private static string GetItemTypeBadgeClass(string itemType)
+    {
+        return itemType switch
+        {
+            "Test" => "bg-primary",
+            "Step" => "bg-secondary",
+            "Suite" => "bg-dark",
+            "Scenario" => "bg-info",
+            "Story" => "bg-purple",
+            "BeforeTest" or "BeforeMethod" or "BeforeClass" or "BeforeSuite" => "bg-warning",
+            "AfterTest" or "AfterMethod" or "AfterClass" or "AfterSuite" => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+
+    private static string GetItemTypeIcon(string itemType)
+    {
+        return itemType switch
+        {
+            "Test" => "🧪",
+            "Step" => "→",
+            "Suite" => "📁",
+            "Scenario" => "📋",
+            "Story" => "📖",
+            "BeforeTest" or "BeforeMethod" or "BeforeClass" or "BeforeSuite" => "⚙️",
+            "AfterTest" or "AfterMethod" or "AfterClass" or "AfterSuite" => "🧹",
+            _ => "•"
+        };
+    }
+
+    private static string GetStatusTextClass(TestItemDto item)
+    {
+        if (string.IsNullOrEmpty(item.ComputedStatus))
+            return "";
+
+        return item.ComputedStatus switch
+        {
+            "Passed" => "text-success",
+            "Failed" => "text-danger fw-bold",
+            "Skipped" => "text-warning",
+            "Timedout" => "text-secondary",
+            "Errored" => "text-danger",
+            _ => ""
+        };
+    }
+
+    private static string GetComputedStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Passed" => "bg-success",
+            "Failed" => "bg-danger",
+            "Skipped" => "bg-warning text-dark",
+            "Timedout" => "bg-secondary",
+            "Errored" => "bg-danger",
+            "InProgress" => "bg-info",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string GetSessionStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Running" => "bg-primary",
+            "Queued" => "bg-secondary",
+            "Completed" => "bg-success",
+            "Stopped" => "bg-warning text-dark",
+            "AutoStopped" => "bg-warning text-dark",
+            "Aborted" => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string GetSessionStatusTooltip(string status)
+    {
+        return status switch
+        {
+            "Running" => "Browser session is active and tests are executing",
+            "Queued" => "Browser not borrowed yet, waiting in queue",
+            "Completed" => "Browser session completed successfully and returned to pool",
+            "Stopped" => "Manually stopped by user, browser force-returned to pool",
+            "AutoStopped" => "Timeout/Inactivity - browser session did not close cleanly",
+            "Aborted" => "Infrastructure error prevented browser session from starting",
+            _ => status
+        };
+    }
+
+    private static string FormatDuration(double ms)
+    {
+        if (ms < 1000)
+            return $"{ms:F0}ms";
+        if (ms < 60000)
+            return $"{ms / 1000:F2}s";
+        return $"{ms / 60000:F1}m";
+    }
+
+}

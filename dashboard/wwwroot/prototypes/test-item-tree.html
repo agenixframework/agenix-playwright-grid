@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Item Tree Prototype</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="../css/test-item-components.css" rel="stylesheet">
+  <style>
+    body {
+      padding: 2rem;
+      background: #f8f9fa;
+    }
+
+    .container {
+      max-width: 1200px;
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1 class="mb-4">Test Item Tree Component</h1>
+  <p class="text-muted">Hierarchical test item display with ReportPortal-style structure</p>
+
+  <hr class="my-4">
+
+  <!-- Test Item Tree -->
+  <div class="test-item-tree">
+    <!-- Root Test Item (Suite) -->
+    <div class="test-item item-type-suite status-passed">
+      <div class="item-header">
+        <button class="item-toggle" title="Collapse">
+          <span>▼</span>
+        </button>
+
+        <span class="item-type-badge badge bg-dark me-2">
+                        📁 Suite
+                    </span>
+
+        <span class="item-name text-success" title="Authentication Tests">
+                        Authentication Tests
+                    </span>
+
+        <span class="item-duration ms-2 text-muted">
+                        45.3s
+                    </span>
+
+        <span class="item-status-indicators ms-auto">
+                        <span class="badge bg-success me-1">Passed</span>
+                    </span>
+      </div>
+
+      <!-- Metadata -->
+      <div class="item-metadata">
+        <div class="metadata-field">
+          <strong>Description:</strong> Complete authentication flow tests
+        </div>
+        <div class="metadata-field">
+          <strong>Attributes:</strong>
+          <span class="badge bg-light text-dark me-1">smoke</span>
+          <span class="badge bg-light text-dark me-1">critical</span>
+        </div>
+        <div class="metadata-field">
+          <strong>Tags:</strong>
+          <span class="badge bg-info me-1">login</span>
+          <span class="badge bg-info me-1">auth</span>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="item-stats mt-1">
+        <small class="text-muted">
+          <span class="me-2">Total: <strong>3</strong></span>
+          <span class="text-success me-2">✓ 2</span>
+          <span class="text-danger me-2">✗ 1</span>
+        </small>
+      </div>
+    </div>
+
+    <!-- Child Test Item 1 (Test) -->
+    <div class="test-item item-type-test status-passed" style="margin-left: 24px">
+      <div class="item-header">
+        <button class="item-toggle" title="Expand">
+          <span>▶</span>
+        </button>
+
+        <span class="item-type-badge badge bg-primary me-2">
+                        🧪 Test
+                    </span>
+
+        <span class="item-name text-success" title="Login with valid credentials">
+                        Login with valid credentials
+                    </span>
+
+        <span class="item-duration ms-2 text-muted">
+                        12.5s
+                    </span>
+
+        <span class="item-status-indicators ms-auto">
+                        <span class="badge bg-success me-1">Passed</span>
+                    </span>
+
+        <button class="btn btn-sm btn-outline-primary ms-2" title="View details">
+          <i class="bi bi-eye"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Child Test Item 2 (Test with Steps) -->
+    <div class="test-item item-type-test status-failed" style="margin-left: 24px">
+      <div class="item-header">
+        <button class="item-toggle" title="Collapse">
+          <span>▼</span>
+        </button>
+
+        <span class="item-type-badge badge bg-primary me-2">
+                        🧪 Test
+                    </span>
+
+        <span class="item-name text-danger fw-bold" title="Login with invalid credentials">
+                        Login with invalid credentials
+                    </span>
+
+        <span class="item-duration ms-2 text-muted">
+                        8.2s
+                    </span>
+
+        <span class="item-status-indicators ms-auto">
+                        <span class="badge bg-danger me-1">Failed</span>
+                        <span class="badge bg-primary">Session: Running</span>
+                    </span>
+
+        <button class="btn btn-sm btn-outline-primary ms-2" title="View details">
+          <i class="bi bi-eye"></i>
+        </button>
+      </div>
+
+      <!-- Error -->
+      <div class="item-error alert alert-danger mt-2 mb-0">
+        <strong>Error:</strong> Expected error message not displayed
+        <details class="mt-1">
+          <summary class="small">Show stack trace</summary>
+          <pre class="small mb-0 mt-1">at LoginPage.checkErrorMessage (login.spec.ts:45:12)
+at TestRunner.run (test-runner.js:123:5)</pre>
+        </details>
+      </div>
+
+      <!-- Nested Steps -->
+      <div class="test-item item-type-step status-passed" style="margin-left: 48px">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">
+                            → Step
+                        </span>
+          <span class="item-name text-success">Navigate to login page</span>
+          <span class="item-duration ms-2 text-muted">2.1s</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-success me-1">Passed</span>
+                        </span>
+        </div>
+      </div>
+
+      <div class="test-item item-type-step status-passed" style="margin-left: 48px">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">
+                            → Step
+                        </span>
+          <span class="item-name text-success">Enter invalid credentials</span>
+          <span class="item-duration ms-2 text-muted">1.5s</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-success me-1">Passed</span>
+                        </span>
+        </div>
+      </div>
+
+      <div class="test-item item-type-step status-failed" style="margin-left: 48px">
+        <div class="item-header">
+          <span class="item-bullet">•</span>
+          <span class="item-type-badge badge bg-secondary me-2">
+                            → Step
+                        </span>
+          <span class="item-name text-danger fw-bold">Verify error message</span>
+          <span class="item-duration ms-2 text-muted">4.6s</span>
+          <span class="item-status-indicators ms-auto">
+                            <span class="badge bg-danger me-1">Failed</span>
+                        </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Child Test Item 3 (Scenario) -->
+    <div class="test-item item-type-scenario status-passed" style="margin-left: 24px">
+      <div class="item-header">
+        <span class="item-bullet">•</span>
+
+        <span class="item-type-badge badge bg-info me-2">
+                        📋 Scenario
+                    </span>
+
+        <span class="item-name text-success" title="Password reset flow">
+                        Password reset flow
+                    </span>
+
+        <span class="item-duration ms-2 text-muted">
+                        24.6s
+                    </span>
+
+        <span class="item-status-indicators ms-auto">
+                        <span class="badge bg-success me-1">Passed</span>
+                    </span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-4">
+
+  <!-- Empty State -->
+  <div class="test-item-tree">
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle"></i> No test items to display.
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Toggle functionality
+  document.querySelectorAll('.item-toggle').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const span = this.querySelector('span');
+      span.textContent = span.textContent === '▼' ? '▶' : '▼';
+      this.title = span.textContent === '▼' ? 'Collapse' : 'Expand';
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+@* Shared validation and error panel with accessible announcements *@
+@namespace Dashboard.Shared
+
+@if (HasContent)
+{
+    <div class="alert @CssClass" role="alert" aria-live="@AriaLive">
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <div class="fw-semibold mb-1">@Title</div>
+        }
+        @if (Errors is not null)
+        {
+            <ul class="mb-0">
+                @foreach (var m in Errors)
+                {
+                    if (!string.IsNullOrWhiteSpace(m))
+                    {
+                        <li>@m</li>
+                    }
+                }
+            </ul>
+        }
+        else if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <div>@Error</div>
+        }
+        else if (ChildContent is not null)
+        {
+            @ChildContent
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public IEnumerable<string>? Errors { get; set; }
+    [Parameter] public string AriaLive { get; set; } = "polite";
+    [Parameter] public string CssClass { get; set; } = "alert-danger";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool HasContent => (Errors?.Any() ?? false) || !string.IsNullOrWhiteSpace(Error) || ChildContent is not null;
+}

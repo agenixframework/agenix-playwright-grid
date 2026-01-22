@@ -1,0 +1,216 @@
+@* Reusable History Matrix Component for Launch/Suite Test History *@
+@inherits DashboardComponentBase
+
+<link href="/css/history-matrix.css" rel="stylesheet"/>
+
+@if (_loading)
+{
+    <div class="matrix-wrapper">
+        <div class="loading-container text-center p-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading history...</span>
+            </div>
+            <div class="mt-3 text-muted">Loading test history...</div>
+        </div>
+    </div>
+}
+else if (_data == null || !_data.Rows.Any())
+{
+    <div class="matrix-wrapper">
+        <div class="empty-state text-center p-5">
+            <i class="bi bi-clock-history" style="font-size: 4rem; color: var(--gray-300);"></i>
+            <h3 class="mt-3">No History Available</h3>
+            <p class="text-muted">No test execution history found for this @Context.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <span class="toolbar-label">Search</span>
+            <div class="search-wrapper">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" class="form-control" placeholder="Filter items..." @bind="_searchTerm"
+                       @bind:event="oninput"/>
+            </div>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+            <span class="toolbar-label">History</span>
+            <select class="form-select" @bind="_depth" @bind:after="LoadDataAsync">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+            </select>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+            <span class="toolbar-label">View</span>
+            <select class="form-select" @bind="_viewMode">
+                <option value="compact">Compact</option>
+                <option value="comfortable">Comfortable</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="matrix-wrapper">
+        <div class="matrix-scroll">
+            <table class="matrix-table @($"view-{_viewMode}")">
+                <thead>
+                <tr>
+                    <th>@(Context == "launch" ? "Suite" : "Test") Name</th>
+                    @foreach (var col in _data.Columns)
+                    {
+                        <th>
+                            <div class="launch-header">
+                                <span class="launch-number">#@col.LaunchNumber</span>
+                                <span class="launch-time">@FormatTime(col.StartTime)</span>
+                            </div>
+                        </th>
+                    }
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in FilteredRows)
+                {
+                    <tr>
+                        <td>
+                            <div class="item-name" @onclick="() => OnItemClick(row)">
+                                <i class="@GetItemIcon(row.ItemType) item-icon"></i>
+                                @row.ItemName
+                            </div>
+                        </td>
+                        @foreach (var cell in row.Cells)
+                        {
+                            <td>
+                                <div class="cell status-@cell.Status" data-tooltip="@GetTooltip(cell)"
+                                     @onclick="() => OnCellClick(row, cell)">
+                                    @if (cell.Status == "empty")
+                                    {
+                                        <i class="bi bi-dash-lg empty-icon"></i>
+                                    }
+                                </div>
+                            </td>
+                        }
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box status-passed"><span class="status-indicator indicator-passed"></span></div>
+                <span>All Passed</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box status-failed"><span class="status-indicator indicator-failed"></span></div>
+                <span>Failed</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box status-mixed"><span class="status-indicator indicator-mixed"></span></div>
+                <span>Mixed</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box status-empty"><i class="bi bi-dash-lg empty-icon"></i></div>
+                <span>No Data</span>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Context { get; set; } = "launch"; // "launch" or "suite"
+    [Parameter] public string ProjectKey { get; set; } = "";
+    [Parameter] public Guid? LaunchId { get; set; }
+    [Parameter] public long? SuiteDbId { get; set; }
+    [Parameter] public EventCallback<HistoryMatrixRow> OnItemClickCallback { get; set; }
+    [Parameter] public EventCallback<(HistoryMatrixRow Row, HistoryMatrixCell Cell)> OnCellClickCallback { get; set; }
+
+    [Inject] private IHttpClientFactory HttpFactory { get; set; } = default!;
+
+    private HistoryMatrixData? _data;
+    private bool _loading = true;
+    private string _searchTerm = "";
+    private int _depth = 10;
+    private string _viewMode = "compact";
+
+    private IEnumerable<HistoryMatrixRow> FilteredRows =>
+        _data?.Rows.Where(r => string.IsNullOrWhiteSpace(_searchTerm) ||
+                               r.ItemName.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)) ?? Enumerable.Empty<HistoryMatrixRow>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+
+        var url = Context == "launch"
+            ? $"/api/launches/{LaunchId}/parent-items-history?depth={_depth}"
+            : $"/api/suites/{SuiteDbId}/child-items-history?depth={_depth}";
+
+        var result = await GetJsonAsync<HistoryMatrixData>(url);
+
+        if (result != null)
+        {
+            _data = result;
+        }
+
+        _loading = false;
+    }
+
+    private string GetItemIcon(string itemType)
+    {
+        return itemType switch
+        {
+            "Suite" => "bi bi-folder",
+            "Story" => "bi bi-book",
+            "Test" => "bi bi-play-circle",
+            "Scenario" => "bi bi-list-check",
+            _ => "bi bi-circle"
+        };
+    }
+
+    private string FormatTime(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        return diff.TotalHours < 1 ? $"{(int)diff.TotalMinutes}m ago" :
+            diff.TotalHours < 24 ? $"{(int)diff.TotalHours}h ago" :
+            diff.TotalDays < 7 ? $"{(int)diff.TotalDays}d ago" :
+            $"{(int)(diff.TotalDays / 7)}w ago";
+    }
+
+    private string GetTooltip(HistoryMatrixCell cell)
+    {
+        if (cell.Status == "empty") return "No data";
+        var t = cell.Tooltip;
+        return $"{t.Total} tests: {t.Passed} passed, {t.Failed} failed, {t.Skipped} skipped";
+    }
+
+    private async Task OnItemClick(HistoryMatrixRow row)
+    {
+        if (OnItemClickCallback.HasDelegate)
+            await OnItemClickCallback.InvokeAsync(row);
+    }
+
+    private async Task OnCellClick(HistoryMatrixRow row, HistoryMatrixCell cell)
+    {
+        if (OnCellClickCallback.HasDelegate && cell.Status != "empty")
+            await OnCellClickCallback.InvokeAsync((row, cell));
+    }
+
+    public record HistoryMatrixData(List<HistoryMatrixColumn> Columns, List<HistoryMatrixRow> Rows);
+
+    public record HistoryMatrixColumn(Guid LaunchId, long LaunchNumber, DateTime StartTime);
+
+    public record HistoryMatrixRow(string ItemName, string ItemType, List<HistoryMatrixCell> Cells);
+
+    public record HistoryMatrixCell(Guid LaunchId, string Status, HistoryMatrixTooltip Tooltip);
+
+    public record HistoryMatrixTooltip(int Total, int Passed, int Failed, int Skipped);
+
+}

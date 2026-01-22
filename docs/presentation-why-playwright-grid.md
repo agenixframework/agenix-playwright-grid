@@ -146,6 +146,6 @@ Tip: Start with a small node pool (e.g., 2–3 workers per hot label), measure u
   - Redis‑backed Hub state; horizontal scaling; Docker‑first.
 
 Links
-- Root README: ../README.md
+- Root README: https://github.com/agenixframework/agenix-playwright-grid/blob/main/README.md
 - Test client usage: ./TestClient-Usage.md
 - Playwright .NET API logging: ./PlaywrightDotNet-pw-api.md

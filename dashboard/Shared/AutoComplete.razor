@@ -1,0 +1,70 @@
+@using System.Timers
+@namespace Dashboard.Shared
+
+<input id="@Id" class="@Class" placeholder="@Placeholder" list="@(_listId)" value="@Value" @oninput="OnInput"
+       aria-label="@AriaLabel"/>
+<datalist id="@_listId">
+    @if (Options is not null)
+    {
+        foreach (var opt in Options)
+        {
+            <option value="@opt.Value" label="@opt.Label"></option>
+        }
+    }
+</datalist>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string Class { get; set; } = "form-control";
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public Func<string, Task<IEnumerable<Option>>>? Search { get; set; }
+
+    private readonly string _listId = $"dl_{Guid.NewGuid():N}";
+    private IEnumerable<Option>? Options;
+    private Timer? _debounce;
+
+    protected override void OnInitialized()
+    {
+        _debounce = new Timer(250) { AutoReset = false };
+        _debounce.Elapsed += async (_, _) => await InvokeAsync(async () =>
+        {
+            var q = Value ?? string.Empty;
+            if (Search is not null)
+            {
+                try
+                {
+                    Options = await Search.Invoke(q);
+                }
+                catch
+                {
+                    Options = Array.Empty<Option>();
+                }
+
+                StateHasChanged();
+            }
+        });
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        Value = e?.Value?.ToString() ?? string.Empty;
+        await ValueChanged.InvokeAsync(Value);
+        _debounce?.Stop();
+        _debounce?.Start();
+    }
+
+    public record Option(string Value, string Label);
+
+    public void Dispose()
+    {
+        if (_debounce is not null)
+        {
+            _debounce.Dispose();
+            _debounce = null;
+        }
+    }
+
+}

@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -20,16 +20,30 @@ namespace WorkerService.Infrastructure;
 
 internal static class LoggingScopes
 {
-    public static IDisposable Begin(ILogger logger, string? runId = null, string? browserId = null, string? runName = null)
+    public static IDisposable Begin(ILogger logger, string? runId = null, string? browserId = null,
+        string? runName = null)
     {
         var dict = new Dictionary<string, object?>(3);
-        if (!string.IsNullOrWhiteSpace(runId)) dict["runId"] = runId;
-        if (!string.IsNullOrWhiteSpace(browserId)) dict["browserId"] = browserId;
-        if (!string.IsNullOrWhiteSpace(runName)) dict["runName"] = runName;
+        if (!string.IsNullOrWhiteSpace(runId))
+        {
+            dict["runId"] = runId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(browserId))
+        {
+            dict["browserId"] = browserId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(runName))
+        {
+            dict["runName"] = runName;
+        }
+
         if (dict.Count == 0)
         {
             return NullScope.Instance;
         }
+
         var scope = logger.BeginScope(dict);
         return scope ?? NullScope.Instance;
     }

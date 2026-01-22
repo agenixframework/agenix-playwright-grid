@@ -1,0 +1,207 @@
+# Prometheus Alert Rules for Test Run Status Monitoring
+# These alerts detect issues with browser session lifecycle vs test outcomes
+
+groups:
+  - name: test_run_status_alerts
+    interval: 60s
+    rules:
+      # Alert when browser auto-stop rate is high
+      - alert: HighBrowserAutoStopRate
+        expr: |
+          rate(playwright_grid_browser_autostopped_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: browser_pool
+        annotations:
+          summary: "High browser auto-stop rate detected"
+          description: |
+            Browser sessions are being auto-stopped at {{ $value | humanize }} per second.
+            This indicates browsers are not closing cleanly, possibly due to:
+            - Sidecar process issues
+            - Timeout configuration problems
+            - Worker node resource exhaustion
+            Labels: app={{ $labels.app }}, browser={{ $labels.browser }}, env={{ $labels.env }}
+
+      # Alert when status mismatches are frequent
+      - alert: FrequentStatusMismatch
+        expr: |
+          rate(playwright_grid_session_status_mismatch_total[15m]) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          component: test_execution
+        annotations:
+          summary: "Frequent test status vs browser status mismatches"
+          description: |
+            Tests are passing but browsers are failing at {{ $value | humanize }} per second.
+            {{ $labels.computed_status }} tests but {{ $labels.session_status }} browser sessions.
+            This suggests infrastructure issues that don't affect test outcomes.
+            Check worker node health and sidecar logs.
+            Labels: app={{ $labels.app }}, browser={{ $labels.browser }}, env={{ $labels.env }}
+
+      # Alert when a specific app/browser/env has consistent auto-stop issues
+      - alert: ConsistentBrowserAutoStopForLabel
+        expr: |
+          sum by (app, browser, env) (
+            increase(playwright_grid_browser_autostopped_total[1h])
+          ) > 5
+        for: 30m
+        labels:
+          severity: critical
+          component: browser_pool
+        annotations:
+          summary: "Consistent browser auto-stop for {{ $labels.app }}/{{ $labels.browser }}/{{ $labels.env }}"
+          description: |
+            Label combination {{ $labels.app }}/{{ $labels.browser }}/{{ $labels.env }} has had
+            {{ $value }} auto-stopped browser sessions in the last hour.
+            This indicates a persistent issue with this specific configuration.
+            Action required:
+            - Check worker node logs for this label
+            - Review browser version compatibility
+            - Investigate resource limits for this configuration
+
+      # Alert when a specific worker node has high auto-stop rate
+      - alert: WorkerNodeBrowserIssues
+        expr: |
+          sum by (worker_node_id) (
+            rate(playwright_grid_browser_autostopped_total[10m])
+          ) > 0.2
+        for: 15m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Worker {{ $labels.worker_node_id }} has high browser failure rate"
+          description: |
+            Worker node {{ $labels.worker_node_id }} is experiencing {{ $value | humanize }} browser
+            auto-stops per second. This indicates a problem with this specific worker.
+            Recommended actions:
+            - Check worker node resource usage (CPU, memory, disk, inodes)
+            - Review sidecar health endpoint
+            - Consider restarting or quarantining this worker
+            - Check for conflicting processes or resource exhaustion
+
+      # Alert when test run duration is abnormally long for auto-stopped runs
+      - alert: AutoStoppedRunsWithLongDuration
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, session_status) (
+              rate(playwright_grid_test_run_duration_seconds_bucket{session_status="autostopped"}[15m])
+            )
+          ) > 1800
+        for: 20m
+        labels:
+          severity: warning
+          component: test_execution
+        annotations:
+          summary: "Auto-stopped runs have abnormally long duration"
+          description: |
+            95th percentile duration for auto-stopped runs is {{ $value | humanizeDuration }}.
+            This suggests runs are timing out rather than completing naturally.
+            Consider:
+            - Reviewing HUB_MAX_RUN_DURATION_MINUTES configuration
+            - Checking for hung tests or slow test execution
+            - Investigating test infrastructure bottlenecks
+
+      # Info: Track status mismatch percentage
+      - alert: StatusMismatchPercentageHigh
+        expr: |
+          (
+            sum(rate(playwright_grid_session_status_mismatch_total[1h]))
+            /
+            sum(rate(playwright_grid_test_run_completed_total[1h]))
+          ) > 0.1
+        for: 30m
+        labels:
+          severity: info
+          component: monitoring
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of test runs have status mismatches"
+          description: |
+            {{ $value | humanizePercentage }} of completed test runs show status mismatches
+            (tests passed but browser failed to close cleanly).
+            This is informational but may indicate underlying infrastructure issues.
+            Monitor trends over time to identify degradation.
+
+      # Critical: Very high auto-stop rate indicates systemic failure
+      - alert: CriticalBrowserAutoStopRate
+        expr: |
+          rate(playwright_grid_browser_autostopped_total[5m]) > 1.0
+        for: 5m
+        labels:
+          severity: critical
+          component: browser_pool
+        annotations:
+          summary: "CRITICAL: Extremely high browser auto-stop rate"
+          description: |
+            Browser sessions are being auto-stopped at {{ $value | humanize }} per second!
+            This indicates a systemic failure in the browser pool or worker infrastructure.
+            IMMEDIATE ACTION REQUIRED:
+            - Check worker node health across all nodes
+            - Review Redis connectivity and health
+            - Check Hub service logs for errors
+            - Consider emergency maintenance window
+
+      # Alert when auto-stops due to specific reasons spike
+      - alert: InactivityTimeoutSpike
+        expr: |
+          sum by (reason) (
+            rate(playwright_grid_browser_autostopped_total{reason="inactivity"}[10m])
+          ) > 0.15
+        for: 15m
+        labels:
+          severity: warning
+          component: configuration
+        annotations:
+          summary: "High rate of inactivity timeouts"
+          description: |
+            Browser sessions are timing out due to inactivity at {{ $value | humanize }} per second.
+            This may indicate:
+            - HUB_INACTIVITY_THRESHOLD_MINUTES set too low
+            - Tests taking longer than expected
+            - Worker-Hub communication issues
+            Review timeout configuration and test execution patterns.
+
+      - alert: MaxDurationTimeoutSpike
+        expr: |
+          sum by (reason) (
+            rate(playwright_grid_browser_autostopped_total{reason="max_duration"}[10m])
+          ) > 0.15
+        for: 15m
+        labels:
+          severity: warning
+          component: configuration
+        annotations:
+          summary: "High rate of max duration timeouts"
+          description: |
+            Browser sessions are exceeding max duration at {{ $value | humanize }} per second.
+            This may indicate:
+            - HUB_MAX_RUN_DURATION_MINUTES/HOURS set too low
+            - Tests genuinely taking too long
+            - Hung or stuck test executions
+            Review duration limits and investigate slow-running tests.
+
+# Additional context for alert routing
+#
+# Route these alerts to appropriate channels:
+# - severity: critical → PagerDuty / on-call
+# - severity: warning → Slack / team channel
+# - severity: info → Metrics dashboard / reporting only
+#
+# Example Alertmanager routing:
+#
+# route:
+#   group_by: ['alertname', 'app', 'browser', 'env']
+#   group_wait: 30s
+#   group_interval: 5m
+#   repeat_interval: 12h
+#   receiver: 'team-slack'
+#   routes:
+#   - match:
+#       severity: critical
+#     receiver: 'pagerduty'
+#     continue: true
+#   - match:
+#       severity: warning
+#     receiver: 'team-slack'

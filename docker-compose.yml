@@ -1,5 +1,135 @@
+# ==============================================================================
+# Agenix Report Portal + Playwright Service - Docker Compose Configuration
+# ==============================================================================
+# Documentation: docs/traefik/README.md
+# ==============================================================================
 
+# Project name - used as prefix for all container names
+name: agenix-reportportal
+
+# ==============================================================================
+# YAML Anchors (Shared Configuration)
+# ==============================================================================
+
+## @section PostgreSQL database configuration
+## Shared database connection settings used across all services
+x-postgres:
+  host: &pg_host ${POSTGRES_HOST-postgres}
+  port: &pg_port ${POSTGRES_PORT-5432}
+  user: &pg_user ${POSTGRES_USER-postgres}
+  password: &pg_password ${POSTGRES_PASSWORD-postgres}
+  database: &pg_database ${POSTGRES_DB-agenix_reportportal}
+
+## @section Redis configuration
+## Shared Redis connection settings for caching and sessions
+x-redis:
+  host: &redis_host ${REDIS_HOST-redis}
+  port: &redis_port ${REDIS_PORT-6379}
+
+## @section RabbitMQ (AMQP) configuration
+## Shared message broker settings for event-driven communication
+x-rabbitmq:
+  host: &rabbitmq_host ${RABBITMQ_HOST-rabbitmq}
+  port: &rabbitmq_port ${RABBITMQ_PORT-5672}
+  management_port: &rabbitmq_mgmt_port ${RABBITMQ_MANAGEMENT_PORT-15672}
+  user: &rabbitmq_user ${RABBITMQ_USER-rabbitmq}
+  password: &rabbitmq_password ${RABBITMQ_PASSWORD-rabbitmq}
+
+## @section MinIO (S3) configuration
+## Shared object storage settings for artifacts and files
+x-minio:
+  endpoint: &minio_endpoint ${MINIO_ENDPOINT-agenix-reportportal-minio:9000}
+  console_endpoint: &minio_console ${MINIO_CONSOLE_ENDPOINT-agenix-reportportal-minio:9001}
+  access_key: &minio_access_key ${MINIO_ROOT_USER-minioadmin}
+  secret_key: &minio_secret_key ${MINIO_ROOT_PASSWORD-minioadmin}
+  bucket: &minio_bucket ${MINIO_BUCKET-artifacts}
+
+## @section Gateway (Traefik) configuration
+## Reverse proxy and load balancer settings
+x-gateway:
+  http_port: &gateway_http_port ${AGENIX_GATEWAY_HTTP_PORT-8080}
+  dashboard_port: &gateway_dashboard_port ${AGENIX_GATEWAY_DASHBOARD_PORT-8081}
+
+## @section Common environment variables
+## Shared environment values used by all core services
+x-common-environment: &common-environment
+  # PostgreSQL (individual fields)
+  POSTGRES_HOST: *pg_host
+  POSTGRES_PORT: *pg_port
+  POSTGRES_USER: *pg_user
+  POSTGRES_PASSWORD: *pg_password
+  POSTGRES_DB: *pg_database
+  # PostgreSQL (connection string)
+  POSTGRES_CONNECTION_STRING: "Host=postgres;Port=5432;Username=postgres;Password=postgres;Database=agenix_reportportal;Pooling=true;Minimum Pool Size=5;Maximum Pool Size=100;Connection Idle Lifetime=300;Connection Pruning Interval=10;Max Auto Prepare=20;Auto Prepare Min Usages=1"
+  # Redis (individual fields)
+  REDIS_HOST: *redis_host
+  REDIS_PORT: *redis_port
+  # Redis (URL format)
+  REDIS_URL: "redis:6379"
+  # RabbitMQ (individual fields)
+  RABBITMQ_HOST: *rabbitmq_host
+  RABBITMQ_PORT: *rabbitmq_port
+  RABBITMQ_USER: *rabbitmq_user
+  RABBITMQ_PASSWORD: *rabbitmq_password
+  # RabbitMQ (URL format)
+  RABBITMQ_URL: "amqp://rabbitmq:5672"
+  # MinIO (individual fields)
+  MINIO_ENDPOINT: *minio_endpoint
+  MINIO_ACCESS_KEY: *minio_access_key
+  MINIO_SECRET_KEY: *minio_secret_key
+  MINIO_BUCKET: *minio_bucket
+
+## @section Logging configuration
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: 100m
+    max-file: "5"
+
+## @section Restart policy
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+# ==============================================================================
+# Services
+# ==============================================================================
 services:
+  # ============================================================================
+  # Traefik Gateway (Reverse Proxy & Load Balancer)
+  # ============================================================================
+  gateway:
+    image: traefik:v3.6.4
+    container_name: agenix-reportportal-gateway
+    logging:
+      <<: *logging
+    ports:
+      - "${AGENIX_GATEWAY_HTTP_PORT:-8080}:8080"  # Main application traffic
+      - "${AGENIX_GATEWAY_DASHBOARD_PORT:-8081}:8081"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.constraints=Label(`traefik.enable`,`true`)
+      - --entrypoints.web.address=:8080
+      - --entrypoints.traefik.address=:8081
+      - --api.dashboard=true
+      - --api.insecure=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/api/http/routers || wget -q --spider http://localhost:8081/api/http/routers || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - default
+    <<: *restart-policy
+    profiles:
+      - infrastructure
+
+  # ============================================================================
+  # Infrastructure Services
+  # ============================================================================
   redis:
     image: redis:7
     ports:
@@ -10,64 +140,183 @@ services:
       timeout: 3s
       retries: 20
     restart: unless-stopped
+    profiles:
+      - infrastructure
 
   postgres:
     image: postgres:16
     environment:
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=playwrightgrid
+      POSTGRES_PASSWORD: *pg_password
+      POSTGRES_USER: *pg_user
+      POSTGRES_DB: *pg_database
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d playwrightgrid"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 20
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
+    profiles:
+      - infrastructure
+
+  mailpit:
+    image: axllent/mailpit:latest
+    logging:
+      <<: *logging
+    ports:
+      - "1025:1025"  # SMTP server (direct access)
+      - "8025:8025"  # Web UI (direct access optional)
+    labels:
+      # Traefik routing configuration for Web UI
+      - "traefik.http.routers.mailpit.rule=Host(`${AGENIX_GATEWAY_DOMAIN_MAILPIT:-mailpit.localhost}`)"
+      - "traefik.http.routers.mailpit.service=mailpit"
+      - "traefik.http.routers.mailpit.entrypoints=web"
+      # Service configuration (Web UI port)
+      - "traefik.http.services.mailpit.loadbalancer.server.port=8025"
+      - "traefik.http.services.mailpit.loadbalancer.server.scheme=http"
+      # Enable in Traefik
+      - "traefik.enable=true"
+    <<: *restart-policy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    profiles:
+      - infrastructure
 
   prometheus:
     image: prom/prometheus:v2.48.1
+    logging:
+      <<: *logging
     ports:
-      - "9090:9090"
+      - "9090:9090"  # Direct access (optional, for backwards compatibility)
+    labels:
+      # Traefik routing configuration
+      - "traefik.http.routers.prometheus.rule=Host(`${AGENIX_GATEWAY_DOMAIN_PROMETHEUS:-prometheus.localhost}`)"
+      - "traefik.http.routers.prometheus.service=prometheus"
+      - "traefik.http.routers.prometheus.entrypoints=web"
+      # Service configuration
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+      - "traefik.http.services.prometheus.loadbalancer.server.scheme=http"
+      # Enable in Traefik
+      - "traefik.enable=true"
     volumes:
       - ./prometheus:/etc/prometheus:ro
-    restart: unless-stopped
+    <<: *restart-policy
+    profiles:
+      - monitoring
 
   grafana:
     image: grafana/grafana:9.5.5
+    logging:
+      <<: *logging
     ports:
-      - "3000:3000"
+      - "3000:3000"  # Direct access (optional, for backwards compatibility)
+    labels:
+      # Traefik routing configuration (subdomain)
+      - "traefik.http.routers.grafana.rule=Host(`${AGENIX_GATEWAY_DOMAIN_GRAFANA:-grafana.localhost}`)"
+      - "traefik.http.routers.grafana.service=grafana"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      # Service configuration
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.services.grafana.loadbalancer.server.scheme=http"
+      # Enable in Traefik
+      - "traefik.enable=true"
     environment:
       - GF_LOG_LEVEL=debug
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Configure Grafana to work behind reverse proxy
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
     volumes:
       - ./provisioning/datasources:/etc/grafana/provisioning/datasources
       - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
-    restart: unless-stopped
+    <<: *restart-policy
+    profiles:
+      - monitoring
 
   hub:
     build:
       context: .
       dockerfile: hub/Dockerfile
+    logging:
+      <<: *logging
     ports:
-      - "5100:5000"
+      - "5100:5000"  # Direct access (optional, for backwards compatibility)
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    labels:
+      # Traefik routing configuration
+      - "traefik.http.routers.hub.rule=Host(`${AGENIX_GATEWAY_DOMAIN_HUB:-hub.localhost}`)"
+      - "traefik.http.routers.hub.service=hub"
+      - "traefik.http.routers.hub.entrypoints=web"
+      # Service configuration
+      - "traefik.http.services.hub.loadbalancer.server.port=5000"
+      - "traefik.http.services.hub.loadbalancer.server.scheme=http"
+      # Health check configuration
+      - "traefik.http.services.hub.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.hub.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.hub.loadbalancer.healthcheck.timeout=3s"
+      # Enable in Traefik
+      - "traefik.enable=true"
     environment:
-      - REDIS_URL=redis:6379
-      - HUB_NODE_SECRET=node-secret
-      - HUB_RUNNER_SECRET=runner-secret
-      - HUB_RESULTS_BACKEND=postgres
-      - HUB_RESULTS_POSTGRES=Host=postgres;Port=5432;Username=postgres;Password=postgres;Database=playwrightgrid
+      <<: *common-environment
+      # Hub Configuration
+      AGENIX_HUB_URL: http://hub:5000
+      AGENIX_HUB_NODE_SECRET: node-secret
+      AGENIX_HUB_BOOTSTRAP_ENABLED: 1
+      AGENIX_HUB_BOOTSTRAP_ADMIN_USER: admin
+      AGENIX_HUB_BOOTSTRAP_ADMIN_PASSWORD: agenix-admin
+      AGENIX_HUB_BOOTSTRAP_DEFAULT_PROJECT: admin_default
+      AGENIX_HUB_BOOTSTRAP_ADMIN_EMAIL: agenix.admin@domain.com
+
+      # Background Services
+      AGENIX_HUB_NODE_SWEEP_INTERVAL_SECONDS: 20
+      AGENIX_HUB_SWEEPER_EXPIRE: ${AGENIX_HUB_SWEEPER_EXPIRE:-true}
+      AGENIX_HUB_POOL_BROADCAST_INTERVAL_SECONDS: 2
+      AGENIX_HUB_BORROW_TTL_SWEEP_SECONDS: 10
+      AGENIX_HUB_CLEANUP_INTERVAL_MINUTES: 5
+      AGENIX_HUB_INACTIVITY_THRESHOLD_MINUTES: 30
+      AGENIX_HUB_MAX_RUN_DURATION_HOURS: 3
+      AGENIX_HUB_CLEANUP_BATCH_SIZE: 50
+      AGENIX_HUB_LAUNCH_CLEANUP_INTERVAL_MINUTES: 10
+      AGENIX_HUB_LAUNCH_CLEANUP_BATCH_SIZE: 20
+      AGENIX_HUB_LAUNCH_CLEANUP_DEBUG: false
+      # Artifacts
+      AGENIX_ARTIFACTS_STORAGE_PATH: /app/artifacts
+      AGENIX_ARTIFACTS_MAX_SIZE_MB: 100
+      # SMTP (standard naming)
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_USERNAME: test@localhost
+      SMTP_PASSWORD: test
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@agenix-reportportal.local}
+      SMTP_FROM_NAME: Agenix Report Portal
+      SMTP_USE_SSL: false
+      # Dashboard
+      AGENIX_DASHBOARD_PUBLIC_URL: http://localhost:3001
+      # Chunked Logging
+      AGENIX_LOGGING_CHUNKED_ENABLED: ${AGENIX_LOGGING_CHUNKED_ENABLED:-true}
+      AGENIX_LOGGING_CHUNK_MAX_EVENTS: ${AGENIX_LOGGING_CHUNK_MAX_EVENTS:-1000}
+      AGENIX_LOGGING_CHUNK_MAX_AGE_SECONDS: ${AGENIX_LOGGING_CHUNK_MAX_AGE_SECONDS:-60}
+      AGENIX_LOGGING_EVENT_CODE_PREFIX: ${AGENIX_LOGGING_EVENT_CODE_PREFIX:-true}
+      AGENIX_LOGGING_INCLUDE_SOURCE_LOCATION: ${AGENIX_LOGGING_INCLUDE_SOURCE_LOCATION:-false}
+    volumes:
+      - artifacts:/app/artifacts
     depends_on:
       redis:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -76,118 +325,286 @@ services:
       timeout: 3s
       retries: 10
       start_period: 30s
+    profiles:
+      - core
 
-  worker1:
-    build:
-      context: .
-      dockerfile: worker/Dockerfile
-      args:
-        PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
-    ports:
-      - "5200:5000"
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-    environment:
-      - HUB_URL=http://hub:5000
-      - REDIS_URL=redis:6379
-      - NODE_ID=worker1
-      - NODE_SECRET=node-secret
-      - NODE_NODE_SECRET=node-node-secret
-      - POOL_CONFIG=AppB:Chromium:UAT=3
-      - PUBLIC_WS_HOST=127.0.0.1
-      - PUBLIC_WS_PORT=5200
-      - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
-      - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb
-    depends_on:
-      redis:
-        condition: service_healthy
-      hub:
-        condition: service_healthy
-    shm_size: "1gb"
-    restart: unless-stopped
-
-  worker2:
-      build:
-        context: .
-        dockerfile: worker/Dockerfile
-        args:
-          PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
-      ports:
-        - "5201:5000"
-      dns:
-        - 1.1.1.1
-        - 8.8.8.8
-      environment:
-        - HUB_URL=http://hub:5000
-        - REDIS_URL=redis:6379
-        - NODE_ID=worker2
-        - NODE_SECRET=node-secret
-        - NODE_NODE_SECRET=node-node-secret
-        - POOL_CONFIG=AppB:Chromium:UAT=3
-        - PUBLIC_WS_HOST=127.0.0.1
-        - PUBLIC_WS_PORT=5201
-        - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
-        - CHROMIUM_ARGS=--disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --no-proxy-server --disable-ipv6 --disable-quic --disable-http2 --disable-features=UseDNSHttpsSvcb
-      depends_on:
-        redis:
-          condition: service_healthy
-        hub:
-          condition: service_healthy
-      shm_size: "1gb"
-      restart: unless-stopped
-
-
-  worker3:
-    build:
-      context: .
-      dockerfile: worker/Dockerfile
-      args:
-        PLAYWRIGHT_VERSION: ${PLAYWRIGHT_VERSION:-1.54.2}
-    ports:
-      - "5202:5000"
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-    environment:
-      - HUB_URL=http://hub:5000
-      - REDIS_URL=redis:6379
-      - NODE_ID=worker3
-      - NODE_SECRET=node-secret
-      - NODE_NODE_SECRET=node-node-secret
-      - POOL_CONFIG=AppB:Firefox:UAT=2,AppB:Webkit:UAT=2
-      - PUBLIC_WS_HOST=127.0.0.1
-      - PUBLIC_WS_PORT=5202
-      - PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.54.2}
-      - FIREFOX_ARGS=--headless
-      - FIREFOX_PREFS={"network.dns.disablePrefetch":true,"browser.cache.disk.enable":false}
-    depends_on:
-      redis:
-        condition: service_healthy
-      hub:
-        condition: service_healthy
-    shm_size: "1gb"
-    restart: unless-stopped
-
+  # ============================================================================
+  # Worker Pool (Phase 3: Decoupled Worker Deployment)
+  # ============================================================================
+  # Workers have been moved to docker-compose.workers.yml for independent deployment.
+  # This enables:
+  # - Independent worker scaling without affecting core services
+  # - Multi-host worker deployment
+  # - Scale-to-zero capabilities for cost optimization
+  #
+  # To start workers:
+  #   ./scripts/start-workers.sh
+  #
+  # To scale workers:
+  #   ./scripts/scale-workers.sh chromium 10
+  #   ./scripts/scale-workers.sh firefox 5
+  #   ./scripts/scale-workers.sh all 20
+  #
+  # To stop workers (core continues running):
+  #   ./scripts/stop-workers.sh
+  #
+  # Documentation: specs/dynamic_worker_registration/phase-3-decoupled-deployment.md
+  # ============================================================================
 
   dashboard:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
+    logging:
+      <<: *logging
     ports:
-      - "3001:3001"
+      - "3001:3001"  # Direct access (optional, for backwards compatibility)
+    labels:
+      # Traefik routing configuration
+      - "traefik.http.routers.dashboard.rule=Host(`${AGENIX_GATEWAY_DOMAIN_DASHBOARD:-dashboard.localhost}`)"
+      - "traefik.http.routers.dashboard.service=dashboard"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      # Service configuration
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3001"
+      - "traefik.http.services.dashboard.loadbalancer.server.scheme=http"
+      # Health check configuration
+      - "traefik.http.services.dashboard.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.dashboard.loadbalancer.healthcheck.interval=10s"
+      # Enable in Traefik
+      - "traefik.enable=true"
     environment:
-      - HUB_SIGNALR=http://hub:5000/ws
+      <<: *common-environment
+      AGENIX_DASHBOARD_HUB_SIGNALR_URL: http://hub:5000/ws
+    volumes:
+      - dashboardkeys:/data/protection
     depends_on:
       - hub
-      - grafana
     healthcheck:
       test: [ "CMD", "curl", "-fsSL", "http://127.0.0.1:3001/health" ]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 20s
+    profiles:
+      - core
 
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: agenix-reportportal-rabbitmq
+    logging:
+      <<: *logging
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI (direct access optional)
+    labels:
+      # Traefik routing configuration for Management UI
+      - "traefik.http.routers.rabbitmq.rule=Host(`${AGENIX_GATEWAY_DOMAIN_RABBITMQ:-rabbitmq.localhost}`)"
+      - "traefik.http.routers.rabbitmq.service=rabbitmq"
+      - "traefik.http.routers.rabbitmq.entrypoints=web"
+      # Service configuration (Management UI port)
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.scheme=http"
+      # Enable in Traefik
+      - "traefik.enable=true"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *restart-policy
+    profiles:
+      - infrastructure
+
+  minio:
+    image: minio/minio:latest
+    container_name: agenix-reportportal-minio
+    logging:
+      <<: *logging
+    ports:
+      - "9000:9000"   # S3 API (direct access)
+      - "9001:9001"   # Web Console (direct access optional)
+    labels:
+      # Traefik routing configuration for Web Console
+      - "traefik.http.routers.minio.rule=Host(`${AGENIX_GATEWAY_DOMAIN_MINIO:-minio.localhost}`)"
+      - "traefik.http.routers.minio.service=minio"
+      - "traefik.http.routers.minio.entrypoints=web"
+      # Service configuration (Console port)
+      - "traefik.http.services.minio.loadbalancer.server.port=9001"
+      - "traefik.http.services.minio.loadbalancer.server.scheme=http"
+      # Enable in Traefik
+      - "traefik.enable=true"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # Public URLs (recommended for pre-signed URL generation)
+      MINIO_SERVER_URL: http://localhost:9000
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+      # Region (optional, defaults to us-east-1)
+      MINIO_REGION_NAME: eu-central-1
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    <<: *restart-policy
+    profiles:
+      - infrastructure
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: ingestion/Dockerfile
+    logging:
+      <<: *logging
+    labels:
+      # Traefik routing configuration
+      - "traefik.http.routers.ingestion.rule=Host(`${AGENIX_GATEWAY_DOMAIN_INGESTION:-ingestion.localhost}`)"
+      - "traefik.http.routers.ingestion.service=ingestion"
+      - "traefik.http.routers.ingestion.entrypoints=web"
+      # Service configuration with load balancing
+      - "traefik.http.services.ingestion.loadbalancer.server.port=8082"
+      - "traefik.http.services.ingestion.loadbalancer.server.scheme=http"
+      # Sticky sessions for stateful requests
+      - "traefik.http.services.ingestion.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.ingestion.loadbalancer.sticky.cookie.name=ingestion_session"
+      # Health check configuration
+      - "traefik.http.services.ingestion.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.ingestion.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.ingestion.loadbalancer.healthcheck.timeout=3s"
+      # Enable in Traefik
+      - "traefik.enable=true"
+    environment:
+      <<: *common-environment
+      # RabbitMQ additional settings
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_PREFETCH_COUNT: 100
+      # Ingestion Configuration
+      AGENIX_INGESTION_PORT: 8082
+      # Log Token Optimization (90%+ storage reduction)
+      AGENIX_INGESTION_LOG_TOKEN_OPTIMIZATION_ENABLED: true
+      AGENIX_INGESTION_LOG_TOKEN_TTL_SECONDS: 604800
+      AGENIX_INGESTION_LOG_TOKEN_CACHE_ENABLED: false
+      AGENIX_INGESTION_LOG_TOKEN_CACHE_MAX_SIZE: 10000
+      # Command Token Optimization (90%+ storage reduction)
+      AGENIX_INGESTION_COMMAND_TOKEN_OPTIMIZATION_ENABLED: true
+      AGENIX_INGESTION_COMMAND_TOKEN_TTL_SECONDS: 604800
+      AGENIX_INGESTION_COMMAND_TOKEN_CACHE_ENABLED: false
+      AGENIX_INGESTION_COMMAND_TOKEN_CACHE_MAX_SIZE: 10000
+      # Audit Event Processing
+      AGENIX_INGESTION_AUDIT_BATCH_SIZE: 500
+      AGENIX_INGESTION_AUDIT_BATCH_TIMEOUT_MS: 750
+
+      # Batching
+      AGENIX_INGESTION_BATCH_SIZE_TEST_ITEMS: 200
+      AGENIX_INGESTION_BATCH_SIZE_COMMANDS: 500
+      AGENIX_INGESTION_BATCH_SIZE_LOG_ITEMS: 300
+      AGENIX_INGESTION_BATCH_TIMEOUT_MS: 1000
+      # Consumer (always enabled - ingestion service purpose is to consume events)
+      AGENIX_INGESTION_CONSUMER_CONCURRENCY: 4
+      AGENIX_INGESTION_MAX_RETRY_ATTEMPTS: 3
+      AGENIX_INGESTION_RETRY_DELAY_MS: 1000
+      # Monitoring
+      ASPNETCORE_URLS: http://+:8082
+    # Note: No direct port exposure - Traefik handles all routing and load balancing
+    # Access via: http://ingestion.localhost (Traefik will distribute across replicas)
+    # For direct access during debugging, temporarily add: ports: ["8082:8082"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      replicas: 2  # Traefik load balancing with horizontal scaling
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    profiles:
+      - core
+
+  housekeeping:
+    build:
+      context: .
+      dockerfile: housekeeping-service/Dockerfile
+    labels:
+      # Traefik routing configuration
+      - "traefik.http.routers.housekeeping.rule=Host(`${AGENIX_GATEWAY_DOMAIN_HOUSEKEEPING:-housekeeping.localhost}`)"
+      - "traefik.http.routers.housekeeping.service=housekeeping"
+      - "traefik.http.routers.housekeeping.entrypoints=web"
+      # Service configuration with load balancing
+      - "traefik.http.services.housekeeping.loadbalancer.server.port=8083"
+      - "traefik.http.services.housekeeping.loadbalancer.server.scheme=http"
+      # Health check configuration
+      - "traefik.http.services.housekeeping.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.housekeeping.loadbalancer.healthcheck.interval=30s"
+      - "traefik.http.services.housekeeping.loadbalancer.healthcheck.timeout=5s"
+      # Enable in Traefik
+      - "traefik.enable=true"
+    environment:
+      <<: *common-environment
+      # MinIO/S3 Configuration (for artifact deletion)
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-test-artifacts}
+      # Worker Intervals
+      AGENIX_HOUSEKEEPING_LAUNCH_RETENTION_CHECK_INTERVAL_HOURS: ${AGENIX_HOUSEKEEPING_LAUNCH_RETENTION_CHECK_INTERVAL_HOURS:-6}
+      AGENIX_HOUSEKEEPING_LAUNCH_AUTO_STOP_INTERVAL_MINUTES: ${AGENIX_HOUSEKEEPING_LAUNCH_AUTO_STOP_INTERVAL_MINUTES:-10}
+      AGENIX_HOUSEKEEPING_LAUNCH_AUTO_STOP_BATCH_SIZE: ${AGENIX_HOUSEKEEPING_LAUNCH_AUTO_STOP_BATCH_SIZE:-20}
+      AGENIX_HOUSEKEEPING_LOG_RETENTION_CHECK_INTERVAL_HOURS: ${AGENIX_HOUSEKEEPING_LOG_RETENTION_CHECK_INTERVAL_HOURS:-1}
+      AGENIX_HOUSEKEEPING_ATTACHMENT_RETENTION_CHECK_INTERVAL_HOURS: ${AGENIX_HOUSEKEEPING_ATTACHMENT_RETENTION_CHECK_INTERVAL_HOURS:-1}
+      AGENIX_HOUSEKEEPING_AUDIT_RETENTION_CHECK_INTERVAL_HOURS: ${AGENIX_HOUSEKEEPING_AUDIT_RETENTION_CHECK_INTERVAL_HOURS:-24}
+      # Leadership Election (multi-instance deployment)
+      AGENIX_HOUSEKEEPING_LEADERSHIP: ${AGENIX_HOUSEKEEPING_LEADERSHIP:-true}
+      AGENIX_HOUSEKEEPING_LEASE_SECONDS: ${AGENIX_HOUSEKEEPING_LEASE_SECONDS:-30}
+      AGENIX_HOUSEKEEPING_INSTANCE_ID: ${AGENIX_HOUSEKEEPING_INSTANCE_ID:-housekeeping-1}
+      # Monitoring
+      ASPNETCORE_URLS: http://+:8083
+    # Note: No direct port exposure - Traefik handles all routing
+    # Access via: http://housekeeping.localhost
+    # For direct access during debugging, temporarily add: ports: ["8083:8083"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      replicas: 1  # Single instance (leadership election not needed for 1 instance)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - core
 
 volumes:
   pgdata:
+  dashboardkeys:
+  artifacts:
+  rabbitmq_data:
+  minio-data:
+
+# ==============================================================================
+# Network Configuration (Phase 3: Decoupled Worker Deployment)
+# ==============================================================================
+# Default network is explicitly named to allow workers to connect via external network
+networks:
+  default:
+    name: agenix-reportportal-network
+    driver: bridge

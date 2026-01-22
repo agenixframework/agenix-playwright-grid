@@ -1,0 +1,4157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Run Logs - Prototype</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f8f9fa;
+      padding: 20px;
+    }
+
+    .test-run-details {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Breadcrumb Section */
+    .breadcrumbs-section {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 20px;
+    }
+
+    .breadcrumb-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.375rem;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    .breadcrumb-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: #6b7280;
+    }
+
+    .breadcrumb-btn:hover {
+      opacity: 0.7;
+    }
+
+    .breadcrumb-link {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #3b82f6;
+      text-decoration: none;
+    }
+
+    .breadcrumb-link:hover {
+      color: #2563eb;
+      text-decoration: underline;
+    }
+
+    .breadcrumb-separator {
+      display: flex;
+      align-items: center;
+      color: #d1d5db;
+    }
+
+    .breadcrumb-separator svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    .breadcrumb-current {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .breadcrumb-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    .nav-btn,
+    .refresh-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.375rem 0.5rem;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: #495057;
+    }
+
+    .nav-btn:hover,
+    .refresh-btn:hover {
+      background: #f8f9fa;
+      border-color: #adb5bd;
+    }
+
+    .nav-btn i,
+    .refresh-btn i {
+      font-size: 14px;
+    }
+
+    /* Main Tabs */
+    .main-tabs {
+      display: flex;
+      gap: 4px;
+      background: #f8f9fa;
+      padding: 8px 16px;
+      border-bottom: 1px solid #dee2e6;
+      margin-bottom: 0;
+    }
+
+    .main-tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      border-radius: 8px 8px 0 0;
+      color: #6c757d;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      letter-spacing: 0.2px;
+    }
+
+    .main-tab:hover:not(.active) {
+      color: #495057;
+      background-color: rgba(255, 255, 255, 0.6);
+    }
+
+    .main-tab.active {
+      background: #ffffff;
+      color: #667eea;
+      border-bottom: 3px solid #667eea;
+      margin-bottom: -1px;
+    }
+
+    .main-tab i {
+      width: 16px;
+      height: 16px;
+      opacity: 0.7;
+    }
+
+    .main-tab.active i {
+      opacity: 1;
+    }
+
+    /* View Tabs (for alternative tab style) */
+    .view-tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-right: auto;
+      background: #f1f5f9;
+      padding: 0.25rem;
+      border-radius: 8px;
+    }
+
+    .view-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: #64748b;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .view-tab:hover {
+      background-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .view-tab.active {
+      background: #ffffff;
+      color: #667eea;
+      box-shadow: 0 1px 3px rgba(102, 126, 234, 0.15), 0 1px 2px rgba(102, 126, 234, 0.1);
+    }
+
+    .tab-icon {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    /* Log Content Container */
+    .log-content {
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+      border-top: none;
+    }
+
+    /* Info Panel (Filter/Sort Bar) */
+    .info-panel {
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    /* Compact Filter Bar */
+    .compact-filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      gap: 16px;
+    }
+
+    .filter-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .filter-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Filter Chip Button */
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #495057;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      white-space: nowrap;
+    }
+
+    .filter-chip:hover {
+      background-color: #f8f9fa;
+      border-color: #667eea;
+      color: #667eea;
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .filter-chip.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border-color: #667eea;
+    }
+
+    .filter-chip i:first-child {
+      font-size: 14px;
+    }
+
+    .filter-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background-color: rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .filter-chip.active .filter-count {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .filter-chevron {
+      font-size: 11px;
+      transition: transform 0.2s ease;
+    }
+
+    .filter-chip.active .filter-chevron {
+      transform: rotate(180deg);
+    }
+
+    /* Advanced Filters Panel */
+    .advanced-filters {
+      padding: 16px;
+      background-color: #fff;
+      border-top: 1px solid #e9ecef;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .filter-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .filter-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .filter-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 0;
+    }
+
+    .filter-dropdown.compact,
+    .filter-text-input.compact {
+      width: 100%;
+    }
+
+    .checkbox-filter.compact {
+      padding: 10px 14px;
+      background-color: #f8f9fa;
+      border-color: #e9ecef;
+    }
+
+    .checkbox-filter.compact:hover {
+      background-color: #e9ecef;
+    }
+
+    .checkbox-filter.compact label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .checkbox-filter.compact label i {
+      font-size: 14px;
+      color: #667eea;
+    }
+
+    /* Compact view mode and theme toggles */
+    .view-mode-toggle.compact,
+    .theme-toggle.compact {
+      margin-left: 0;
+    }
+
+    .view-mode-toggle.compact .view-mode-btn,
+    .theme-toggle.compact .theme-btn {
+      padding: 8px 12px;
+    }
+
+    .view-mode-toggle.compact .view-mode-btn span,
+    .theme-toggle.compact .theme-btn span {
+      display: none;
+    }
+
+    /* Test Summary Bar */
+    .test-summary-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 13px;
+    }
+
+    .summary-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .summary-action-btns {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .summary-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #495057;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .summary-btn:hover {
+      background-color: #e9ecef;
+      border-color: #adb5bd;
+    }
+
+    .summary-btn i {
+      font-size: 13px;
+    }
+
+    .summary-stats {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .summary-stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+    }
+
+    .summary-stat .stat-icon {
+      font-size: 14px;
+    }
+
+    .summary-stat.passed {
+      color: #28a745;
+      border-color: #c3e6cb;
+      background-color: #d4edda;
+    }
+
+    .summary-stat.failed {
+      color: #dc3545;
+      border-color: #f5c6cb;
+      background-color: #f8d7da;
+    }
+
+    .summary-stat.skipped {
+      color: #856404;
+      border-color: #ffeeba;
+      background-color: #fff3cd;
+    }
+
+    .summary-divider {
+      width: 1px;
+      height: 20px;
+      background-color: #dee2e6;
+    }
+
+    /* Density modes */
+    .log-entries.density-comfortable .log-entry {
+      padding: 12px 16px;
+      gap: 12px;
+    }
+
+    .log-entries.density-comfortable .log-entry.step-header {
+      padding: 14px 20px !important;
+    }
+
+    .log-entries.density-compact .log-entry {
+      padding: 6px 12px;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .log-entries.density-compact .log-entry.step-header {
+      padding: 8px 16px !important;
+      font-size: 13px;
+    }
+
+    .log-entries.density-compact .log-timestamp {
+      font-size: 11px;
+    }
+
+    .log-entries.density-compact .log-level {
+      font-size: 10px;
+      padding: 1px 5px;
+    }
+
+    .log-entries.density-compact .status-indicator {
+      padding: 4px 10px;
+      font-size: 11px;
+    }
+
+    .log-entries.density-compact .duration-block {
+      font-size: 11px;
+      padding: 3px 8px;
+    }
+
+    .info-line {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    /* Filter Controls - Elegant Design */
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .filter-group label {
+      color: #495057;
+      font-weight: 600;
+      margin: 0;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .filter-dropdown {
+      padding: 8px 32px 8px 12px;
+      font-size: 13px;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      background-color: #fff;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236c757d' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      font-weight: 500;
+      color: #2c3e50;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .filter-dropdown:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .filter-dropdown:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+
+    .checkbox-filter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #495057;
+      padding: 6px 12px;
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .checkbox-filter:hover {
+      border-color: #667eea;
+      background-color: #f8f9fa;
+    }
+
+    .checkbox-filter input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: #667eea;
+    }
+
+    .checkbox-filter label {
+      cursor: pointer;
+      margin: 0;
+      font-weight: 500;
+    }
+
+    .filter-text-input {
+      padding: 8px 12px 8px 36px;
+      font-size: 13px;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      min-width: 240px;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      color: #2c3e50;
+      background-color: #fff;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%236c757d' d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 10px center;
+      background-size: 16px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .filter-text-input:hover {
+      border-color: #667eea;
+    }
+
+    .filter-text-input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+
+    .filter-text-input::placeholder {
+      color: #adb5bd;
+      font-weight: 400;
+    }
+
+    .view-mode-toggle {
+      display: flex;
+      gap: 0;
+      margin-left: auto;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .view-mode-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      border: 1px solid #dee2e6;
+      border-right: none;
+      background-color: #fff;
+      color: #495057;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+    }
+
+    .view-mode-btn:last-child {
+      border-right: 1px solid #dee2e6;
+    }
+
+    .view-mode-btn:first-child {
+      border-top-left-radius: 6px;
+      border-bottom-left-radius: 6px;
+    }
+
+    .view-mode-btn:last-child {
+      border-top-right-radius: 6px;
+      border-bottom-right-radius: 6px;
+    }
+
+    .view-mode-btn:hover:not(.active) {
+      background-color: #f8f9fa;
+      color: #667eea;
+    }
+
+    .view-mode-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border-color: #667eea;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .view-mode-btn i {
+      font-size: 14px;
+    }
+
+    .theme-toggle {
+      display: flex;
+      gap: 0;
+      margin-left: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .theme-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      border: 1px solid #dee2e6;
+      border-right: none;
+      background-color: #fff;
+      color: #495057;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+    }
+
+    .theme-btn:last-child {
+      border-right: 1px solid #dee2e6;
+    }
+
+    .theme-btn:first-child {
+      border-top-left-radius: 6px;
+      border-bottom-left-radius: 6px;
+    }
+
+    .theme-btn:last-child {
+      border-top-right-radius: 6px;
+      border-bottom-right-radius: 6px;
+    }
+
+    .theme-btn:hover:not(.active) {
+      background-color: #f8f9fa;
+      color: #495057;
+    }
+
+    .theme-btn.active {
+      background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+      color: #fff;
+      border-color: #495057;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .theme-btn i {
+      font-size: 14px;
+    }
+
+    /* Log Entries */
+    .log-entries {
+      padding: 16px;
+    }
+
+    .log-entry {
+      display: flex;
+      gap: 12px;
+      padding: 8px 0 8px 8px;
+      border-bottom: 1px solid #f1f3f5;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 13px;
+      position: relative;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-entry.nested-step {
+      padding-left: 48px;
+    }
+
+    .log-entry.nested-step::before {
+      content: '';
+      position: absolute;
+      left: 28px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background-color: #e9ecef;
+    }
+
+    /* Step Header Row - Elegant design */
+    .log-entry.step-header {
+      display: grid !important;
+      grid-template-columns: 1fr auto auto;
+      gap: 20px;
+      align-items: center;
+      padding: 14px 20px !important;
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      border-bottom: 1px solid #e0e3e7;
+      border-left: 4px solid transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    .log-entry.step-header:hover {
+      background: linear-gradient(135deg, #eef0f3 0%, #f8f9fa 100%);
+      border-left-color: #667eea;
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.08);
+    }
+
+    .log-entry.step-header.nested-step {
+      padding-left: 60px !important;
+      background: linear-gradient(135deg, #fafbfc 0%, #ffffff 100%);
+      border-left-width: 3px;
+    }
+
+    .log-entry.step-header.nested-step::before {
+      left: 40px;
+      background: linear-gradient(to bottom, #ced4da 0%, #dee2e6 100%);
+      width: 3px;
+    }
+
+    .log-entry.step-header.nested-step:hover {
+      background: linear-gradient(135deg, #f0f2f5 0%, #fafbfc 100%);
+    }
+
+    .step-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+    }
+
+    .step-name-text {
+      line-height: 1.5;
+      color: #2c3e50;
+    }
+
+    .step-name-text small {
+      display: block;
+      margin-top: 4px;
+      color: #6c757d;
+      font-size: 12px;
+      font-weight: 400;
+      font-style: italic;
+    }
+
+    .step-status-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-stats-cell {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      justify-content: flex-end;
+      min-width: 150px;
+    }
+
+    .expand-collapse-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      margin-right: 2px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      padding: 0;
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+    }
+
+    .expand-collapse-btn:hover {
+      background-color: rgba(102, 126, 234, 0.1);
+    }
+
+    .expand-collapse-btn svg {
+      width: 12px;
+      height: 12px;
+      fill: #667eea;
+      transition: transform 0.2s ease;
+    }
+
+    .expand-collapse-btn.expanded svg {
+      transform: rotate(90deg);
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .status-indicator.passed {
+      background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+      color: #155724;
+    }
+
+    .status-indicator.passed::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #28a745 0%, #1e7e34 100%);
+      box-shadow: 0 0 4px rgba(40, 167, 69, 0.4);
+    }
+
+    .status-indicator.failed {
+      background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+      color: #721c24;
+    }
+
+    .status-indicator.failed::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #dc3545 0%, #bd2130 100%);
+      box-shadow: 0 0 4px rgba(220, 53, 69, 0.4);
+    }
+
+    .duration-block {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background-color: rgba(108, 117, 125, 0.08);
+      border-radius: 4px;
+      color: #495057;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .duration-block svg {
+      width: 14px;
+      height: 14px;
+      fill: #6c757d;
+    }
+
+    /* Load step button removed per user request */
+
+    .log-timestamp {
+      color: #6c757d;
+      white-space: nowrap;
+      min-width: 140px;
+    }
+
+    .log-level {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+      min-width: 52px;
+      height: 20px;
+      flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+
+    .log-level.fatal {
+      background-color: #721c24;
+      color: #fff;
+    }
+
+    .log-level.error {
+      background-color: #dc3545;
+      color: #fff;
+    }
+
+    .log-level.warn {
+      background-color: #ffc107;
+      color: #000;
+      font-weight: 700;
+    }
+
+    .log-level.info {
+      background-color: #0dcaf0;
+      color: #000;
+      font-weight: 700;
+    }
+
+    .log-level.debug {
+      background-color: #6c757d;
+      color: #fff;
+    }
+
+    .log-level.trace {
+      background-color: #adb5bd;
+      color: #fff;
+    }
+
+    .log-source {
+      color: #495057;
+      white-space: nowrap;
+      min-width: 100px;
+    }
+
+    .log-message {
+      color: #212529;
+      flex: 1;
+      word-break: break-word;
+    }
+
+    /* Long message with show more */
+    .log-message.truncated {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .log-message.truncated::after {
+      content: '...';
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(to right, transparent, #fff 20%);
+      padding-left: 40px;
+    }
+
+    .show-more-link {
+      color: #667eea;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .show-more-link:hover {
+      color: #764ba2;
+      text-decoration: underline;
+    }
+
+    .show-more-link i {
+      font-size: 10px;
+      transition: transform 0.2s ease;
+    }
+
+    .show-more-link.expanded i {
+      transform: rotate(180deg);
+    }
+
+    .log-attachment-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, #e7f3ff 0%, #d4e9ff 100%);
+      color: #0056b3;
+      border-radius: 6px;
+      border: 1px solid #b8d9ff;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 86, 179, 0.08);
+    }
+
+    .log-attachment-badge:hover {
+      background: linear-gradient(135deg, #d4e9ff 0%, #c0e0ff 100%);
+      border-color: #9ac9ff;
+      box-shadow: 0 2px 4px rgba(0, 86, 179, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .log-attachment-badge i {
+      font-size: 13px;
+    }
+
+    .log-attachment-badge.attachment-image {
+      background: linear-gradient(135deg, #e8f5e9 0%, #d4edd6 100%);
+      color: #2e7d32;
+      border-color: #b2d4b3;
+    }
+
+    .log-attachment-badge.attachment-image:hover {
+      background: linear-gradient(135deg, #d4edd6 0%, #c1e1c2 100%);
+      border-color: #a1c9a2;
+    }
+
+    .log-attachment-badge.attachment-warning {
+      background: linear-gradient(135deg, #fff3cd 0%, #ffe8a3 100%);
+      color: #856404;
+      border-color: #ffd97d;
+    }
+
+    .log-attachment-badge.attachment-warning:hover {
+      background: linear-gradient(135deg, #ffe8a3 0%, #ffde7d 100%);
+      border-color: #ffc857;
+    }
+
+    /* Attachment icon in step stats */
+    .step-stats-cell .attachment-count {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: #6c757d;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .step-stats-cell .attachment-count i {
+      font-size: 14px;
+      color: #0056b3;
+    }
+
+    /* Compact Pagination */
+    .compact-pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-top: 1px solid #dee2e6;
+      background-color: #f8f9fa;
+      font-size: 13px;
+    }
+
+    .pagination-info-left,
+    .pagination-info-right {
+      color: #6c757d;
+    }
+
+    .pagination-info-left strong,
+    .pagination-info-right strong {
+      color: #212529;
+      font-weight: 600;
+    }
+
+    .pagination-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pagination-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      border: 1px solid #ced4da;
+      background-color: #fff;
+      color: #495057;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .pagination-btn svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background-color: #f8f9fa;
+      border-color: #adb5bd;
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination-info-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .per-page-select {
+      padding: 4px 8px;
+      font-size: 13px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      background-color: #fff;
+      cursor: pointer;
+    }
+
+    /* Console View - Light Theme (Default) */
+    .console-view {
+      background-color: #ffffff;
+      color: #212529;
+      padding: 16px;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      transition: all 0.2s ease;
+    }
+
+    .console-view.dark-theme {
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+    }
+
+    .console-entry {
+      margin-bottom: 4px;
+      white-space: pre-wrap;
+    }
+
+    /* Light Theme Colors */
+    .console-timestamp {
+      color: #6c757d;
+    }
+
+    .console-level {
+      font-weight: bold;
+    }
+
+    .console-level.fatal, .console-level.error {
+      color: #dc3545;
+    }
+
+    .console-level.warn {
+      color: #f59e0b;
+    }
+
+    .console-level.info {
+      color: #0d6efd;
+    }
+
+    .console-level.debug {
+      color: #6c757d;
+    }
+
+    .console-level.trace {
+      color: #adb5bd;
+    }
+
+    .console-source {
+      color: #0d6efd;
+    }
+
+    .console-message {
+      color: #212529;
+    }
+
+    /* Dark Theme Colors */
+    .console-view.dark-theme .console-timestamp {
+      color: #858585;
+    }
+
+    .console-view.dark-theme .console-level.fatal,
+    .console-view.dark-theme .console-level.error {
+      color: #f48771;
+    }
+
+    .console-view.dark-theme .console-level.warn {
+      color: #dcdcaa;
+    }
+
+    .console-view.dark-theme .console-level.info {
+      color: #4ec9b0;
+    }
+
+    .console-view.dark-theme .console-level.debug {
+      color: #858585;
+    }
+
+    .console-view.dark-theme .console-level.trace {
+      color: #6a6a6a;
+    }
+
+    .console-view.dark-theme .console-source {
+      color: #9cdcfe;
+    }
+
+    .console-view.dark-theme .console-message {
+      color: #d4d4d4;
+    }
+
+    /* Stack Trace View */
+    .stack-trace-view {
+      padding: 16px;
+      background-color: #fff;
+    }
+
+    .stack-trace-entry {
+      margin-bottom: 16px;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      background-color: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s ease;
+    }
+
+    .stack-trace-entry:hover {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      border-color: #ced4da;
+    }
+
+    .stack-trace-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 14px 18px;
+      gap: 16px;
+    }
+
+    .stack-trace-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stack-trace-time-context {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .stack-trace-timestamp {
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: #6c757d;
+    }
+
+    .stack-trace-context {
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 12px;
+      color: #667eea;
+      background-color: rgba(102, 126, 234, 0.08);
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .stack-trace-level-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stack-trace-level-badge.error {
+      background-color: #dc3545;
+      color: #fff;
+    }
+
+    .stack-trace-level-badge.fatal {
+      background-color: #721c24;
+      color: #fff;
+    }
+
+    .stack-trace-level-badge.warn {
+      background-color: #ffc107;
+      color: #000;
+    }
+
+    .stack-trace-message {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #212529;
+      word-break: break-word;
+    }
+
+    .stack-trace-class {
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-weight: 600;
+      color: #495057;
+    }
+
+    .stack-trace-jump {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
+      text-decoration: none;
+    }
+
+    .stack-trace-jump:hover {
+      background: linear-gradient(135deg, #5a6dd8 0%, #6a4190 100%);
+      box-shadow: 0 3px 6px rgba(102, 126, 234, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .stack-trace-jump i {
+      font-size: 13px;
+    }
+
+    .stack-trace-expand {
+      border-top: 1px solid #f1f3f5;
+      background-color: #fafbfc;
+    }
+
+    .stack-trace-expand-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .stack-trace-expand-header:hover {
+      background-color: #f1f3f5;
+    }
+
+    .stack-trace-expand-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #495057;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stack-trace-expand-icon {
+      font-size: 11px;
+      transition: transform 0.2s ease;
+      color: #6c757d;
+    }
+
+    .stack-trace-expand-icon.expanded {
+      transform: rotate(180deg);
+    }
+
+    .stack-trace-expand-content {
+      padding: 14px 18px;
+      border-top: 1px solid #e9ecef;
+      background-color: #fff;
+      display: none;
+    }
+
+    .stack-trace-expand-content.show {
+      display: block;
+    }
+
+    .stack-trace-details {
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      color: #495057;
+    }
+
+    .stack-trace-details p {
+      margin: 0 0 10px 0;
+    }
+
+    .stack-trace-details p:last-child {
+      margin-bottom: 0;
+    }
+
+    .stack-trace-details .code-line {
+      display: block;
+      padding: 6px 12px;
+      background-color: #f8f9fa;
+      border-left: 3px solid #667eea;
+      border-radius: 4px;
+      margin: 8px 0;
+      color: #212529;
+    }
+
+    .stack-trace-details .status-code {
+      font-weight: 700;
+      color: #dc3545;
+    }
+
+    .stack-trace-http-method {
+      display: inline-block;
+      padding: 2px 8px;
+      background-color: #0d6efd;
+      color: #fff;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+
+    .stack-trace-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6c757d;
+      font-size: 14px;
+    }
+
+    .stack-trace-empty i {
+      font-size: 48px;
+      color: #dee2e6;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    /* Browser Session View - Modern Card Design */
+    .browser-session-view {
+      padding: 24px;
+      background-color: #f8f9fa;
+    }
+
+    .browser-session-container {
+    }
+
+    /* Hero Section */
+    .session-hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px 12px 0 0;
+      padding: 32px;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .session-hero-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .session-hero-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .session-hero-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      backdrop-filter: blur(10px);
+    }
+
+    .session-hero-text h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .session-hero-text p {
+      margin: 4px 0 0 0;
+      opacity: 0.9;
+      font-size: 13px;
+    }
+
+    .status-badge-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .status-badge-hero::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .session-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .session-stat-item {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .session-stat-label {
+      font-size: 11px;
+      opacity: 0.9;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .session-stat-value {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .session-stat-value i {
+      font-size: 18px;
+    }
+
+    /* Content Cards */
+    .session-content {
+      background: #fff;
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .session-section {
+      padding: 24px 32px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .session-section:last-child {
+      border-bottom: none;
+    }
+
+    .session-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0 0 16px 0;
+    }
+
+    .session-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .session-info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .session-info-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #868e96;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .session-info-value {
+      font-size: 14px;
+      font-weight: 500;
+      color: #212529;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    }
+
+    /* Alert Box */
+    .session-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: linear-gradient(135deg, #fff9e6 0%, #fffbf0 100%);
+      border: 1px solid #ffe8a3;
+      border-left: 4px solid #ffc107;
+      border-radius: 8px;
+    }
+
+    .session-alert-icon {
+      font-size: 20px;
+      color: #ffc107;
+      flex-shrink: 0;
+    }
+
+    .session-alert-content {
+      flex: 1;
+    }
+
+    .session-alert-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #856404;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 4px 0;
+    }
+
+    .session-alert-message {
+      font-size: 14px;
+      color: #856404;
+      margin: 0;
+    }
+
+    /* Timestamps Section */
+    .session-timeline {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .session-timeline-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .session-timeline-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .session-timeline-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .session-timeline-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #868e96;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .session-timeline-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #212529;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    }
+
+    .session-timeline-divider {
+      width: 24px;
+      height: 2px;
+      background: linear-gradient(to right, #667eea, #764ba2);
+      border-radius: 2px;
+    }
+
+    @media (max-width: 768px) {
+      .session-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .session-info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .session-timeline {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .session-timeline-divider {
+        display: none;
+      }
+    }
+
+    /* Item Details View */
+    .item-details-view {
+      padding: 0;
+      background-color: #fff;
+    }
+
+    .item-details-container {
+      background: #fff;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .item-details-header {
+      padding: 32px 40px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .item-details-title-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .item-details-name {
+      font-size: 20px;
+      font-weight: 600;
+      color: #212529;
+      letter-spacing: -0.01em;
+    }
+
+    .item-status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .item-status-badge.failed {
+      background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+      color: #fff;
+    }
+
+    .item-status-badge.passed {
+      background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+      color: #fff;
+    }
+
+    .item-details-duration {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #6c757d;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .item-details-duration i {
+      font-size: 16px;
+    }
+
+    .item-details-content {
+      padding: 0;
+    }
+
+    .item-details-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 24px;
+      padding: 20px 40px;
+      border-bottom: 1px solid #f1f3f5;
+      transition: background-color 0.2s ease;
+    }
+
+    .item-details-row:hover {
+      background-color: #f8f9fa;
+    }
+
+    .item-details-row:last-child {
+      border-bottom: none;
+    }
+
+    .item-details-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #495057;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .item-details-value {
+      font-size: 14px;
+      color: #212529;
+      word-break: break-word;
+      line-height: 1.6;
+    }
+
+    .item-details-value code {
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 13px;
+      background-color: #f8f9fa;
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: #495057;
+      border: 1px solid #e9ecef;
+    }
+
+    .item-details-value.empty {
+      color: #adb5bd;
+      font-style: italic;
+    }
+
+    .item-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #495057;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .item-tag:hover {
+      background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .item-tag i {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    .item-description-box {
+      padding: 20px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      border-left: 4px solid #667eea;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #495057;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .item-copy-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #495057;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .item-copy-button:hover {
+      background-color: #f8f9fa;
+      border-color: #adb5bd;
+    }
+
+    .item-copy-button i {
+      font-size: 13px;
+    }
+
+    .item-parameters-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #495057;
+    }
+
+    /* Artifacts View */
+    .artifacts-view {
+      padding: 24px;
+      background-color: #f8f9fa;
+    }
+
+    .artifacts-viewer {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .artifact-preview {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+      padding: 48px 24px;
+      min-height: 500px;
+      position: relative;
+    }
+
+    .artifact-navigation {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 0 24px;
+      pointer-events: none;
+    }
+
+    .artifact-nav-btn {
+      pointer-events: all;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #dee2e6;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .artifact-nav-btn:hover:not(:disabled) {
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: scale(1.05);
+    }
+
+    .artifact-nav-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .artifact-nav-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: #495057;
+    }
+
+    .artifact-main-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .artifact-file-icon {
+      width: 120px;
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e9ecef;
+      border-radius: 12px;
+      border: 2px dashed #adb5bd;
+    }
+
+    .artifact-file-icon svg {
+      width: 64px;
+      height: 64px;
+      fill: #6c757d;
+    }
+
+    .artifact-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .artifact-action-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: #fff;
+      border: 1px solid #667eea;
+      border-radius: 6px;
+      color: #667eea;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .artifact-action-link:hover {
+      background: #667eea;
+      color: #fff;
+    }
+
+    .artifact-action-link i {
+      font-size: 14px;
+    }
+
+    .artifact-thumbnails {
+      display: flex;
+      gap: 12px;
+      padding: 20px 24px;
+      background: #fff;
+      border-top: 1px solid #dee2e6;
+      overflow-x: auto;
+      align-items: center;
+    }
+
+    .artifact-thumbnail {
+      flex-shrink: 0;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .artifact-thumbnail:hover {
+      border-color: #adb5bd;
+    }
+
+    .artifact-thumbnail.active {
+      border-color: #667eea;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    .artifact-thumbnail-icon {
+      width: 48px;
+      height: 48px;
+      fill: #6c757d;
+    }
+
+    .artifact-thumbnail-label {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+      right: 4px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .artifact-nav-arrow {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e9ecef;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .artifact-nav-arrow:hover:not(.disabled) {
+      background: #dee2e6;
+    }
+
+    .artifact-nav-arrow.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .artifact-nav-arrow svg {
+      width: 16px;
+      height: 16px;
+      fill: #495057;
+    }
+
+    @media (max-width: 768px) {
+      .artifact-preview {
+        min-height: 400px;
+        padding: 32px 16px;
+      }
+
+      .artifact-navigation {
+        padding: 0 16px;
+      }
+
+      .artifact-thumbnails {
+        padding: 16px;
+      }
+
+      .artifact-thumbnail {
+        width: 80px;
+        height: 80px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .item-details-row {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .item-details-label {
+        width: 100%;
+        padding-right: 0;
+      }
+    }
+
+    /* Test History Line */
+    .history-line {
+      margin: 5px 25px 20px;
+      max-width: 100%;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Inline Navigation Buttons */
+    .history-nav-btn {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid #667eea;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+      color: #667eea;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 16px;
+      box-shadow: 0 2px 6px rgba(102, 126, 234, 0.15);
+    }
+
+    .history-nav-btn:hover:not(:disabled) {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .history-nav-btn:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    .history-nav-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      border-color: #ccc;
+      background: rgba(0, 0, 0, 0.03);
+      color: #999;
+      box-shadow: none;
+    }
+
+    .history-line-scroll {
+      position: relative;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 15px 0;
+    }
+
+    .history-line-scroll::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .history-line-scroll::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    .history-line-scroll::-webkit-scrollbar-thumb {
+      background: #ccc;
+      border-radius: 3px;
+    }
+
+    .history-line-scroll::-webkit-scrollbar-thumb:hover {
+      background: #999;
+    }
+
+    .history-line-items {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      margin-bottom: 8px;
+      box-sizing: border-box;
+    }
+
+    .history-line-item {
+      position: relative;
+      margin-right: 40px;
+      flex-shrink: 0;
+    }
+
+    /* Arrow connector between items */
+    .history-line-item::after {
+      content: "";
+      position: absolute;
+      right: -22px;
+      top: 12px;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 6px solid #ccc;
+      width: 0;
+      height: 0;
+    }
+
+    .history-line-item.history-item-last {
+      margin-right: 0;
+    }
+
+    /* Remove arrow from last item */
+    .history-line-item.history-item-last::after {
+      display: none;
+    }
+
+    /* Active indicator triangle pointing down */
+    .history-line-item.history-item-active::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: -20px;
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-top: 12px solid #667eea;
+      z-index: 10;
+    }
+
+    .history-item-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .history-status-block {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 76px;
+      height: 32px;
+      border-radius: 4px;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .history-status-block:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .history-status-block.status-failed {
+      background-color: #f65e5e;
+    }
+
+    .history-status-block.status-passed {
+      background-color: #56b985;
+    }
+
+    .history-status-block.status-interrupted,
+    .history-status-block.status-stopped {
+      background-color: #f65e5e;
+    }
+
+    .history-status-block.status-skipped {
+      background-color: #ffc107;
+    }
+
+    .history-line-item.history-item-active .history-status-block {
+      cursor: default;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      border: 2px solid #667eea;
+    }
+
+    .history-line-item.history-item-active .history-status-block:hover {
+      transform: none;
+    }
+
+    /* Launch Position Indicator */
+    .launch-position-indicator {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      padding: 6px 14px;
+      margin-left: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #667eea;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+      border-radius: 14px;
+      border: 1px solid rgba(102, 126, 234, 0.3);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-width: 60px;
+      height: 32px;
+      justify-content: center;
+      white-space: nowrap;
+      line-height: 1;
+    }
+
+    /* Smooth scroll behavior */
+    .history-line-scroll {
+      scroll-behavior: smooth;
+    }
+
+    /* Transition for active state changes */
+    .history-line-item {
+      transition: all 0.3s ease;
+    }
+
+    .history-line-item.history-item-active .history-status-block {
+      animation: pulseActive 0.5s ease;
+    }
+
+    @keyframes pulseActive {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    /* Disabled button state */
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* History Item Tooltip */
+    .history-item-tooltip {
+      position: absolute;
+      bottom: calc(100% + 25px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 1000;
+      min-width: 240px;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .history-line-item:hover .history-item-tooltip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-5px);
+    }
+
+    .history-item-tooltip::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 8px solid #34495e;
+    }
+
+    .tooltip-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .tooltip-launch-number {
+      font-weight: 700;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .tooltip-status-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .tooltip-status-badge.failed {
+      background-color: #dc3545;
+      color: #fff;
+    }
+
+    .tooltip-status-badge.passed {
+      background-color: #56b985;
+      color: #fff;
+    }
+
+    .tooltip-status-badge.skipped {
+      background-color: #ffc107;
+      color: #000;
+    }
+
+    .tooltip-status-badge.stopped {
+      background-color: #f65e5e;
+      color: #fff;
+    }
+
+    .tooltip-section {
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+
+    .tooltip-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .tooltip-label {
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+
+    .tooltip-value {
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .tooltip-attributes {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .tooltip-attribute {
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    .tooltip-defect-type {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .defect-type-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .defect-type-indicator.automation-bug {
+      background-color: #ffc107;
+    }
+
+    .defect-type-indicator.product-bug {
+      background-color: #dc3545;
+    }
+
+    .defect-type-indicator.system-issue {
+      background-color: #3e7be6;
+    }
+
+    .defect-type-indicator.to-investigate {
+      background-color: #adb5bd;
+    }
+
+    .tooltip-duration {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    @media (max-width: 768px) {
+      .history-line {
+        margin: 5px 15px 15px;
+      }
+
+      .history-line-item {
+        margin-right: 24px;
+      }
+
+      .history-status-block {
+        width: 64px;
+        height: 28px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="test-run-details">
+  <!-- Breadcrumb Navigation with Actions -->
+  <div class="breadcrumbs-section">
+    <button class="breadcrumb-btn">
+      <svg height="16" viewBox="0 0 17 17" width="16" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1.889 0C.85 0 0 .85 0 1.889V15.11C0 16.15.85 17 1.889 17H15.11C16.15 17 17 16.15 17 15.111V1.89C17 .85 16.15 0 15.111 0H1.89zM1 1h15v15H1V1zm13 8H3V8h11v1z"
+              fill-rule="evenodd"></path>
+      </svg>
+    </button>
+    <a class="breadcrumb-link" href="#">All</a>
+    <span class="breadcrumb-separator">
+                <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+                </svg>
+            </span>
+    <a class="breadcrumb-link" href="#">Active Test Run #68</a>
+    <span class="breadcrumb-separator">
+                <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+                </svg>
+            </span>
+    <span class="breadcrumb-current">Active Test Suite</span>
+
+    <div class="breadcrumb-actions">
+      <button class="nav-btn" title="Previous Test">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <button class="nav-btn" title="Next Test">
+        <i class="bi bi-chevron-right"></i>
+      </button>
+      <button class="refresh-btn" title="Refresh">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Test History Line with Inline Navigation -->
+  <div class="history-line">
+    <button class="history-nav-btn history-nav-prev" id="prevLaunchBtn" title="Previous Launch (←)">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+
+    <div class="history-line-scroll">
+      <div class="history-line-items">
+        <!-- Launch #1 - PASSED (Active/Current) -->
+        <div class="history-line-item history-item-active">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#1</div>
+          </div>
+        </div>
+
+        <!-- Launch #2 - FAILED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-failed">#2</div>
+            <div class="history-item-tooltip">
+              <div class="tooltip-header">
+                <span class="tooltip-launch-number">Launch #2</span>
+                <span class="tooltip-status-badge failed">FAILED</span>
+              </div>
+              <div class="tooltip-section">
+                <div class="tooltip-label">Launch Attributes:</div>
+                <div class="tooltip-attributes">
+                  <span class="tooltip-attribute">build: 3.16.15.20.8</span>
+                  <span class="tooltip-attribute">platform: android</span>
+                  <span class="tooltip-attribute">demo</span>
+                </div>
+              </div>
+              <div class="tooltip-section">
+                <div class="tooltip-label">Defect Type:</div>
+                <div class="tooltip-defect-type">
+                  <span class="defect-type-indicator automation-bug"></span>
+                  <span class="tooltip-value">Automation Bug</span>
+                </div>
+              </div>
+              <div class="tooltip-section">
+                <div class="tooltip-label">Duration:</div>
+                <div class="tooltip-duration">
+                  <span class="tooltip-value">1s</span>
+                </div>
+              </div>
+              <div class="tooltip-section">
+                <div class="tooltip-label">Item Details:</div>
+                <span class="tooltip-value">4 Error</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Launch #3 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#3</div>
+          </div>
+        </div>
+
+        <!-- Launch #4 - FAILED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-failed">#4</div>
+          </div>
+        </div>
+
+        <!-- Launch #5 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#5</div>
+          </div>
+        </div>
+
+        <!-- Launch #6 - FAILED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-failed">#6</div>
+          </div>
+        </div>
+
+        <!-- Launch #7 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#7</div>
+          </div>
+        </div>
+
+        <!-- Launch #8 - SKIPPED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-skipped">#8</div>
+          </div>
+        </div>
+
+        <!-- Launch #9 - FAILED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-failed">#9</div>
+          </div>
+        </div>
+
+        <!-- Launch #10 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#10</div>
+          </div>
+        </div>
+
+        <!-- Launch #11 - FAILED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-failed">#11</div>
+          </div>
+        </div>
+
+        <!-- Launch #12 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#12</div>
+          </div>
+        </div>
+
+        <!-- Launch #13 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#13</div>
+          </div>
+        </div>
+
+        <!-- Launch #14 - FAILED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-failed">#14</div>
+          </div>
+        </div>
+
+        <!-- Launch #15 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#15</div>
+          </div>
+        </div>
+
+        <!-- Launch #16 - STOPPED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-stopped">#16</div>
+          </div>
+        </div>
+
+        <!-- Launch #17 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#17</div>
+          </div>
+        </div>
+
+        <!-- Launch #18 - FAILED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-failed">#18</div>
+          </div>
+        </div>
+
+        <!-- Launch #19 - PASSED -->
+        <div class="history-line-item">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#19</div>
+          </div>
+        </div>
+
+        <!-- Launch #20 - PASSED (Last Item) -->
+        <div class="history-line-item history-item-last">
+          <div class="history-item-content">
+            <div class="history-status-block status-passed">#20</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="history-nav-btn history-nav-next" id="nextLaunchBtn" title="Next Launch (→)">
+      <i class="bi bi-chevron-right"></i>
+    </button>
+
+    <span class="launch-position-indicator" id="launchPosition">1 / 20</span>
+  </div>
+
+  <!-- Main Tabs -->
+  <div class="main-tabs">
+    <button class="main-tab active">
+      <i class="bi bi-terminal"></i>
+      EXECUTION LOGS
+    </button>
+    <button class="main-tab">
+      <i class="bi bi-exclamation-triangle"></i>
+      STACK TRACE
+    </button>
+    <button class="main-tab">
+      <i class="bi bi-info-circle"></i>
+      ITEM DETAILS
+    </button>
+    <button class="main-tab">
+      <i class="bi bi-paperclip"></i>
+      ARTIFACTS
+    </button>
+    <button class="main-tab">
+      <i class="bi bi-browser-chrome"></i>
+      BROWSER SESSION
+    </button>
+    <button class="main-tab">
+      <i class="bi bi-code-slash"></i>
+      PLAYWRIGHT SERVER COMMANDS
+    </button>
+  </div>
+
+  <!-- Log Content -->
+  <div class="log-content">
+    <!-- Info Panel with Filters -->
+    <div class="info-panel">
+      <!-- Compact Filter Bar -->
+      <div class="compact-filter-bar">
+        <div class="filter-bar-left">
+          <input class="filter-text-input compact" id="filter-text" placeholder="Filter log messages..." type="text">
+
+          <button class="filter-chip" id="toggle-filters">
+            <i class="bi bi-funnel"></i>
+            <span>Filters</span>
+            <span class="filter-count" style="display: none;">0</span>
+            <i class="bi bi-chevron-down filter-chevron"></i>
+          </button>
+        </div>
+
+        <div class="filter-bar-right">
+          <div class="view-mode-toggle compact">
+            <button class="view-mode-btn active" data-mode="markdown" title="Markdown View">
+              <i class="bi bi-list-ul"></i>
+            </button>
+            <button class="view-mode-btn" data-mode="console" title="Console View">
+              <i class="bi bi-terminal"></i>
+            </button>
+          </div>
+
+          <div class="theme-toggle compact" id="theme-toggle" style="display: none;">
+            <button class="theme-btn active" data-theme="light" title="Light Theme">
+              <i class="bi bi-sun"></i>
+            </button>
+            <button class="theme-btn" data-theme="dark" title="Dark Theme">
+              <i class="bi bi-moon"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Filters Panel (Collapsible) -->
+      <div class="advanced-filters" id="advanced-filters" style="display: none;">
+        <div class="filter-row">
+          <div class="filter-col">
+            <label class="filter-label">LOG LEVEL</label>
+            <select class="filter-dropdown compact">
+              <option>No Error Logs</option>
+              <option>All Logs</option>
+              <option>Fatal Only</option>
+              <option>Error Only</option>
+              <option>Warn and Above</option>
+              <option>Info and Above</option>
+            </select>
+          </div>
+
+          <div class="filter-col">
+            <label class="filter-label">STATUS</label>
+            <select class="filter-dropdown compact" id="status-filter">
+              <option value="">All Statuses</option>
+              <option value="passed">Passed</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+
+          <div class="filter-col">
+            <label class="filter-label">OPTIONS</label>
+            <div class="checkbox-filter compact">
+              <input id="with-attachment" type="checkbox">
+              <label for="with-attachment">
+                <i class="bi bi-paperclip"></i>
+                With Attachments
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test Summary Bar -->
+    <div class="test-summary-bar">
+      <div class="summary-left">
+        <div class="summary-action-btns">
+          <button class="summary-btn" id="toggle-expand-btn">
+            <i class="bi bi-plus-square"></i>
+            <span>Expand all</span>
+          </button>
+          <span class="summary-divider"></span>
+          <button class="summary-btn" id="density-btn">
+            <i class="bi bi-speedometer2"></i>
+            <span>Density</span>
+          </button>
+        </div>
+      </div>
+      <div class="summary-stats">
+        <div class="summary-stat passed">
+          <span class="stat-icon">✓</span>
+          <span>3 passed</span>
+        </div>
+        <div class="summary-stat failed">
+          <span class="stat-icon">✗</span>
+          <span>1 failed</span>
+        </div>
+        <div class="summary-stat skipped">
+          <span class="stat-icon">⊝</span>
+          <span>2 skipped</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Entries (Markdown Mode) -->
+    <div class="log-entries" id="markdown-view">
+      <!-- Launch Entry -->
+      <div class="log-entry step-header" data-parent="launch">
+        <div class="step-name-cell">
+          <button class="expand-collapse-btn expanded">
+            <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+            </svg>
+          </button>
+          <div class="step-name-text">Launch was executed 11 times</div>
+        </div>
+        <div class="step-status-cell">
+          <div class="status-indicator passed">PASSED</div>
+        </div>
+        <div class="step-stats-cell">
+          <div class="duration-block">
+            <svg viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6.997 0A6.995 6.995 0 0 0 0 7c0 3.867 3.129 7 6.997 7a7.001 7.001 0 1 0 0-14zM7 12.6A5.598 5.598 0 0 1 1.4 7c0-3.094 2.506-5.6 5.6-5.6s5.6 2.506 5.6 5.6-2.506 5.6-5.6 5.6zm.35-9.1H6.3v4.2l3.672 2.205.528-.861-3.15-1.869V3.5z"
+                    fill-rule="evenodd"></path>
+            </svg>
+            <span>0.06s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 1: Login -->
+      <div class="log-entry step-header nested-step" data-child-of="launch" data-parent="step1">
+        <div class="step-name-cell">
+          <button class="expand-collapse-btn expanded">
+            <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+            </svg>
+          </button>
+          <div class="step-name-text">
+            Step 1: Login to https://localhost:8080/ with password ●
+            <small>Expected Result: ** User is in RP</small>
+          </div>
+        </div>
+        <div class="step-status-cell">
+          <div class="status-indicator passed">PASSED</div>
+        </div>
+        <div class="step-stats-cell">
+          <div class="attachment-count">
+            <i class="bi bi-paperclip"></i>
+            <span>1</span>
+          </div>
+          <div class="duration-block">
+            <svg viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6.997 0A6.995 6.995 0 0 0 0 7c0 3.867 3.129 7 6.997 7a7.001 7.001 0 1 0 0-14zM7 12.6A5.598 5.598 0 0 1 1.4 7c0-3.094 2.506-5.6 5.6-5.6s5.6 2.506 5.6 5.6-2.506 5.6-5.6 5.6zm.35-9.1H6.3v4.2l3.672 2.205.528-.861-3.15-1.869V3.5z"
+                    fill-rule="evenodd"></path>
+            </svg>
+            <span>0.14s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nested log under Step 1 -->
+      <div class="log-entry nested-step" data-child-of="step1" style="padding-left: 88px;">
+        <span class="log-timestamp">10:14:45.665</span>
+        <span class="log-level info">INFO</span>
+        <span class="log-source">[main]</span>
+        <span class="log-message">com.epam.ta.utils.logger.Logger - Select 'Defect Type' from drop-down menu</span>
+      </div>
+
+      <!-- Regular log entry -->
+      <div class="log-entry" data-child-of="launch">
+        <span class="log-timestamp">09:53:43.161</span>
+        <span class="log-level info">INFO</span>
+        <span class="log-source">[main]</span>
+        <span class="log-message">com.epam.ta.utils.logger.Logger - Switch to project: default_project.</span>
+        <span class="log-attachment-badge attachment-warning">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        WARNING.txt
+                    </span>
+      </div>
+
+      <!-- Debug log entry -->
+      <div class="log-entry" data-child-of="launch">
+        <span class="log-timestamp">11:29:02.237</span>
+        <span class="log-level debug">DEBUG</span>
+        <span class="log-source">[main]</span>
+        <span class="log-message">[Forwarding findElement on session 477bee808cd8c415a7aae24e4edc5cc9 to remote] DEBUG o.a.h.c.protocol.RequestAuthCache - Auth cache not set in the context</span>
+      </div>
+
+      <!-- Step 2: Open launches -->
+      <div class="log-entry step-header nested-step" data-child-of="launch" data-parent="step2">
+        <div class="step-name-cell">
+          <button class="expand-collapse-btn">
+            <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+            </svg>
+          </button>
+          <div class="step-name-text">
+            Step 2: Open 'All launches'
+            <small>Expected Result: All launches page is presented</small>
+          </div>
+        </div>
+        <div class="step-status-cell">
+          <div class="status-indicator passed">PASSED</div>
+        </div>
+        <div class="step-stats-cell">
+          <div class="duration-block">
+            <svg viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6.997 0A6.995 6.995 0 0 0 0 7c0 3.867 3.129 7 6.997 7a7.001 7.001 0 1 0 0-14zM7 12.6A5.598 5.598 0 0 1 1.4 7c0-3.094 2.506-5.6 5.6-5.6s5.6 2.506 5.6 5.6-2.506 5.6-5.6 5.6zm.35-9.1H6.3v4.2l3.672 2.205.528-.861-3.15-1.869V3.5z"
+                    fill-rule="evenodd"></path>
+            </svg>
+            <span>0.07s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nested log under Step 2 (hidden by default) -->
+      <div class="log-entry nested-step" data-child-of="step2" style="padding-left: 88px; display: none;">
+        <span class="log-timestamp">10:15:12.334</span>
+        <span class="log-level info">INFO</span>
+        <span class="log-source">[main]</span>
+        <span class="log-message">com.epam.ta.utils.logger.Logger - All launches page is presented</span>
+      </div>
+
+      <!-- Step 3: Failed step with long error -->
+      <div class="log-entry step-header nested-step" data-child-of="launch" data-parent="step3">
+        <div class="step-name-cell">
+          <button class="expand-collapse-btn expanded">
+            <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+            </svg>
+          </button>
+          <div class="step-name-text">
+            Step 3: Verify dashboard widgets
+            <small>Expected Result: All widgets loaded successfully</small>
+          </div>
+        </div>
+        <div class="step-status-cell">
+          <div class="status-indicator failed">FAILED</div>
+        </div>
+        <div class="step-stats-cell">
+          <div class="attachment-count">
+            <i class="bi bi-paperclip"></i>
+            <span>3</span>
+          </div>
+          <div class="duration-block">
+            <svg viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6.997 0A6.995 6.995 0 0 0 0 7c0 3.867 3.129 7 6.997 7a7.001 7.001 0 1 0 0-14zM7 12.6A5.598 5.598 0 0 1 1.4 7c0-3.094 2.506-5.6 5.6-5.6s5.6 2.506 5.6 5.6-2.506 5.6-5.6 5.6zm.35-9.1H6.3v4.2l3.672 2.205.528-.861-3.15-1.869V3.5z"
+                    fill-rule="evenodd"></path>
+            </svg>
+            <span>2.45s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Long error log under Step 3 -->
+      <div class="log-entry nested-step" data-child-of="step3" style="padding-left: 88px;">
+        <span class="log-timestamp">10:15:18.892</span>
+        <span class="log-level error">ERROR</span>
+        <span class="log-source">[main]</span>
+        <span class="log-message truncated" data-message-id="msg1">com.epam.ta.reportportal.exception.ReportPortalException: Failed to load dashboard widgets due to database connection timeout. The connection pool has been exhausted and no connections are available. This usually indicates either a connection leak in the application code, or that the pool size is too small for the load. Stack trace: at com.epam.ta.reportportal.dao.WidgetRepository.findAllByDashboard(WidgetRepository.java:45) at com.epam.ta.reportportal.core.widget.impl.GetWidgetHandler.getWidgets(GetWidgetHandler.java:78) at com.epam.ta.reportportal.ws.controller.WidgetController.getWidgets(WidgetController.java:92). Additional context: Database host: postgres-primary.internal Port: 5432 Database: reportportal Connection pool size: 10 Active connections: 10 Idle connections: 0 Waiting threads: 15</span>
+        <a class="show-more-link" data-target="msg1" href="javascript:void(0)">
+          <span>show more</span>
+          <i class="bi bi-chevron-down"></i>
+        </a>
+        <span class="log-attachment-badge attachment-image">
+                        <i class="bi bi-file-image"></i>
+                        screenshot.png
+                    </span>
+      </div>
+
+      <!-- Another log under Step 3 -->
+      <div class="log-entry nested-step" data-child-of="step3" style="padding-left: 88px;">
+        <span class="log-timestamp">10:15:19.105</span>
+        <span class="log-level warn">WARN</span>
+        <span class="log-source">[pool-2]</span>
+        <span class="log-message">com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=25s123ms).</span>
+      </div>
+    </div>
+
+    <!-- Console View (Hidden by default) -->
+    <div class="console-view" id="console-view" style="display: none;">
+      <div class="console-entry"><span class="console-timestamp">10:14:47.405</span> <span class="console-level info">[INFO]</span>
+        <span class="console-source">[main]</span> <span class="console-message">com.epam.ta.utils.logger.Logger - Refresh current page.</span>
+      </div>
+      <div class="console-entry"><span class="console-timestamp">10:21:21.892</span> <span class="console-level info">[INFO]</span>
+        <span class="console-source">[main]</span> <span class="console-message">com.epam.ta.utils.logger.Logger - Select 'Bug Tracking System' from list: 'RALLY'</span>
+      </div>
+      <div class="console-entry"><span class="console-timestamp">09:55:21.743</span> <span class="console-level info">[INFO]</span>
+        <span class="console-source">[main]</span> <span class="console-message">com.epam.ta.utils.logger.Logger - [STEP] Click History button. [PHP]</span>
+      </div>
+      <div class="console-entry"><span class="console-timestamp">11:29:02.237</span> <span class="console-level info">[INFO]</span>
+        <span class="console-source">[TestNG-tests-1]</span> <span class="console-message">c.e.t.r.q.w.c.FailureLoggingListener - Cannot finish test item. [XML]</span>
+      </div>
+      <div class="console-entry"><span class="console-timestamp">11:29:05.123</span> <span class="console-level warn">[WARN]</span>
+        <span class="console-source">[main]</span> <span class="console-message">com.epam.ta.utils.logger.Logger - Test execution taking longer than expected</span>
+      </div>
+      <div class="console-entry"><span class="console-timestamp">11:29:08.456</span> <span class="console-level error">[ERROR]</span>
+        <span class="console-source">[main]</span> <span class="console-message">com.epam.ta.utils.logger.Logger - Failed to connect to database: Connection timeout</span>
+      </div>
+    </div>
+
+    <!-- Stack Trace View (Hidden by default) -->
+    <div class="stack-trace-view" id="stack-trace-view" style="display: none;">
+      <!-- Error Entry 1 -->
+      <div class="stack-trace-entry">
+        <div class="stack-trace-header">
+          <div class="stack-trace-main">
+            <div class="stack-trace-time-context">
+              <span class="stack-trace-timestamp">11:59:04.568</span>
+              <span class="stack-trace-context">[TestENC-tests-2]</span>
+              <span class="stack-trace-level-badge error">ERROR</span>
+            </div>
+            <div class="stack-trace-message">
+              <span class="stack-trace-class">c.e.t.r.q.w.c.FailureLoggingListener</span> - Cannot finish test item.
+            </div>
+          </div>
+          <a class="stack-trace-jump" href="#">
+            Jump to
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+        <div class="stack-trace-expand">
+          <div class="stack-trace-expand-header" onclick="toggleStackTrace(this)">
+            <div class="stack-trace-expand-title">
+              <i class="bi bi-info-circle"></i>
+              Status message:
+            </div>
+            <i class="bi bi-chevron-down stack-trace-expand-icon"></i>
+          </div>
+          <div class="stack-trace-expand-content">
+            <div class="stack-trace-details">
+              <p><span class="stack-trace-http-method">POST</span><span class="status-code">409</span> Conflict</p>
+              <p>The entity with the same name already exists. You should use PUT or DELETE to change it or delete
+                respectively.</p>
+              <span class="code-line">at com.epam.ta.rest.Client.serializer.JacksonSerializer.java:75</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Entry 2 -->
+      <div class="stack-trace-entry">
+        <div class="stack-trace-header">
+          <div class="stack-trace-main">
+            <div class="stack-trace-time-context">
+              <span class="stack-trace-timestamp">13:06:43.332</span>
+              <span class="stack-trace-context">[main]</span>
+              <span class="stack-trace-level-badge fatal">FATAL</span>
+            </div>
+            <div class="stack-trace-message">
+              <span class="stack-trace-class">o.s.boot.SpringApplication</span> - Application run failed
+            </div>
+          </div>
+          <a class="stack-trace-jump" href="#">
+            Jump to
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+        <div class="stack-trace-expand">
+          <div class="stack-trace-expand-header" onclick="toggleStackTrace(this)">
+            <div class="stack-trace-expand-title">
+              <i class="bi bi-info-circle"></i>
+              Status message:
+            </div>
+            <i class="bi bi-chevron-down stack-trace-expand-icon"></i>
+          </div>
+          <div class="stack-trace-expand-content">
+            <div class="stack-trace-details">
+              <p>org.springframework.context.ApplicationContextException: Unable to start web server; nested exception
+                is org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat</p>
+              <span class="code-line">at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.onRefresh(ServletWebServerApplicationContext.java:163)</span>
+              <span class="code-line">at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:577)</span>
+              <p>Caused by: org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat</p>
+              <span class="code-line">at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.initialize(TomcatWebServer.java:142)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Entry 3 -->
+      <div class="stack-trace-entry">
+        <div class="stack-trace-header">
+          <div class="stack-trace-main">
+            <div class="stack-trace-time-context">
+              <span class="stack-trace-timestamp">14:05:56.621</span>
+              <span class="stack-trace-context">[TestENC-tests-1]</span>
+              <span class="stack-trace-level-badge error">ERROR</span>
+            </div>
+            <div class="stack-trace-message">
+              <span class="stack-trace-class">o.e.test.context.TestContextManager</span> - Caught exception while
+              allowing TestExecutionListener to process test execution
+            </div>
+          </div>
+          <a class="stack-trace-jump" href="#">
+            Jump to
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+        <div class="stack-trace-expand">
+          <div class="stack-trace-expand-header" onclick="toggleStackTrace(this)">
+            <div class="stack-trace-expand-title">
+              <i class="bi bi-info-circle"></i>
+              Status message:
+            </div>
+            <i class="bi bi-chevron-down stack-trace-expand-icon"></i>
+          </div>
+          <div class="stack-trace-expand-content">
+            <div class="stack-trace-details">
+              <p>java.lang.IllegalStateException: Failed to load ApplicationContext for
+                [WebMergedContextConfiguration@5a10411]</p>
+              <span class="code-line">at org.springframework.test.context.cache.DefaultCacheAwareContextLoaderDelegate.loadContext(DefaultCacheAwareContextLoaderDelegate.java:132)</span>
+              <span class="code-line">at org.springframework.test.context.support.DefaultTestContext.getApplicationContext(DefaultTestContext.java:124)</span>
+              <p>Caused by: org.springframework.beans.factory.BeanCreationException: Error creating bean with name
+                'dataSource' defined in class path resource</p>
+              <span class="code-line">at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1804)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Entry 4 -->
+      <div class="stack-trace-entry">
+        <div class="stack-trace-header">
+          <div class="stack-trace-main">
+            <div class="stack-trace-time-context">
+              <span class="stack-trace-timestamp">15:22:11.445</span>
+              <span class="stack-trace-context">[main]</span>
+              <span class="stack-trace-level-badge warn">WARN</span>
+            </div>
+            <div class="stack-trace-message">
+              <span class="stack-trace-class">c.e.t.r.database.dao.impl.LaunchDAOImpl</span> - Connection pool
+              exhausted, waiting for available connection
+            </div>
+          </div>
+          <a class="stack-trace-jump" href="#">
+            Jump to
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+        <div class="stack-trace-expand">
+          <div class="stack-trace-expand-header" onclick="toggleStackTrace(this)">
+            <div class="stack-trace-expand-title">
+              <i class="bi bi-info-circle"></i>
+              Status message:
+            </div>
+            <i class="bi bi-chevron-down stack-trace-expand-icon"></i>
+          </div>
+          <div class="stack-trace-expand-content">
+            <div class="stack-trace-details">
+              <p>com.zaxxer.hikari.pool.HikariPool$PoolInitializationException: Failed to initialize pool: Connection to
+                localhost:5432 refused. Check that the hostname and port are correct and that the postmaster is
+                accepting TCP/IP connections.</p>
+              <span class="code-line">at com.zaxxer.hikari.pool.HikariPool.throwPoolInitializationException(HikariPool.java:597)</span>
+              <span class="code-line">at com.zaxxer.hikari.pool.HikariPool.checkFailFast(HikariPool.java:560)</span>
+              <p>Caused by: org.postgresql.util.PSQLException: Connection to localhost:5432 refused</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Browser Session View (Hidden by default) -->
+    <div class="browser-session-view" id="browser-session-view" style="display: none;">
+      <div class="browser-session-container">
+        <!-- Hero Section -->
+        <div class="session-hero">
+          <div class="session-hero-top">
+            <div class="session-hero-title">
+              <div class="session-hero-icon">
+                <i class="bi bi-browser-chrome"></i>
+              </div>
+              <div class="session-hero-text">
+                <h2>Browser Session Information</h2>
+                <p>Detailed information about the browser session and environment</p>
+              </div>
+            </div>
+            <div class="status-badge-hero">Auto-Stopped</div>
+          </div>
+
+          <!-- Quick Stats -->
+          <div class="session-stats">
+            <div class="session-stat-item">
+              <div class="session-stat-label">Browser Type</div>
+              <div class="session-stat-value">
+                <i class="bi bi-browser-chrome"></i>
+                <span>Chromium</span>
+              </div>
+            </div>
+            <div class="session-stat-item">
+              <div class="session-stat-label">Node</div>
+              <div class="session-stat-value">
+                <i class="bi bi-hdd-network"></i>
+                <span>worker2</span>
+              </div>
+            </div>
+            <div class="session-stat-item">
+              <div class="session-stat-label">Region/OS</div>
+              <div class="session-stat-value">
+                <i class="bi bi-globe"></i>
+                <span>r/macOS 10.15.7</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Sections -->
+        <div class="session-content">
+          <!-- Version Information -->
+          <div class="session-section">
+            <h3 class="session-section-title">Version Information</h3>
+            <div class="session-info-grid">
+              <div class="session-info-item">
+                <div class="session-info-label">Playwright Version</div>
+                <div class="session-info-value">1.54.2</div>
+              </div>
+              <div class="session-info-item">
+                <div class="session-info-label">Browser Version</div>
+                <div class="session-info-value">139.0.7258.5</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Infrastructure Alert -->
+          <div class="session-section">
+            <h3 class="session-section-title">Infrastructure Status</h3>
+            <div class="session-alert">
+              <div class="session-alert-icon">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+              </div>
+              <div class="session-alert-content">
+                <h4 class="session-alert-title">Infrastructure Issue</h4>
+                <p class="session-alert-message">Browser session did not close cleanly</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Timeline -->
+          <div class="session-section">
+            <h3 class="session-section-title">Session Timeline</h3>
+            <div class="session-timeline">
+              <div class="session-timeline-item">
+                <div class="session-timeline-icon">
+                  <i class="bi bi-play-circle-fill"></i>
+                </div>
+                <div class="session-timeline-info">
+                  <div class="session-timeline-label">Started</div>
+                  <div class="session-timeline-value">12.11.2025 10:36</div>
+                </div>
+              </div>
+              <div class="session-timeline-divider"></div>
+              <div class="session-timeline-item">
+                <div class="session-timeline-icon">
+                  <i class="bi bi-stop-circle-fill"></i>
+                </div>
+                <div class="session-timeline-info">
+                  <div class="session-timeline-label">Completed</div>
+                  <div class="session-timeline-value">12.11.2025 10:36</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item Details View (Hidden by default) -->
+    <div class="item-details-view" id="item-details-view" style="display: none;">
+      <div class="item-details-container">
+        <!-- Header -->
+        <div class="item-details-header">
+          <div class="item-details-title-section">
+            <span class="item-details-name">Test</span>
+            <span class="item-status-badge failed">FAILED</span>
+          </div>
+          <div class="item-details-duration">
+            <i class="bi bi-clock"></i>
+            <span>1s</span>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="item-details-content">
+          <!-- Duration -->
+          <div class="item-details-row">
+            <div class="item-details-label">Duration:</div>
+            <div class="item-details-value">23 hours ago</div>
+          </div>
+
+          <!-- Tags/Attributes -->
+          <div class="item-details-row">
+            <div class="item-details-label">Tags:</div>
+            <div class="item-details-value">
+                                <span class="item-tag">
+                                    <i class="bi bi-tag-fill"></i>
+                                    os:android
+                                </span>
+              <span class="item-tag">
+                                    <i class="bi bi-tag-fill"></i>
+                                    flaky
+                                </span>
+              <span class="item-tag">
+                                    <i class="bi bi-tag-fill"></i>
+                                    os:ios
+                                </span>
+            </div>
+          </div>
+
+          <!-- Code Reference -->
+          <div class="item-details-row">
+            <div class="item-details-label">Code reference:</div>
+            <div class="item-details-value">
+              <code>com.epam.ta.reportportal.demodata.History table. Extended functionality. Permissions. Edit
+                defect</code>
+              <button class="item-copy-button" style="margin-left: 8px;">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Test Case ID -->
+          <div class="item-details-row">
+            <div class="item-details-label">Test case id:</div>
+            <div class="item-details-value">
+              <code>com.epam.ta.reportportal.demodata.History table. Extended functionality. Permissions. Edit
+                defect</code>
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="item-details-row">
+            <div class="item-details-label">Description:</div>
+            <div class="item-details-value">
+              <div class="item-description-box">
+                Greater or equals filter test for test items product bugs criteria. Negative value
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div aria-label="Pagination" class="compact-pagination" role="navigation">
+      <div class="pagination-info-left">
+        <strong>1 - 6</strong> of <strong>6</strong> entries
+      </div>
+      <div class="pagination-controls">
+        <button aria-label="Previous page" class="pagination-btn" disabled>
+          <svg fill="currentColor" height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 8a.5.5 0 0 1-.5.5H5.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L5.707 7.5H11.5a.5.5 0 0 1 .5.5z"
+                  fill-rule="evenodd"></path>
+          </svg>
+          Previous
+        </button>
+        <button aria-label="Next page" class="pagination-btn" disabled>
+          Next
+          <svg fill="currentColor" height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"
+                  fill-rule="evenodd"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="pagination-info-right">
+        <select class="per-page-select">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option selected value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+        <span>per page</span>
+      </div>
+    </div>
+
+    <!-- Artifacts View (Hidden by default) -->
+    <div class="artifacts-view" id="artifacts-view" style="display: none;">
+      <div class="artifacts-viewer">
+        <!-- Main Preview Area -->
+        <div class="artifact-preview">
+          <!-- Navigation Arrows -->
+          <div class="artifact-navigation">
+            <button aria-label="Previous artifact" class="artifact-nav-btn" id="prev-artifact">
+              <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                <path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"
+                      fill-rule="evenodd"/>
+              </svg>
+            </button>
+            <button aria-label="Next artifact" class="artifact-nav-btn" id="next-artifact">
+              <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"
+                      fill-rule="evenodd"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- File Display -->
+          <div class="artifact-main-display">
+            <div class="artifact-file-icon">
+              <svg viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0V128H384L256 0zM112 256H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16z"/>
+              </svg>
+            </div>
+
+            <!-- Actions -->
+            <div class="artifact-actions">
+              <a class="artifact-action-link" href="#">
+                <i class="bi bi-box-arrow-up-right"></i>
+                Open in new tab
+              </a>
+              <a class="artifact-action-link" href="#">
+                <i class="bi bi-download"></i>
+                Download
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Thumbnails Strip -->
+        <div class="artifact-thumbnails">
+          <button class="artifact-nav-arrow" id="scroll-left-artifacts">
+            <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+              <path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"
+                    fill-rule="evenodd"/>
+            </svg>
+          </button>
+
+          <!-- Thumbnail 1 - TXT -->
+          <div class="artifact-thumbnail active">
+            <svg class="artifact-thumbnail-icon" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0V128H384L256 0zM112 256H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16z"/>
+            </svg>
+            <span class="artifact-thumbnail-label">TXT</span>
+          </div>
+
+          <!-- Thumbnail 2 - TXT -->
+          <div class="artifact-thumbnail">
+            <svg class="artifact-thumbnail-icon" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0V128H384L256 0zM112 256H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H272c8.8 0 16 7.2 16 16s-7.2 16-16 16H112c-8.8 0-16-7.2-16-16s7.2-16 16-16z"/>
+            </svg>
+            <span class="artifact-thumbnail-label">TXT</span>
+          </div>
+
+          <!-- Thumbnail 3 - HTML -->
+          <div class="artifact-thumbnail">
+            <svg class="artifact-thumbnail-icon" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0V128H384L256 0zM216 232V334.1l31-31c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-72 72c-9.4 9.4-24.6 9.4-33.9 0l-72-72c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l31 31V232c0-13.3 10.7-24 24-24s24 10.7 24 24z"/>
+            </svg>
+            <span class="artifact-thumbnail-label">HTML</span>
+          </div>
+
+          <!-- Thumbnail 4 - HTML -->
+          <div class="artifact-thumbnail">
+            <svg class="artifact-thumbnail-icon" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0V128H384L256 0zM216 232V334.1l31-31c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-72 72c-9.4 9.4-24.6 9.4-33.9 0l-72-72c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l31 31V232c0-13.3 10.7-24 24-24s24 10.7 24 24z"/>
+            </svg>
+            <span class="artifact-thumbnail-label">HTML</span>
+          </div>
+
+          <!-- Thumbnail 5 - Screenshot -->
+          <div class="artifact-thumbnail">
+            <svg class="artifact-thumbnail-icon" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M0 96C0 60.7 28.7 32 64 32H448c35.3 0 64 28.7 64 64V416c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V96zM323.8 202.5c-4.5-6.6-11.9-10.5-19.8-10.5s-15.4 3.9-19.8 10.5l-87 127.6L170.7 297c-4.6-5.7-11.5-9-18.7-9s-14.2 3.3-18.7 9l-64 80c-5.8 7.2-6.9 17.1-2.9 25.4s12.4 13.6 21.6 13.6h96 32H424c8.9 0 17.1-4.9 21.2-12.8s3.6-17.4-1.4-24.7l-120-176zM112 192a48 48 0 1 0 0-96 48 48 0 1 0 0 96z"/>
+            </svg>
+            <span class="artifact-thumbnail-label">Screenshot</span>
+          </div>
+
+          <!-- Thumbnail 6 - HTML -->
+          <div class="artifact-thumbnail">
+            <svg class="artifact-thumbnail-icon" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0V128H384L256 0zM216 232V334.1l31-31c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-72 72c-9.4 9.4-24.6 9.4-33.9 0l-72-72c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l31 31V232c0-13.3 10.7-24 24-24s24 10.7 24 24z"/>
+            </svg>
+            <span class="artifact-thumbnail-label">HTML</span>
+          </div>
+
+          <button class="artifact-nav-arrow" id="scroll-right-artifacts">
+            <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"
+                    fill-rule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const viewModeBtns = document.querySelectorAll('.view-mode-btn');
+  const markdownView = document.getElementById('markdown-view');
+  const consoleView = document.getElementById('console-view');
+  const stackTraceView = document.getElementById('stack-trace-view');
+  const browserSessionView = document.getElementById('browser-session-view');
+  const itemDetailsView = document.getElementById('item-details-view');
+  const artifactsView = document.getElementById('artifacts-view');
+  const themeToggle = document.getElementById('theme-toggle');
+  const themeBtns = document.querySelectorAll('.theme-btn');
+
+  // Main Tab Switching
+  const mainTabs = document.querySelectorAll('.main-tab');
+  const infoPanel = document.querySelector('.info-panel');
+  const testSummaryBar = document.querySelector('.test-summary-bar');
+  const pagination = document.querySelector('.compact-pagination');
+
+  mainTabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => {
+      // Remove active class from all tabs
+      mainTabs.forEach(t => t.classList.remove('active'));
+
+      // Add active class to clicked tab
+      tab.classList.add('active');
+
+      // Show/hide content based on tab index
+      if (index === 0) {
+        // Execution Logs
+        markdownView.style.display = 'block';
+        consoleView.style.display = 'none';
+        stackTraceView.style.display = 'none';
+        browserSessionView.style.display = 'none';
+        itemDetailsView.style.display = 'none';
+        artifactsView.style.display = 'none';
+        infoPanel.style.display = 'block';
+        testSummaryBar.style.display = 'flex';
+        pagination.style.display = 'flex';
+      } else if (index === 1) {
+        // Stack Trace
+        markdownView.style.display = 'none';
+        consoleView.style.display = 'none';
+        stackTraceView.style.display = 'block';
+        browserSessionView.style.display = 'none';
+        itemDetailsView.style.display = 'none';
+        artifactsView.style.display = 'none';
+        infoPanel.style.display = 'none';
+        testSummaryBar.style.display = 'none';
+        pagination.style.display = 'none';
+      } else if (index === 2) {
+        // Item Details
+        markdownView.style.display = 'none';
+        consoleView.style.display = 'none';
+        stackTraceView.style.display = 'none';
+        browserSessionView.style.display = 'none';
+        itemDetailsView.style.display = 'block';
+        artifactsView.style.display = 'none';
+        infoPanel.style.display = 'none';
+        testSummaryBar.style.display = 'none';
+        pagination.style.display = 'none';
+      } else if (index === 3) {
+        // Artifacts
+        markdownView.style.display = 'none';
+        consoleView.style.display = 'none';
+        stackTraceView.style.display = 'none';
+        browserSessionView.style.display = 'none';
+        itemDetailsView.style.display = 'none';
+        artifactsView.style.display = 'block';
+        infoPanel.style.display = 'none';
+        testSummaryBar.style.display = 'none';
+        pagination.style.display = 'none';
+      } else if (index === 4) {
+        // Browser Session
+        markdownView.style.display = 'none';
+        consoleView.style.display = 'none';
+        stackTraceView.style.display = 'none';
+        browserSessionView.style.display = 'block';
+        itemDetailsView.style.display = 'none';
+        artifactsView.style.display = 'none';
+        infoPanel.style.display = 'none';
+        testSummaryBar.style.display = 'none';
+        pagination.style.display = 'none';
+      } else {
+        // Other tabs (Playwright Commands)
+        markdownView.style.display = 'none';
+        consoleView.style.display = 'none';
+        stackTraceView.style.display = 'none';
+        browserSessionView.style.display = 'none';
+        itemDetailsView.style.display = 'none';
+        artifactsView.style.display = 'none';
+        infoPanel.style.display = 'none';
+        testSummaryBar.style.display = 'none';
+        pagination.style.display = 'none';
+        // TODO: Show Playwright Commands content
+      }
+    });
+  });
+
+  // Stack Trace expand/collapse function
+  function toggleStackTrace(header) {
+    const expandContent = header.nextElementSibling;
+    const icon = header.querySelector('.stack-trace-expand-icon');
+
+    if (expandContent.classList.contains('show')) {
+      expandContent.classList.remove('show');
+      icon.classList.remove('expanded');
+    } else {
+      expandContent.classList.add('show');
+      icon.classList.add('expanded');
+    }
+  }
+
+  // Toggle Advanced Filters
+  const toggleFiltersBtn = document.getElementById('toggle-filters');
+  const advancedFilters = document.getElementById('advanced-filters');
+
+  toggleFiltersBtn.addEventListener('click', () => {
+    const isHidden = advancedFilters.style.display === 'none' || advancedFilters.style.display === '';
+
+    if (isHidden) {
+      advancedFilters.style.display = 'block';
+      toggleFiltersBtn.classList.add('active');
+    } else {
+      advancedFilters.style.display = 'none';
+      toggleFiltersBtn.classList.remove('active');
+    }
+  });
+
+  // Toggle Expand All / Collapse All functionality
+  const toggleExpandBtn = document.getElementById('toggle-expand-btn');
+  let isAllExpanded = true; // Track current state (starts expanded by default)
+
+  toggleExpandBtn.addEventListener('click', () => {
+    const expandBtns = document.querySelectorAll('.expand-collapse-btn');
+    const icon = toggleExpandBtn.querySelector('i');
+    const text = toggleExpandBtn.querySelector('span');
+
+    if (isAllExpanded) {
+      // Collapse all
+      expandBtns.forEach(btn => {
+        const parentId = btn.closest('.step-header').dataset.parent;
+        if (parentId) {
+          btn.classList.remove('expanded');
+          const children = document.querySelectorAll(`[data-child-of="${parentId}"]`);
+          children.forEach(child => {
+            child.style.display = 'none';
+          });
+        }
+      });
+      icon.className = 'bi bi-plus-square';
+      text.textContent = 'Expand all';
+      isAllExpanded = false;
+    } else {
+      // Expand all
+      expandBtns.forEach(btn => {
+        const parentId = btn.closest('.step-header').dataset.parent;
+        if (parentId) {
+          btn.classList.add('expanded');
+          const children = document.querySelectorAll(`[data-child-of="${parentId}"]`);
+          children.forEach(child => {
+            child.style.display = child.classList.contains('step-header') ? 'grid' : 'flex';
+          });
+        }
+      });
+      icon.className = 'bi bi-dash-square';
+      text.textContent = 'Collapse all';
+      isAllExpanded = true;
+    }
+  });
+
+  // Density toggle functionality
+  const densityBtn = document.getElementById('density-btn');
+  let currentDensity = 'default'; // Track current density (default, comfortable, compact)
+
+  densityBtn.addEventListener('click', () => {
+    const logEntries = document.getElementById('markdown-view');
+    const text = densityBtn.querySelector('span');
+
+    // Cycle through density modes
+    if (currentDensity === 'default') {
+      // Switch to comfortable
+      logEntries.classList.remove('density-compact');
+      logEntries.classList.add('density-comfortable');
+      text.textContent = 'Comfortable';
+      currentDensity = 'comfortable';
+    } else if (currentDensity === 'comfortable') {
+      // Switch to compact
+      logEntries.classList.remove('density-comfortable');
+      logEntries.classList.add('density-compact');
+      text.textContent = 'Compact';
+      currentDensity = 'compact';
+    } else {
+      // Switch back to default
+      logEntries.classList.remove('density-compact');
+      text.textContent = 'Density';
+      currentDensity = 'default';
+    }
+  });
+
+  // View mode toggle (Markdown / Console)
+  viewModeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.mode;
+
+      viewModeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (mode === 'markdown') {
+        markdownView.style.display = 'block';
+        consoleView.style.display = 'none';
+        themeToggle.style.display = 'none';
+      } else {
+        markdownView.style.display = 'none';
+        consoleView.style.display = 'block';
+        themeToggle.style.display = 'flex';
+      }
+    });
+  });
+
+  // Theme toggle (Light / Dark) - Only for Console mode
+  themeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const theme = btn.dataset.theme;
+
+      themeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (theme === 'dark') {
+        consoleView.classList.add('dark-theme');
+      } else {
+        consoleView.classList.remove('dark-theme');
+      }
+    });
+  });
+
+  // Text filter
+  const filterTextInput = document.getElementById('filter-text');
+  filterTextInput.addEventListener('input', (e) => {
+    const filterValue = e.target.value.toLowerCase();
+    const logEntries = document.querySelectorAll('.log-entry');
+
+    logEntries.forEach(entry => {
+      const messageEl = entry.querySelector('.log-message');
+      if (messageEl) {
+        const message = messageEl.textContent.toLowerCase();
+        if (message.includes(filterValue)) {
+          entry.style.display = 'flex';
+        } else {
+          entry.style.display = 'none';
+        }
+      }
+    });
+  });
+
+  // Status filter
+  const statusFilter = document.getElementById('status-filter');
+  statusFilter.addEventListener('change', (e) => {
+    const selectedStatus = e.target.value.toLowerCase();
+    const stepHeaders = document.querySelectorAll('.log-entry.step-header');
+
+    stepHeaders.forEach(stepHeader => {
+      const statusIndicator = stepHeader.querySelector('.status-indicator');
+      if (!statusIndicator) return;
+
+      const stepStatus = statusIndicator.classList.contains('passed') ? 'passed' : 'failed';
+      const parentId = stepHeader.dataset.parent;
+
+      if (selectedStatus === '' || stepStatus === selectedStatus) {
+        // Show this step and its children
+        stepHeader.style.display = 'grid';
+
+        // Show children if step is expanded
+        const expandBtn = stepHeader.querySelector('.expand-collapse-btn');
+        if (expandBtn && expandBtn.classList.contains('expanded') && parentId) {
+          const children = document.querySelectorAll(`[data-child-of="${parentId}"]`);
+          children.forEach(child => {
+            child.style.display = 'flex';
+          });
+        }
+      } else {
+        // Hide this step and its children
+        stepHeader.style.display = 'none';
+
+        if (parentId) {
+          const children = document.querySelectorAll(`[data-child-of="${parentId}"]`);
+          children.forEach(child => {
+            child.style.display = 'none';
+          });
+        }
+      }
+    });
+  });
+
+  // Expand/Collapse functionality for nested steps
+  const expandCollapseBtns = document.querySelectorAll('.expand-collapse-btn');
+
+  expandCollapseBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+
+      const parentEntry = btn.closest('.log-entry');
+      const parentId = parentEntry.dataset.parent;
+
+      // Toggle button state
+      btn.classList.toggle('expanded');
+
+      // Find all children of this parent
+      const children = document.querySelectorAll(`[data-child-of="${parentId}"]`);
+
+      children.forEach(child => {
+        if (btn.classList.contains('expanded')) {
+          child.style.display = 'flex';
+        } else {
+          child.style.display = 'none';
+
+          // If child has children, collapse them too
+          const childBtn = child.querySelector('.expand-collapse-btn');
+          if (childBtn && childBtn.classList.contains('expanded')) {
+            childBtn.classList.remove('expanded');
+            const childParentId = child.dataset.parent;
+            if (childParentId) {
+              const grandChildren = document.querySelectorAll(`[data-child-of="${childParentId}"]`);
+              grandChildren.forEach(gc => gc.style.display = 'none');
+            }
+          }
+        }
+      });
+    });
+  });
+
+  // Click on has-children entry to toggle (optional)
+  const hasChildrenEntries = document.querySelectorAll('.log-entry.has-children');
+  hasChildrenEntries.forEach(entry => {
+    entry.addEventListener('click', (e) => {
+      // Only trigger if not clicking the button itself
+      if (!e.target.closest('.expand-collapse-btn')) {
+        const btn = entry.querySelector('.expand-collapse-btn');
+        if (btn) {
+          btn.click();
+        }
+      }
+    });
+  });
+
+  // Show more/less functionality for long log messages
+  const showMoreLinks = document.querySelectorAll('.show-more-link');
+  showMoreLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      const targetId = link.dataset.target;
+      const message = document.querySelector(`[data-message-id="${targetId}"]`);
+      const textSpan = link.querySelector('span');
+      const icon = link.querySelector('i');
+
+      if (message.classList.contains('truncated')) {
+        // Expand
+        message.classList.remove('truncated');
+        textSpan.textContent = 'show less';
+        link.classList.add('expanded');
+      } else {
+        // Collapse
+        message.classList.add('truncated');
+        textSpan.textContent = 'show more';
+        link.classList.remove('expanded');
+      }
+    });
+  });
+
+  // ========================================
+  // Test History Navigation
+  // ========================================
+  (function () {
+    const historyItems = document.querySelectorAll('.history-line-item');
+    const historyScroll = document.querySelector('.history-line-scroll');
+    const prevBtn = document.getElementById('prevLaunchBtn');
+    const nextBtn = document.getElementById('nextLaunchBtn');
+    const positionIndicator = document.getElementById('launchPosition');
+
+    let currentIndex = 0; // Currently active launch (0-based index)
+    const totalItems = historyItems.length;
+
+    // Update position indicator and button states
+    function updateUI() {
+      positionIndicator.textContent = `${currentIndex + 1} / ${totalItems}`;
+
+      // Disable/enable buttons based on position
+      prevBtn.disabled = currentIndex === 0;
+      nextBtn.disabled = currentIndex === totalItems - 1;
+    }
+
+    // Navigate to a specific launch
+    function navigateToLaunch(index) {
+      if (index < 0 || index >= totalItems) return;
+
+      // Remove active class from current
+      const currentActive = document.querySelector('.history-item-active');
+      if (currentActive) {
+        currentActive.classList.remove('history-item-active');
+      }
+
+      // Add active class to new item
+      historyItems[index].classList.add('history-item-active');
+      currentIndex = index;
+
+      // Smooth scroll to center the active item
+      const item = historyItems[index];
+      const itemLeft = item.offsetLeft;
+      const itemWidth = item.offsetWidth;
+      const scrollWidth = historyScroll.offsetWidth;
+
+      // Center the item in the scroll container
+      const scrollTo = itemLeft - (scrollWidth / 2) + (itemWidth / 2);
+      historyScroll.scrollTo({
+        left: Math.max(0, scrollTo),
+        behavior: 'smooth'
+      });
+
+      updateUI();
+
+      // In a real application, you would load the launch data here
+      console.log(`Navigated to launch #${index + 1}`);
+    }
+
+    // Previous launch button
+    prevBtn.addEventListener('click', () => {
+      if (currentIndex > 0) {
+        navigateToLaunch(currentIndex - 1);
+      }
+    });
+
+    // Next launch button
+    nextBtn.addEventListener('click', () => {
+      if (currentIndex < totalItems - 1) {
+        navigateToLaunch(currentIndex + 1);
+      }
+    });
+
+    // Click on history badges to navigate directly
+    historyItems.forEach((item, index) => {
+      const badge = item.querySelector('.history-status-block');
+      badge.addEventListener('click', () => {
+        if (index !== currentIndex) {
+          navigateToLaunch(index);
+        }
+      });
+    });
+
+    // Keyboard navigation (Arrow keys)
+    document.addEventListener('keydown', (e) => {
+      // Only handle if not typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          navigateToLaunch(currentIndex - 1);
+        }
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (currentIndex < totalItems - 1) {
+          navigateToLaunch(currentIndex + 1);
+        }
+      }
+    });
+
+    // Initialize UI
+    updateUI();
+  })();
+</script>
+</body>
+</html>

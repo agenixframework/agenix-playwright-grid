@@ -1,0 +1,316 @@
+@* Card component for displaying a single test item with rich details *@
+
+<div class="test-item-card @GetCardClass(Item)" @onclick="HandleClick">
+    <div class="card-header">
+        <div class="d-flex align-items-center">
+            @* Item type icon and badge *@
+            <span class="item-type-icon me-2">@GetItemTypeIcon(Item.ItemType)</span>
+            <span class="badge @GetItemTypeBadgeClass(Item.ItemType) me-2">@Item.ItemType</span>
+
+            @* Item name *@
+            <h6 class="mb-0 flex-grow-1 @GetStatusTextClass(Item)">@Item.Name</h6>
+
+            @* Status badges *@
+            @if (!string.IsNullOrEmpty(Item.ComputedStatus))
+            {
+                <span class="badge @GetComputedStatusBadgeClass(Item.ComputedStatus) me-2">
+                    @Item.ComputedStatus
+                </span>
+            }
+
+            @* Child count indicator *@
+            @if (Item.Children != null && Item.Children.Count > 0)
+            {
+                <span class="badge bg-light text-dark" title="@Item.Children.Count child items">
+                    <i class="bi bi-diagram-3"></i> @Item.Children.Count
+                </span>
+            }
+        </div>
+    </div>
+
+    <div class="card-body">
+        @* Description *@
+        @if (!string.IsNullOrEmpty(Item.Description))
+        {
+            <p class="card-text text-muted mb-2">@Item.Description</p>
+        }
+
+        @* Timestamps and duration *@
+        <div class="item-timing mb-2">
+            <small class="text-muted">
+                <i class="bi bi-clock-history"></i>
+                Started: @Item.StartTime.ToString("yyyy-MM-dd HH:mm:ss")
+                @if (Item.FinishTime.HasValue)
+                {
+                    <span class="ms-2">
+                        | Finished: @Item.FinishTime.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                    </span>
+                }
+                @if (Item.DurationMs.HasValue)
+                {
+                    <span class="ms-2 fw-bold">
+                        | Duration: @FormatDuration(Item.DurationMs.Value)
+                    </span>
+                }
+            </small>
+        </div>
+
+        @* Attributes *@
+        @if (Item.Attributes != null && Item.Attributes.Length > 0)
+        {
+            <div class="item-attributes mb-2">
+                @foreach (var attr in Item.Attributes)
+                {
+                    <span class="badge bg-light text-dark me-1 mb-1">@attr</span>
+                }
+            </div>
+        }
+
+        @* Tags *@
+        @if (Item.Tags != null && Item.Tags.Length > 0)
+        {
+            <div class="item-tags mb-2">
+                @foreach (var tag in Item.Tags)
+                {
+                    <span class="badge bg-info me-1 mb-1"><i class="bi bi-tag"></i> @tag</span>
+                }
+            </div>
+        }
+
+        @* Browser session info *@
+        @if (!string.IsNullOrEmpty(Item.BrowserType))
+        {
+            <div class="browser-info mb-2">
+                <small>
+                    <span class="badge bg-secondary me-1">@Item.BrowserType</span>
+                    @if (!string.IsNullOrEmpty(Item.WorkerNodeId))
+                    {
+                        <span class="text-muted">on @Item.WorkerNodeId</span>
+                    }
+                </small>
+            </div>
+        }
+
+        @* Test aggregations *@
+        @if (Item.TotalTests > 0)
+        {
+            <div class="test-stats mb-2">
+                <div class="progress" style="height: 24px;">
+                    @if (Item.PassedTests > 0)
+                    {
+                        var passedPercent = Item.PassedTests * 100.0 / Item.TotalTests;
+                        <div class="progress-bar bg-success" style="width: @(passedPercent)%"
+                             title="@Item.PassedTests passed">
+                            @if (passedPercent > 15)
+                            {
+                                <span>@Item.PassedTests ✓</span>
+                            }
+                        </div>
+                    }
+                    @if (Item.FailedTests > 0)
+                    {
+                        var failedPercent = Item.FailedTests * 100.0 / Item.TotalTests;
+                        <div class="progress-bar bg-danger" style="width: @(failedPercent)%"
+                             title="@Item.FailedTests failed">
+                            @if (failedPercent > 15)
+                            {
+                                <span>@Item.FailedTests ✗</span>
+                            }
+                        </div>
+                    }
+                    @if (Item.SkippedTests > 0)
+                    {
+                        var skippedPercent = Item.SkippedTests * 100.0 / Item.TotalTests;
+                        <div class="progress-bar bg-warning" style="width: @(skippedPercent)%"
+                             title="@Item.SkippedTests skipped">
+                            @if (skippedPercent > 15)
+                            {
+                                <span class="text-dark">@Item.SkippedTests ⊝</span>
+                            }
+                        </div>
+                    }
+                    @if (Item.TimedoutTests > 0)
+                    {
+                        var timedoutPercent = Item.TimedoutTests * 100.0 / Item.TotalTests;
+                        <div class="progress-bar bg-secondary" style="width: @(timedoutPercent)%"
+                             title="@Item.TimedoutTests timed out">
+                            @if (timedoutPercent > 15)
+                            {
+                                <span>@Item.TimedoutTests ⏱</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <small class="text-muted mt-1 d-block">
+                    Total: @Item.TotalTests tests
+                    (@Item.PassedTests passed, @Item.FailedTests failed, @Item.SkippedTests skipped, @Item.TimedoutTests timed
+                    out)
+                </small>
+            </div>
+        }
+
+        @* Error display *@
+        @if (!string.IsNullOrEmpty(Item.ErrorMessage))
+        {
+            <div class="alert alert-danger mb-2">
+                <strong><i class="bi bi-exclamation-triangle"></i> Error:</strong> @Item.ErrorMessage
+            </div>
+        }
+
+        @* Code reference *@
+        @if (!string.IsNullOrEmpty(Item.CodeRef))
+        {
+            <div class="code-ref mb-2">
+                <small class="text-muted">
+                    <i class="bi bi-file-code"></i> <code>@Item.CodeRef</code>
+                </small>
+            </div>
+        }
+
+        @* Parameters *@
+        @if (Item.Parameters != null && Item.Parameters.Count > 0)
+        {
+            <div class="item-parameters mb-2">
+                <small class="text-muted"><strong>Parameters:</strong></small>
+                <div class="ms-2">
+                    @foreach (var param in Item.Parameters)
+                    {
+                        <div class="small">
+                            <code>@param.Key</code> = <code class="text-primary">@param.Value</code>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (ShowActions)
+    {
+        <div class="card-footer">
+            <div class="d-flex gap-2">
+                @if (OnViewDetails.HasDelegate)
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => OnViewDetails.InvokeAsync(Item)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-eye"></i> View Details
+                    </button>
+                }
+                @if (OnViewChildren.HasDelegate && Item.Children != null && Item.Children.Count > 0)
+                {
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => OnViewChildren.InvokeAsync(Item)"
+                            @onclick:stopPropagation="true">
+                        <i class="bi bi-diagram-3"></i> View @Item.Children.Count Children
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter][EditorRequired] public TestItemDto Item { get; set; } = null!;
+    [Parameter] public bool ShowActions { get; set; } = true;
+    [Parameter] public bool Clickable { get; set; } = true;
+    [Parameter] public EventCallback<TestItemDto> OnClick { get; set; }
+    [Parameter] public EventCallback<TestItemDto> OnViewDetails { get; set; }
+    [Parameter] public EventCallback<TestItemDto> OnViewChildren { get; set; }
+
+    private async Task HandleClick()
+    {
+        if (Clickable && OnClick.HasDelegate)
+        {
+            await OnClick.InvokeAsync(Item);
+        }
+    }
+
+    private string GetCardClass(TestItemDto item)
+    {
+        var classes = new List<string> { "test-item-card", "card", "mb-3" };
+
+        if (Clickable && OnClick.HasDelegate)
+            classes.Add("clickable");
+
+        if (!string.IsNullOrEmpty(item.ComputedStatus))
+        {
+            classes.Add(item.ComputedStatus.ToLowerInvariant() switch
+            {
+                "failed" => "border-danger",
+                "passed" => "border-success",
+                "skipped" => "border-warning",
+                _ => ""
+            });
+        }
+
+        return string.Join(" ", classes.Where(c => !string.IsNullOrEmpty(c)));
+    }
+
+    private static string GetItemTypeIcon(string itemType)
+    {
+        return itemType switch
+        {
+            "Test" => "🧪",
+            "Step" => "→",
+            "Suite" => "📁",
+            "Scenario" => "📋",
+            "Story" => "📖",
+            "BeforeTest" or "BeforeMethod" or "BeforeClass" or "BeforeSuite" => "⚙️",
+            "AfterTest" or "AfterMethod" or "AfterClass" or "AfterSuite" => "🧹",
+            _ => "•"
+        };
+    }
+
+    private static string GetItemTypeBadgeClass(string itemType)
+    {
+        return itemType switch
+        {
+            "Test" => "bg-primary",
+            "Step" => "bg-secondary",
+            "Suite" => "bg-dark",
+            "Scenario" => "bg-info",
+            "Story" => "bg-purple",
+            "BeforeTest" or "BeforeMethod" or "BeforeClass" or "BeforeSuite" => "bg-warning text-dark",
+            "AfterTest" or "AfterMethod" or "AfterClass" or "AfterSuite" => "bg-warning text-dark",
+            _ => "bg-secondary"
+        };
+    }
+
+    private static string GetStatusTextClass(TestItemDto item)
+    {
+        if (string.IsNullOrEmpty(item.ComputedStatus))
+            return "";
+
+        return item.ComputedStatus switch
+        {
+            "Passed" => "text-success",
+            "Failed" => "text-danger",
+            "Skipped" => "text-warning",
+            "Timedout" => "text-secondary",
+            "Errored" => "text-danger",
+            _ => ""
+        };
+    }
+
+    private static string GetComputedStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Passed" => "bg-success",
+            "Failed" => "bg-danger",
+            "Skipped" => "bg-warning text-dark",
+            "Timedout" => "bg-secondary",
+            "Errored" => "bg-danger",
+            "InProgress" => "bg-info",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string FormatDuration(double ms)
+    {
+        if (ms < 1000)
+            return $"{ms:F0}ms";
+        if (ms < 60000)
+            return $"{ms / 1000:F2}s";
+        return $"{ms / 60000:F1}m";
+    }
+
+}

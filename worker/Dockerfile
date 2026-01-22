@@ -47,7 +47,7 @@ RUN --mount=type=cache,id=npm-cache,target=/root/.npm \
 COPY --from=build /app/publish .
 
 EXPOSE 5000
-HEALTHCHECK --interval=10s --timeout=3s --retries=5 --start-period=20s \
+HEALTHCHECK --interval=10s --timeout=10s --retries=5 --start-period=60s \
   CMD curl -fsSL http://127.0.0.1:5000/health || exit 1
 
 ENTRYPOINT ["dotnet","WorkerService.dll"]

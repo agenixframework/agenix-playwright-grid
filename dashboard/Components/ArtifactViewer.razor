@@ -1,0 +1,181 @@
+@inject IConfiguration Config
+@inject IJSRuntime JSRuntime
+@inject IHttpClientFactory HttpFactory
+
+<div class="artifact-gallery">
+    @if (Artifacts.Count == 0)
+    {
+        <div class="text-muted small">No artifacts</div>
+    }
+    else
+    {
+        <div class="artifact-grid">
+            @foreach (var artifact in Artifacts)
+            {
+                <div class="artifact-card">
+                    @if (IsImage(artifact.ContentType))
+                    {
+                        <div class="artifact-preview" @onclick="() => ShowPreview(artifact)">
+                            <img src="@GetArtifactUrl(artifact.Id)" alt="@artifact.Name"/>
+                        </div>
+                    }
+                    else if (IsVideo(artifact.ContentType))
+                    {
+                        <div class="artifact-preview">
+                            <video controls>
+                                <source src="@GetArtifactUrl(artifact.Id)" type="@artifact.ContentType"/>
+                            </video>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="artifact-preview artifact-icon">
+                            <span class="icon">📄</span>
+                        </div>
+                    }
+
+                    <div class="artifact-info">
+                        <div class="artifact-name" title="@artifact.Name">@artifact.Name</div>
+                        <div class="artifact-meta">
+                            <span class="artifact-size">@FormatFileSize(artifact.Size)</span>
+                            <a href="@GetArtifactUrl(artifact.Id)" download="@artifact.Name"
+                               class="btn btn-sm btn-outline-primary">
+                                Download
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_previewArtifact != null)
+{
+    <div class="artifact-modal" @onclick="ClosePreview">
+        <div class="modal-content" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h5>@_previewArtifact.Name</h5>
+                <button class="btn-close" @onclick="ClosePreview"></button>
+            </div>
+            <div class="modal-body">
+                <img src="@GetArtifactUrl(_previewArtifact.Id)" alt="@_previewArtifact.Name"
+                     style="max-width: 100%; height: auto;"/>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public List<TestAttachmentDto> Artifacts { get; set; } = new();
+
+    private TestAttachmentDto? _previewArtifact;
+    private readonly Dictionary<Guid, string> _artifactUrlCache = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await PreloadArtifactUrlsAsync();
+    }
+
+    private async Task PreloadArtifactUrlsAsync()
+    {
+        foreach (var artifact in Artifacts)
+        {
+            if (!_artifactUrlCache.ContainsKey(artifact.Id))
+            {
+                var url = await GetArtifactUrlAsync(artifact.Id);
+                _artifactUrlCache[artifact.Id] = url;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task<string> GetArtifactUrlAsync(Guid artifactId)
+    {
+        var hubUrl = Config["HUB_URL"] ?? "http://localhost:5001";
+
+        // Try SessionStorage cache first
+        var cachedUrl = await JSRuntime.InvokeAsync<string>("ArtifactCache.getCachedUrl", new object[] { artifactId.ToString() });
+        if (!string.IsNullOrEmpty(cachedUrl))
+        {
+            return cachedUrl;
+        }
+
+        // Cache miss - get pre-signed URL from backend
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var response = await http.GetAsync($"/api/artifacts/{artifactId}/url?expirySeconds=3600");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var urlResponse = await response.Content.ReadFromJsonAsync<ArtifactUrlResponse>();
+                if (urlResponse != null)
+                {
+                    // Cache the pre-signed URL
+                    await JSRuntime.InvokeAsync<object>("ArtifactCache.cacheUrl", new object[]
+                    {
+                        artifactId.ToString(),
+                        urlResponse.Url,
+                        urlResponse.ExpiresAt.ToString("o")
+                    });
+
+                    return urlResponse.Url;
+                }
+            }
+        }
+        catch
+        {
+            // Fallback to direct download endpoint
+        }
+
+        // Fallback: direct download endpoint
+        return $"{hubUrl}/api/artifacts/{artifactId}";
+    }
+
+    private string GetArtifactUrl(Guid artifactId)
+    {
+        // Return cached URL if available
+        if (_artifactUrlCache.TryGetValue(artifactId, out var url))
+        {
+            return url;
+        }
+
+        // Fallback to direct download endpoint (will be replaced when preload completes)
+        var hubUrl = Config["HUB_URL"] ?? "http://localhost:5001";
+        return $"{hubUrl}/api/artifacts/{artifactId}";
+    }
+
+    private record ArtifactUrlResponse(Guid ArtifactId, string Url, int ExpiresInSeconds, DateTime ExpiresAt, string FileName, string ContentType, long FileSize);
+
+    private void ShowPreview(TestAttachmentDto artifact)
+    {
+        _previewArtifact = artifact;
+    }
+
+    private void ClosePreview()
+    {
+        _previewArtifact = null;
+    }
+
+    private static bool IsImage(string contentType)
+    {
+        return contentType.StartsWith("image/");
+    }
+
+    private static bool IsVideo(string contentType)
+    {
+        return contentType.StartsWith("video/");
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+}

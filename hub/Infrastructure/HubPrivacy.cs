@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #endregion
-
-using Microsoft.Extensions.Configuration;
 
 namespace PlaywrightHub.Infrastructure;
 
@@ -36,19 +34,24 @@ internal static class HubPrivacy
     /// </summary>
     public static void Initialize(IConfiguration configuration)
     {
-        var value = configuration["HUB_REDACT_RUNNAME"];
-        _redactRunName = value is not null && (value.Equals("1", StringComparison.OrdinalIgnoreCase) || value.Equals("true", StringComparison.OrdinalIgnoreCase));
+        var value = configuration["AGENIX_HUB_REDACT_RUNNAME"];
+        _redactRunName = value is not null && (value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                                               value.Equals("true", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
-    ///     Returns a version of the provided <paramref name="runName"/> that is safe for logging
+    ///     Returns a version of the provided <paramref name="runName" /> that is safe for logging
     ///     according to the configured privacy policy.
     /// </summary>
     /// <param name="runName">The optional run name supplied by the client.</param>
-    /// <returns>The original <paramref name="runName"/> or "&lt;redacted&gt;" when redaction is enabled.</returns>
+    /// <returns>The original <paramref name="runName" /> or "&lt;redacted&gt;" when redaction is enabled.</returns>
     public static string? RedactRunName(string? runName)
     {
-        if (string.IsNullOrWhiteSpace(runName)) return runName; // preserve null/empty
+        if (string.IsNullOrWhiteSpace(runName))
+        {
+            return runName; // preserve null/empty
+        }
+
         return _redactRunName ? "<redacted>" : runName;
     }
 }

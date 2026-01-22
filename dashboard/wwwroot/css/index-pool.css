@@ -1,0 +1,832 @@
+/* Pool page styles - Global CSS (not scoped) */
+.dropdown-menu-sm {
+  padding: .2rem 0;
+  min-width: 0; /* override Bootstrap default 10rem */
+  width: max-content; /* shrink to content */
+  border-radius: .375rem;
+  box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .08);
+}
+
+.dropdown-menu-sm .dropdown-item {
+  padding: .3rem .6rem;
+  font-size: .8125rem; /* smaller text */
+  line-height: 1.1;
+}
+
+/* Ensure dropdown overlays above adjacent rows/elements */
+.dropdown-menu,
+.dropdown-menu-sm {
+  z-index: 2000; /* above default (1000) to avoid being overlapped */
+}
+
+/* Enhanced pool cards */
+.pool-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+}
+
+.pool-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.pool-card.maintenance-mode {
+  border-color: #fbbf24;
+  background-color: #fefce8;
+}
+
+.pool-card.restarting {
+  border-color: #60a5fa;
+  background-color: #eff6ff;
+}
+
+/* Pool header styling */
+.pool-header {
+  flex: 1;
+}
+
+.pool-icon {
+  margin-top: 2px;
+}
+
+.pool-name {
+  font-size: 1rem;
+  margin-bottom: 2px;
+  line-height: 1.4;
+}
+
+.browser-version {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Status badges */
+.pool-status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+}
+
+.total-count {
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* Pool actions button */
+.pool-actions-btn {
+  padding: 2px 6px;
+  font-size: 1.1rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+/* Pool statistics */
+.pool-stats {
+  margin-bottom: 1rem;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+/* Enhanced progress bar */
+.enhanced-progress {
+  background-color: #f1f5f9;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-available {
+  background: linear-gradient(45deg, rgba(25, 135, 84, 1), rgba(20, 108, 67, 1)) !important;
+  box-shadow: 0 1px 2px rgba(25, 135, 84, 0.3);
+}
+
+.progress-borrowed {
+  background: linear-gradient(45deg, #ef4444, #dc2626) !important;
+  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.3);
+}
+
+/* Activity pulse animation */
+.activity-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* Alert styling for maintenance mode */
+.alert-sm {
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  margin-bottom: 0.5rem;
+}
+
+.alert-sm .fas {
+  font-size: 0.75rem;
+}
+
+/* Worker badges in pool cards */
+.pool-card .badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+}
+
+/* Label badges with truncation support */
+.label-badge {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  cursor: help;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.label-badge:hover {
+  background-color: #e5e7eb !important;
+}
+
+/* Ensure labels column doesn't wrap */
+.workers-table td {
+  vertical-align: middle;
+}
+
+.workers-table td:nth-child(2) {
+  /* Labels column */
+  min-width: 250px;
+  white-space: nowrap;
+}
+
+.workers-table td:nth-child(2) > * {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Workers table enhancements */
+.workers-table {
+  margin-bottom: 0;
+}
+
+.worker-row.quarantined {
+  background-color: #fef2f2;
+  border-left: 3px solid #ef4444;
+}
+
+.worker-info {
+  min-width: 0;
+}
+
+.worker-id {
+  display: block;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9rem;
+}
+
+.worker-status {
+  min-width: 0;
+}
+
+.worker-status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  display: inline-block;
+}
+
+.playwright-version {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.browser-count {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.worker-actions-btn {
+  padding: 2px 6px;
+  font-size: 1.1rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .pool-card .pool-header {
+    margin-bottom: 12px;
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .pool-actions-btn {
+    padding: 4px 8px;
+  }
+
+  /* Mobile workers table adjustments */
+  .workers-table {
+    font-size: 0.875rem;
+  }
+
+  .worker-id {
+    font-size: 0.8rem;
+  }
+
+  .worker-status-badge {
+    font-size: 0.65rem;
+    padding: 1px 4px;
+  }
+
+  .browser-count {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .workers-table th,
+  .workers-table td {
+    padding: 0.5rem 0.25rem;
+  }
+
+  .search-controls {
+    display: none !important;
+  }
+}
+
+/* Phase 2: Interactive elements */
+.search-controls input {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-controls input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.sortable-header:hover {
+  background-color: #f8f9fa;
+}
+
+.sortable-header i {
+  font-size: 0.75rem;
+  margin-left: 4px;
+  transition: color 0.2s ease;
+}
+
+/* Tooltip enhancements */
+.tooltip-trigger {
+  cursor: help;
+}
+
+/* Enhanced responsive controls */
+@media (max-width: 992px) {
+  .search-controls input {
+    width: 150px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-controls input {
+    width: 120px !important;
+  }
+
+  .form-select {
+    width: 120px !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .d-flex.gap-2 {
+    gap: 0.5rem !important;
+  }
+}
+
+/* Expandable worker details */
+.expand-btn {
+  color: #6b7280;
+  border: none;
+  transition: color 0.2s ease;
+  min-width: 24px;
+}
+
+.expand-btn:hover {
+  color: #3b82f6;
+}
+
+.worker-details-row {
+  border-top: none !important;
+}
+
+.worker-details-panel {
+  background-color: #f8f9fa;
+  border-top: 1px solid #e5e7eb;
+  padding: 1rem;
+  margin: 0 -0.75rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.detail-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  height: 100%;
+}
+
+.detail-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.detail-item {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.detail-item strong {
+  color: #374151;
+  font-weight: 600;
+}
+
+.worker-id-full {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.75rem;
+  background-color: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+/* Responsive expandable details */
+@media (max-width: 768px) {
+  .worker-details-panel {
+    padding: 0.75rem;
+  }
+
+  .detail-card {
+    padding: 0.75rem;
+  }
+
+  .detail-title {
+    font-size: 0.8125rem;
+  }
+
+  .detail-item {
+    font-size: 0.75rem;
+  }
+}
+
+/* Enhanced dropdown menus */
+.dropdown-menu-enhanced {
+  min-width: 200px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+}
+
+.dropdown-menu-enhanced .dropdown-header {
+  background-color: #f8f9fa;
+  color: #374151;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 0.5rem 1rem;
+  margin: 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dropdown-menu-enhanced .dropdown-item {
+  transition: background-color 0.2s ease;
+  font-size: 0.8125rem;
+  padding: 0.5rem 1rem;
+}
+
+.dropdown-menu-enhanced .dropdown-item:hover:not(:disabled) {
+  background-color: #f3f4f6;
+}
+
+.dropdown-menu-enhanced .dropdown-item.loading {
+  background-color: #fef3c7;
+  border-left: 3px solid #f59e0b;
+}
+
+.dropdown-menu-enhanced .dropdown-item i {
+  width: 16px;
+  text-align: center;
+}
+
+.dropdown-item-info {
+  background: none !important;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  cursor: default;
+}
+
+.dropdown-item-info:disabled {
+  opacity: 1;
+  color: #374151;
+}
+
+.dropdown-item-info .d-flex {
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Quick action buttons on pool cards */
+.pool-quick-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.pool-quick-action-btn {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.pool-quick-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Responsive dropdown adjustments */
+@media (max-width: 768px) {
+  .dropdown-menu-enhanced {
+    min-width: 180px;
+  }
+
+  .dropdown-menu-enhanced .dropdown-item {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.75rem;
+  }
+
+  .dropdown-menu-enhanced .dropdown-header {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.75rem;
+  }
+}
+
+/* Phase 3: Analytics Dashboard Styles */
+.analytics-section {
+  border-top: 2px solid #e5e7eb;
+  padding-top: 2rem;
+}
+
+/* Metric Cards */
+.metric-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+
+.metric-trend {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.trend-positive {
+  color: #059669;
+}
+
+.trend-negative {
+  color: #dc2626;
+}
+
+.trend-neutral {
+  color: #6b7280;
+}
+
+/* Chart Cards */
+.chart-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.chart-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chart-header h6 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.chart-container {
+  padding: 1.5rem;
+  position: relative;
+  min-height: 300px;
+}
+
+.chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 250px;
+}
+
+.placeholder-content {
+  text-align: center;
+}
+
+.health-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.health-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: #374151;
+}
+
+.health-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* System Alerts */
+.alerts-container {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s ease;
+}
+
+.alert-item:last-child {
+  border-bottom: none;
+}
+
+.alert-item:hover {
+  background-color: #f9fafb;
+}
+
+.alert-high {
+  border-left: 4px solid #dc2626;
+  background-color: #fef2f2;
+}
+
+.alert-medium {
+  border-left: 4px solid #f59e0b;
+  background-color: #fffbeb;
+}
+
+.alert-low {
+  border-left: 4px solid #3b82f6;
+  background-color: #eff6ff;
+}
+
+.alert-info {
+  border-left: 4px solid #6b7280;
+  background-color: #f9fafb;
+}
+
+.alert-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  margin-top: 2px;
+}
+
+.alert-high .alert-icon {
+  background-color: #fecaca;
+  color: #dc2626;
+}
+
+.alert-medium .alert-icon {
+  background-color: #fed7aa;
+  color: #f59e0b;
+}
+
+.alert-low .alert-icon {
+  background-color: #bfdbfe;
+  color: #3b82f6;
+}
+
+.alert-info .alert-icon {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.alert-title {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.alert-description {
+  color: #6b7280;
+  font-size: 0.8125rem;
+  margin-bottom: 0.5rem;
+}
+
+.alert-time {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.alert-actions {
+  flex-shrink: 0;
+}
+
+.no-alerts {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+
+/* Responsive Analytics */
+@media (max-width: 992px) {
+  .metric-value {
+    font-size: 1.75rem;
+  }
+
+  .metric-card {
+    padding: 1.25rem;
+  }
+
+  .chart-container {
+    padding: 1rem;
+    min-height: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  .analytics-section {
+    padding-top: 1.5rem;
+  }
+
+  .metric-value {
+    font-size: 1.5rem;
+  }
+
+  .metric-card {
+    padding: 1rem;
+  }
+
+  .chart-header {
+    padding: 0.75rem 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .chart-legend {
+    gap: 0.75rem;
+  }
+
+  .legend-item {
+    font-size: 0.75rem;
+  }
+
+  .alert-item {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .chart-placeholder {
+    min-height: 200px;
+  }
+}

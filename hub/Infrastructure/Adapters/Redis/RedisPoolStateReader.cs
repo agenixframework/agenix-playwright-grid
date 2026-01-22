@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -106,7 +106,10 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                             db.KeyDelete(RedisKeys.MaintenanceSnapInuse(label));
                             db.KeyDelete(RedisKeys.MaintenanceSince(label));
                         }
-                        catch { }
+                        catch
+                        {
+                            // ignored
+                        }
                     }
 
                     // If still active, freeze counts to snapshot
@@ -137,7 +140,10 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                     }
                 }
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
 
             pools.Add(new PoolEntryDto
             {
@@ -174,7 +180,9 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                 .Select(kvp => $"{kvp.Key}={kvp.Value}")
                 .ToList();
 
-            int.TryParse(capacityStr, out var totalBrowsers);
+            // Note: Capacity field stores configured capacity, but actual browser count may differ
+            // We'll calculate actual TotalBrowsers later by summing per-pool counts
+            int.TryParse(capacityStr, out var configuredCapacity);
 
             var computedLastSeen = lastSeen == default ? DateTime.MinValue : lastSeen;
 
@@ -186,14 +194,19 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
                 continue;
             }
 
+            var qTtl = db.KeyTimeToLive(RedisKeys.NodeQuarantine(nodeId));
             workers.Add(new WorkerStatusDto
             {
                 Id = nodeId,
                 Labels = labelsList,
                 LastSeen = computedLastSeen,
+                Quarantined = qTtl is not null,
+                QuarantineUntil = qTtl is null ? null : DateTime.UtcNow.Add(qTtl.Value),
                 Pools = new Dictionary<string, PoolCounts>(),
-                TotalBrowsers = totalBrowsers,
-                PlaywrightVersion = pwVer.IsNullOrEmpty ? null : pwVer.ToString()
+                TotalBrowsers = 0, // Will be calculated from actual browser entries
+                PlaywrightVersion = pwVer.IsNullOrEmpty ? null : pwVer.ToString(),
+                PlaywrightVersionExpected = pwExpected.IsNullOrEmpty ? null : pwExpected.ToString(),
+                PlaywrightVersionMismatch = !pwMismatch.IsNullOrEmpty && pwMismatch.ToString() == "1"
             });
         }
 
@@ -295,6 +308,13 @@ public sealed class RedisPoolStateReader(IDatabase db, IConnectionMultiplexer mu
             {
                 p.BrowserVersion = ver;
             }
+        }
+
+        // Calculate actual TotalBrowsers for each worker by summing per-pool counts
+        // This ensures worker count matches pool counts (no more discrepancies)
+        foreach (var worker in workers)
+        {
+            worker.TotalBrowsers = worker.Pools.Values.Sum(pc => pc.Total);
         }
 
         var dto = new PoolStateDto

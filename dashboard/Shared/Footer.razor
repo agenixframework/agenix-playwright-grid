@@ -1,0 +1,59 @@
+@using System.Reflection
+@namespace Dashboard.Shared
+
+<footer class="pg-footer">
+    <div class="container">
+        <div class="d-flex flex-wrap justify-content-between align-items-center py-1 gap-2" style="font-size: 0.75rem;">
+            <div class="d-flex gap-2 align-items-center">
+                <span class="text-muted">Build: <strong>@BuildVersion</strong></span>
+                <span class="text-muted">|</span>
+                <span class="text-muted">© Agenix Playwright Service @DateTime.UtcNow.Year All rights reserved</span>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <a href="https://github.com/agenixframework/agenix-playwright-grid" target="_blank"
+                   rel="noopener noreferrer"
+                   class="text-decoration-none text-muted small d-flex align-items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                         viewBox="0 0 16 16">
+                        <path
+                            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                    </svg>
+                    Fork us on GitHub
+                </a>
+                <span class="text-muted">|</span>
+                <a href="https://agenixframework.github.io/agenix-playwright-grid/" target="_blank"
+                   rel="noopener noreferrer"
+                   class="text-decoration-none text-muted small d-flex align-items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                         viewBox="0 0 16 16">
+                        <path
+                            d="M0 1.5A1.5 1.5 0 0 1 1.5 0h13A1.5 1.5 0 0 1 16 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5v-13zM1.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5v-13a.5.5 0 0 0-.5-.5h-13z"/>
+                        <path
+                            d="M4.5 5a.5.5 0 0 1 .5-.5h2.5v-1a.5.5 0 0 1 1 0v1H11a.5.5 0 0 1 0 1H8.5v1a.5.5 0 0 1-1 0v-1H5a.5.5 0 0 1-.5-.5z"/>
+                        <path
+                            d="M3.5 8a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.5-.5z"/>
+                    </svg>
+                    Documentation
+                </a>
+                <span class="text-muted">|</span>
+                <a href="mailto:team@agenixframework.org"
+                   class="text-decoration-none text-muted small d-flex align-items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                         viewBox="0 0 16 16">
+                        <path
+                            d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/>
+                    </svg>
+                    Contact us
+                </a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+@code {
+
+    private string BuildVersion => Assembly.GetExecutingAssembly()
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        ?.InformationalVersion ?? "Unknown";
+
+}

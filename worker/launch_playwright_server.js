@@ -68,7 +68,8 @@ function parsePrefs(envValue) {
   try {
     const obj = JSON.parse(envValue);
     if (obj && typeof obj === 'object' && !Array.isArray(obj)) return obj;
-  } catch {}
+  } catch {
+  }
   // Fallback: key=value pairs separated by comma/semicolon/newlines
   const map = {};
   const parts = String(envValue).split(/[\r\n;,]+/).map(s => s.trim()).filter(Boolean);
@@ -124,7 +125,7 @@ function parsePrefs(envValue) {
   // Firefox user prefs
   const firefoxPrefs = name === 'firefox' ? parsePrefs(process.env.FIREFOX_PREFS) : undefined;
 
-  const launchOptions = { headless: true };
+  const launchOptions = {headless: true};
   if (args && args.length) launchOptions.args = args;
   if (name === 'firefox' && firefoxPrefs) launchOptions.firefoxUserPrefs = firefoxPrefs;
 

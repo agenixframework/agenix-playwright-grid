@@ -1,4 +1,4 @@
-Playwright…≥# Playwright Grid – Improvement Tasks Checklist
+b  Playwright…≥# Playwright Grid – Improvement Tasks Checklist
 
 Generated: 2025-09-11 11:30 local time
 
@@ -39,12 +39,11 @@ The following is an ordered, actionable checklist covering architectural and cod
 33. [X] Add graceful error pages and dashboard error boundaries for SignalR disconnections with auto-retry/backoff.
 34. [X] Implement virtualization/pagination for Dashboard results and command logs to prevent UI slowdowns on large runs.
 35. [x] Add filtering/search on Dashboard (by App, Browser, Env, Region, Status, runId) and deep links.
-36. [ ] Introduce authentication for Dashboard (OIDC/OAuth2) with role-based access (viewer/admin); secure SignalR hub accordingly.
+36. [ ] Introduce authentication for Dashboard (OIDC/OAuth2) with role-based access (viewer/member/admin); secure SignalR hub accordingly.
 37. [X] Add retention policies for run results and logs (TTL in Redis; optional durable store adapter e.g., PostgreSQL/SQLite).
 38. [X] Add API to export run details (JSON/NDJSON) for external archiving.
 39. [x] Provide Helm chart/Kubernetes manifests with sensible defaults, probes, and resource limits.
 40. [ ] Harden Docker images: run as non-root user, drop capabilities, read-only filesystem with writable temp for Playwright.
-41. [ ] Slim Docker images further: prune caches (npm, dotnet), multi-stage for Node assets, consolidate OS packages, consider distroless base.
 42. [X] Add multi-arch builds (linux/amd64, linux/arm64) for Hub/Worker via buildx.
 43. [X] Add image vulnerability scanning (Trivy/GHCR) and SBOM generation during CI.
 44. [X] Introduce GitHub Actions CI: build, unit tests, integration tests (with Testcontainers), publish artifacts, and optional Docker image publish.
@@ -95,17 +94,17 @@ The following is an ordered, actionable checklist covering architectural and cod
 91. [ ] Introduce JWT/HMAC request signing for Hub API (time-limited tokens minted by Hub) as an alternative to shared secrets; provide migration guidance.
 92. [ ] Support secrets from files via *_FILE env convention and optional integration with external secret stores (AWS Secrets Manager/Azure Key Vault/GCP Secret Manager).
 93. [ ] Add automated security checks: CodeQL workflow, Dependency/Container update automation (Dependabot/Renovate) with review rules.
-94. [ ] Enable horizontal scaling for Hub: move borrow queue to Redis Streams with consumer groups; implement idempotency and deduplication.
-95. [ ] Implement distributed leadership for sweeper jobs using Redis (SETNX + TTL) to coordinate multiple Hub instances safely.
-96. [ ] Quarantine flapping or failing Worker nodes (cooldown period) and surface quarantine state in Dashboard and metrics.
-97. [ ] Add Redis connection options for Sentinel/Cluster and TLS; document configuration and failover behavior.
-98. [ ] Provide idempotency keys for Borrow/Return endpoints to handle client retries without duplicate sessions.
-99. [ ] Enforce per-Worker max concurrent WebSocket connections (configurable); expose saturation metrics and headroom.
+94. [x] Enable horizontal scaling for Hub: move borrow queue to Redis Streams with consumer groups; implement idempotency and deduplication.
+95. [x] Implement distributed leadership for sweeper jobs using Redis (SETNX + TTL) to coordinate multiple Hub instances safely.
+96. [x] Quarantine flapping or failing Worker nodes (cooldown period) and surface quarantine state in Dashboard & Diagnostic and metrics.
+97. [x] Add Redis connection options for Sentinel/Cluster and TLS; document configuration and failover behavior.
+98. [x] Provide idempotency keys for Borrow/Return endpoints to handle client retries without duplicate sessions.
+99. [x] Enforce per-Worker max concurrent WebSocket connections (configurable); expose saturation metrics and headroom.
 100. [x] Monitor disk/inode usage in Worker; auto-clean old browser caches/traces; emit alerts when thresholds breached.
 101. [x] Add WS per-message compression toggle with thresholds to balance CPU vs bandwidth; document defaults.
 102. [x] Implement safe sidecar upgrade flow (graceful drain + restart) coordinated with Hub to avoid session drops.
 103. [ ] Improve Dashboard accessibility (WCAG 2.1 AA): keyboard navigation, landmarks, focus management, color contrast, ARIA labels.
-104. [ ] Gate Dashboard features by role (admin/viewer) based on OIDC group/claim mapping; hide admin endpoints from non-admins. (extends 36)
+104. [ ] Gate Dashboard features by role (admin/member/viewer) based on OIDC group/claim mapping; hide admin endpoints from non-admins. (extends 36)
 105. [ ] Allow exporting run artifacts (HAR/trace/logs) and provide deep links to Playwright trace viewer; bulk download.
 106. [ ] Add HubClient DI extensions (AddHubClient) with options; support proxies/custom headers; expose retry/jitter tuning knobs.
 107. [ ] Implement idempotency support in HubClient for borrow/return (Idempotency-Key header) and transparent retry handling.
@@ -172,3 +171,40 @@ The following is an ordered, actionable checklist covering architectural and cod
 166. [ ] Security review – ensure no secrets (headers, query params) can leak into prompts; honor existing redaction settings; add a global kill switch (AI_ENABLE=0).
 167. [ ] Documentation – add docs/ai.md detailing enabling providers, example prompts, privacy expectations, and local dev via Ollama; link from README and Dashboard help.
 168. [ ] Non‑goals/guardrails – never make core flows depend on AI; AI features must fail‑safe, degrade gracefully, and offer offline paths (e.g., deterministic synonym search, stats‑only reports).
+
+169. [x] Admin – Projects and Users (ReportPortal-inspired): introduce All Projects and All Users management in Dashboard and APIs (see https://reportportal.io/docs/admin-panel/AllProjectsPage and https://reportportal.io/docs/admin-panel/AllUsersPage).
+170. [x] Domain model: add Project and User aggregates with validation (name/key uniqueness, allowed chars/lengths), Membership (User↔Project with role: Admin/Member/Viewer), Status (Active/Archived/Disabled), and audit fields. 
+171. [x] Storage: persist Projects, Users, and Memberships in Redis with clear key patterns and secondary indexes (by name/key/email); plan optional durable store adapter later.
+172. [x] Admin API – Projects: CRUD endpoints with server paging/sorting/filtering; list fields: Project name/key, owner, members count, runs count, last activity, status; soft delete/archive and restore. (ref All Projects page)
+173. [x] Admin API – Users: CRUD endpoints with server paging/sorting/filtering; list fields: username/email, global role, projects count, last login, status; activate/deactivate; optional invite token flow. (ref All Users page)
+174. [x] RBAC: define global roles (Admin/Member/Viewer) and per-project roles; enforce across Admin APIs and Dashboard pages; integrate with existing auth (36, 104). 
+175. [x] Dashboard – All Projects: searchable, sortable, paginated list; actions: create, edit, archive/delete, restore; quick stats (members, runs, last activity); link to Project details. 
+176. [x] Dashboard – Project details: tabs for Settings, Members, Activity; manage members (add/remove, change role), change owner, update status; confirmation modals and error handling. 
+177. [x] Dashboard – All Users: searchable, sortable, paginated list; filters by role/status; actions: create/invite, activate/deactivate, assign global role; link to User details. 
+178. [x] Dashboard – User details: tabs for Profile, Projects, Activity; manage project memberships (add/remove, set role); show last login and status. 
+179. [x] Audit logging: record project/user CRUD and membership changes; surface in Dashboard Activity tabs; export as NDJSON via API. 
+180. [x] Metrics/observability: Prometheus counters/gauges for active projects/users, membership changes; dashboards; trace important admin operations.
+181. [x] Validation and UX: consistent form validation and error surfacing; reuse pagination/search components; accessibility compliance (103). 
+182. [x] Tests – unit: validators for project name/key, user email/username, RBAC checks; API model serialization. 
+183. [x] Tests – integration: end-to-end flows for creating project, adding user, assigning roles, enforcing permissions; pagination/sorting correctness. 
+184. [x] Bootstrap/migration: seed a default admin user and a sample project in dev/test; provide scripts/docs for initial admin setup in prod. 
+185. [ ] Documentation: add admin guide pages for Projects and Users in docs; include screenshots and link to ReportPortal All Projects and All Users pages.
+
+186. [x] Dashboard – Login page (Login.razor): implement real sign-in flow and UX; see file: ../dashboard/Pages/Login.razor
+    - Replace mock navigation with authentication redirect (OIDC/OAuth2); support returnUrl query and post-login redirect
+    - Handle Remember me (session lifetime/cookie) and show loading/error states on submit
+    - Wire "Forgot password?" to provider reset/help route (or hide when external auth is enforced)
+    - Add Dashboard.Tests to cover login redirect and returnUrl flow
+187. [ ] The user is logged out if their session inactivity exceeds the defined timeout.
+ADMIN can configure session expiration per instance.
+For that, the ADMIN needs to navigate to Administrate > Server Settings and set up the duration of user inactivity before automatic logout in 'Inactivity timeout' block:
+15 minutes
+1 hour
+12 hours
+24 hours (default value)
+The user is logged out if their session inactivity exceeds the defined timeout.
+If the user is working in multiple tabs and the inactivity timeout is reached in one tab while they are still active in another, the user remains logged in until the timeout is reached in all tabs.
+188. [x] The favicon on browser tab to display agenix-favicon.ico 
+189. [x] Implement 'Upload Photo' backend functionality to the user profile page
+190. [x] Implement 'Remove Photo' backend functionality to the user profile page
+191. [x] Implement 'Submit' button functionality to the user profile page when editing personal information; UX validation

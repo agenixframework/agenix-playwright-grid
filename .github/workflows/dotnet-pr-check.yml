@@ -156,6 +156,28 @@ jobs:
       - name: Install Playwright Browsers
         run: playwright install --with-deps
 
+      - name: 🚀 Start Docker Compose services
+        run: |
+          echo "Starting Docker Compose services for integration tests..."
+          chmod +x ./scripts/run-docker-compose-test.sh
+          ./scripts/run-docker-compose-test.sh --skip-tests --keep-running --no-rebuild
+        timeout-minutes: 5
+
+      - name: ✅ Verify services ready
+        run: |
+          echo "Verifying Hub is accessible..."
+          curl -f http://localhost:5100/health || (echo "❌ Hub health check failed" && exit 1)
+
+          echo "Checking worker registration..."
+          WORKERS=$(curl -s http://localhost:5100/diagnostics | grep -o '"id":"[^"]*"' | wc -l || echo "0")
+          echo "Registered workers: $WORKERS"
+
+          if [ "$WORKERS" -gt 0 ]; then
+            echo "✅ Services are ready (Hub + $WORKERS workers)"
+          else
+            echo "⚠️  Warning: No workers registered yet, some tests may fail"
+          fi
+
       - name: 🔍 List test projects
         run: |
           echo "Found test projects:"
@@ -196,6 +218,14 @@ jobs:
           path: "TestResults/test-results-*-linux.trx"
           reporter: dotnet-trx
           fail-on-error: true
+
+      - name: 🧹 Stop Docker Compose services
+        if: always()
+        run: |
+          echo "Stopping Docker Compose services..."
+          docker compose -p agenix-reportportal -f docker-compose.workers.yml down || true
+          docker compose -p agenix-reportportal --profile infrastructure --profile core down || true
+          echo "✅ Services stopped"
 
       - name: 📦 Build packages (for validation)
         run: dotnet pack --configuration Release --no-build --output ./artifacts

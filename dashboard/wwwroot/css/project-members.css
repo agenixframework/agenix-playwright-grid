@@ -1,0 +1,257 @@
+/* Project Members Page Styles */
+
+/* Page header */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2rem 0 1.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.header-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.page-header h3 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--brand-text);
+  margin: 0;
+}
+
+.subtitle {
+  color: var(--brand-muted);
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+/* Card styling */
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Table styling */
+.table-responsive {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.table thead th {
+  background-color: #f9fafb !important;
+  color: #6b7280 !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 0.75rem 1rem !important;
+  border-bottom: 2px solid #e5e7eb !important;
+  vertical-align: middle !important;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.15s ease;
+}
+
+.table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.table tbody td {
+  padding: 1rem !important;
+  vertical-align: middle !important;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+/* Avatar styling */
+.table tbody td img.rounded {
+  border: 2px solid #e5e7eb !important;
+  border-radius: 8px;
+}
+
+/* Name column styling */
+.table tbody td .fw-semibold {
+  color: #111827;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.table tbody td .text-muted.small {
+  color: #6b7280;
+  font-size: 0.8125rem;
+}
+
+/* Badge styling */
+.badge.rounded-pill {
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  font-weight: 600;
+}
+
+.badge.text-bg-success {
+  background-color: #10b981 !important;
+}
+
+.badge.text-bg-danger {
+  background-color: #ef4444 !important;
+}
+
+/* Role dropdown styling */
+.table tbody td .form-select {
+  font-size: 0.875rem;
+  padding: 0.375rem 2rem 0.375rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: white;
+  min-width: 140px;
+}
+
+.table tbody td .form-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+/* Action buttons */
+.table tbody td .btn-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.table tbody td .btn-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.table tbody td .btn-link:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Unassign button specific styling */
+.table tbody td .btn-link svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+}
+
+/* Search and action buttons */
+.input-group .input-group-text {
+  background-color: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-right: none;
+}
+
+.input-group .form-control {
+  border-left: none;
+}
+
+.input-group .form-control:focus {
+  border-color: #3b82f6;
+  box-shadow: none;
+}
+
+.input-group:focus-within .input-group-text {
+  border-color: #3b82f6;
+}
+
+/* Top action buttons */
+.btn-outline-secondary,
+.btn-primary {
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-outline-secondary {
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.btn-outline-secondary:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.btn-primary {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.btn-primary:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Pagination */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.pagination-controls .form-select {
+  width: auto;
+  font-size: 0.875rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .page-header h3 {
+    font-size: 1.5rem;
+  }
+
+  .header-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .header-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .table tbody td {
+    padding: 0.75rem !important;
+  }
+
+  .table tbody td img.rounded {
+    width: 40px !important;
+    height: 40px !important;
+  }
+}

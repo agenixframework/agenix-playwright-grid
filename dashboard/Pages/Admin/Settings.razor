@@ -1,0 +1,529 @@
+@page "/admin/settings"
+@using System.Text.Json
+@attribute [Authorize]
+@inject ToastService Toasts
+@inject IHttpClientFactory HttpFactory
+
+<Dashboard.Shared.AdminTabs/>
+
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                    d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/>
+            </svg>
+        </div>
+        <div>
+            <h3>Dashboard Settings</h3>
+            <div class="subtitle">Configure system settings and preferences</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs">
+    <li class="nav-item">
+        <button
+            class="nav-link text-uppercase fw-semibold @(ActiveTab == Tab.AuthorizationConfiguration ? "active" : "")"
+            @onclick="() => ActiveTab = Tab.AuthorizationConfiguration">Authorization Configuration
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link text-uppercase fw-semibold @(ActiveTab == Tab.Features ? "active" : "")"
+                @onclick="() => ActiveTab = Tab.Features">Features
+        </button>
+    </li>
+</ul>
+
+<style>
+    .nav-tabs {
+        border: none;
+        background: white;
+        border-radius: 0.75rem;
+        padding: 0.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        margin-bottom: 2rem;
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .nav-tabs .nav-link {
+        border: none;
+        color: #6c757d;
+        font-weight: 600;
+        padding: 0.875rem 1.75rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.875rem;
+        letter-spacing: 0.3px;
+        border-radius: 0.5rem;
+        flex: 1;
+        text-align: center;
+    }
+
+    .nav-tabs .nav-link:hover {
+        background: #f8f9fa;
+        color: #764ba2;
+        transform: translateY(-2px);
+    }
+
+    .nav-tabs .nav-link.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: 700;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .card {
+        border: none;
+        border-radius: 1rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .card-body {
+        padding: 2.5rem;
+    }
+
+    h6.section-header {
+        color: #764ba2 !important;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 3px solid #f3f0ff;
+        position: relative;
+    }
+
+    h6.section-header::after {
+        content: '';
+        position: absolute;
+        bottom: -3px;
+        left: 0;
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(to right, #667eea, #764ba2);
+    }
+
+    .form-label {
+        color: #374151;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .setting-row {
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        transition: background 0.2s ease;
+    }
+
+    .setting-row:hover {
+        background: #f8f9fa;
+    }
+
+    hr {
+        border-color: #e9ecef;
+        opacity: 1;
+        margin: 2rem 0;
+    }
+
+    .form-check-input {
+        cursor: pointer;
+        width: 3rem;
+        height: 1.5rem;
+    }
+
+    .form-check-input:checked {
+        background-color: #764ba2;
+        border-color: #764ba2;
+    }
+
+    .form-check-input:focus {
+        border-color: #b794f4;
+        box-shadow: 0 0 0 0.25rem rgba(118, 75, 162, 0.25);
+    }
+
+    .form-check-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+
+    .form-select {
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 0.625rem 1rem;
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+
+    .form-select:focus {
+        border-color: #b794f4;
+        box-shadow: 0 0 0 0.25rem rgba(118, 75, 162, 0.15);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 0.875rem 2.5rem;
+        font-weight: 600;
+        border-radius: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-size: 0.875rem;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+    }
+
+    .text-muted {
+        font-size: 0.875rem;
+        line-height: 1.6;
+    }
+
+    @@media (max-width: 768px) {
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .setting-row {
+            padding: 1rem;
+        }
+
+        .nav-tabs .nav-link {
+            padding: 0.75rem 1rem;
+            font-size: 0.8rem;
+        }
+    }
+</style>
+
+<!-- Tab Content -->
+@if (ActiveTab == Tab.AuthorizationConfiguration)
+{
+    <div class="card">
+        <div class="card-body">
+            <!-- Inactivity Timeout Section -->
+            <h6 class="section-header">Inactivity Timeout</h6>
+
+            <div class="setting-row">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label">Session inactivity timeout</label>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" @bind="SelectedTimeout">
+                            <option value="15">15 minutes</option>
+                            <option value="60">1 hour</option>
+                            <option value="720">12 hours</option>
+                            <option value="1440">24 hours</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Duration of user inactivity before automatic logout.</small>
+                    </div>
+                </div>
+            </div>
+
+            <hr/>
+
+            <!-- GitHub Section -->
+            <h6 class="section-header">GitHub</h6>
+
+            <div class="setting-row">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label">GitHub authorization</label>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="githubSwitch"
+                                   @bind="GitHubAuthEnabled" disabled>
+                            <label class="form-check-label text-muted"
+                                   for="githubSwitch">@(GitHubAuthEnabled ? "ON" : "OFF")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Enable GitHub OAuth integration (placeholder).</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="d-flex justify-content-end mt-4">
+                <button type="button" class="btn btn-primary" @onclick="SaveSettingsAsync" disabled="@_busy">
+                    @if (_busy)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>Submit</span>
+                    }
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="alert alert-danger mt-3" role="alert">
+                    @ErrorMessage
+                </div>
+            }
+        </div>
+    </div>
+}
+else if (ActiveTab == Tab.Features)
+{
+    <div class="card">
+        <div class="card-body">
+            <!-- Important Launches Section -->
+            <h6 class="section-header">Important Launches</h6>
+
+            <div class="setting-row">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label">Important Launches</label>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="importantLaunchesSwitch"
+                                   @bind="ImportantLaunchesEnabled">
+                            <label
+                                class="form-check-label @(ImportantLaunchesEnabled ? "text-success fw-semibold" : "text-muted")"
+                                for="importantLaunchesSwitch">@(ImportantLaunchesEnabled ? "ON" : "OFF")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Important Launches extend the retention period beyond the standard
+                            retention policy settings. You can mark a launch as important using the launch menu.</small>
+                    </div>
+                </div>
+            </div>
+
+            <hr/>
+
+            <!-- Reset Password Section -->
+            <h6 class="section-header">Reset Password on Login Page</h6>
+
+            <div class="setting-row">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label">Reset Password Link</label>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="resetPasswordSwitch"
+                                   @bind="ResetPasswordEnabled">
+                            <label
+                                class="form-check-label @(ResetPasswordEnabled ? "text-success fw-semibold" : "text-muted")"
+                                for="resetPasswordSwitch">@(ResetPasswordEnabled ? "ON" : "OFF")</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Show or hide the "Forgot password?" link on the login page. When
+                            disabled, users cannot reset their passwords through the login page.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="d-flex justify-content-end mt-4">
+                <button type="button" class="btn btn-primary" @onclick="SaveFeaturesAsync" disabled="@_busy">
+                    @if (_busy)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>Submit</span>
+                    }
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="alert alert-danger mt-3" role="alert">
+                    @ErrorMessage
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+
+    private enum Tab
+    {
+        AuthorizationConfiguration,
+        Features
+    }
+
+    private Tab ActiveTab = Tab.AuthorizationConfiguration;
+
+    private int SelectedTimeout = 1440; // Default: 24 hours in minutes
+    private bool GitHubAuthEnabled;
+    private bool ImportantLaunchesEnabled;
+    private bool ResetPasswordEnabled; // Default: disabled
+    private bool _busy;
+    private string? ErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+        await LoadFeaturesAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync("/admin/settings");
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                var doc = JsonDocument.Parse(json);
+
+                if (doc.RootElement.TryGetProperty("sessionTimeoutMinutes", out var timeoutEl))
+                {
+                    SelectedTimeout = timeoutEl.GetInt32();
+                }
+            }
+        }
+        catch
+        {
+            // If loading fails, use defaults
+            SelectedTimeout = 1440; // 24 hours
+        }
+
+        GitHubAuthEnabled = false;
+    }
+
+    private async Task LoadFeaturesAsync()
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            using var resp = await client.GetAsync("/admin/features");
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                var doc = JsonDocument.Parse(json);
+
+                if (doc.RootElement.TryGetProperty("importantLaunchesEnabled", out var featureEl))
+                {
+                    ImportantLaunchesEnabled = featureEl.GetBoolean();
+                }
+
+                if (doc.RootElement.TryGetProperty("resetPasswordEnabled", out var resetEl))
+                {
+                    ResetPasswordEnabled = resetEl.GetBoolean();
+                }
+            }
+        }
+        catch
+        {
+            // If loading fails, use defaults
+            ImportantLaunchesEnabled = false;
+            ResetPasswordEnabled = false;
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        if (_busy) return;
+
+        try
+        {
+            _busy = true;
+            ErrorMessage = null;
+            await InvokeAsync(StateHasChanged);
+
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new { sessionTimeoutMinutes = SelectedTimeout };
+            using var resp = await client.PostAsJsonAsync("/admin/settings", payload);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var errorText = await resp.Content.ReadAsStringAsync();
+                ErrorMessage = $"Failed to save settings: {errorText}";
+                return;
+            }
+
+            // Show success message
+            var timeoutLabel = SelectedTimeout switch
+            {
+                15 => "15 minutes",
+                60 => "1 hour",
+                720 => "12 hours",
+                1440 => "24 hours",
+                _ => $"{SelectedTimeout} minutes"
+            };
+
+            Toasts.Success($"Settings saved successfully. Session timeout: {timeoutLabel}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to save settings: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SaveFeaturesAsync()
+    {
+        if (_busy) return;
+
+        try
+        {
+            _busy = true;
+            ErrorMessage = null;
+            await InvokeAsync(StateHasChanged);
+
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new { importantLaunchesEnabled = ImportantLaunchesEnabled, resetPasswordEnabled = ResetPasswordEnabled };
+            using var resp = await client.PostAsJsonAsync("/admin/features", payload);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var errorText = await resp.Content.ReadAsStringAsync();
+                ErrorMessage = $"Failed to save features: {errorText}";
+                return;
+            }
+
+            // Show success message
+            var launchesLabel = ImportantLaunchesEnabled ? "enabled" : "disabled";
+            var resetPasswordLabel = ResetPasswordEnabled ? "enabled" : "disabled";
+            Toasts.Success($"Features saved successfully. Important Launches: {launchesLabel}, Reset Password: {resetPasswordLabel}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to save features: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+}

@@ -1,0 +1,556 @@
+@page "/admin/projects/{ProjectKey}/monitoring"
+@using System.Text.Json
+@attribute [Authorize]
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Nav
+
+<style>
+    .page-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        background: white;
+        color: #6b7280;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .action-btn:hover {
+        background: #f9fafb;
+        border-color: #d1d5db;
+    }
+
+    .action-btn.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: transparent;
+    }
+
+    .action-btn svg {
+        flex-shrink: 0;
+    }
+
+    .search-card {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .search-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        color: var(--brand-muted);
+        pointer-events: none;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 0.75rem 1rem 0.75rem 3rem;
+        font-size: 0.95rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        background: white;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .monitoring-table-container {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 1.5rem;
+    }
+
+    .monitoring-table {
+        margin: 0;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .monitoring-table thead {
+        background: var(--surface-alt);
+    }
+
+    .monitoring-table thead th {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--brand-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .monitoring-table tbody td {
+        padding: 1rem 1.25rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 0.875rem;
+    }
+
+    .monitoring-table tbody tr {
+        transition: background var(--transition-fast);
+    }
+
+    .monitoring-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    .monitoring-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .action-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.625rem;
+        background: #f3f4f6;
+        color: var(--brand-text);
+        font-size: 0.8rem;
+        font-weight: 500;
+        border-radius: var(--radius);
+        border: 1px solid #e5e7eb;
+    }
+
+    .object-type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.625rem;
+        background: #dbeafe;
+        color: #1e40af;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        border-radius: 12px;
+    }
+
+
+    .empty-state-monitoring {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+
+    .empty-state-monitoring svg {
+        color: var(--brand-muted);
+        opacity: 0.3;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state-monitoring h4 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--brand-text);
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state-monitoring p {
+        font-size: 0.95rem;
+        color: var(--brand-muted);
+    }
+</style>
+
+<nav aria-label="breadcrumb">
+    <ol class="pageBreadcrumbs__page-breadcrumbs">
+        <li class="pageBreadcrumbs__page-breadcrumbs-item"><a class="pageBreadcrumbs__page-breadcrumbs-link"
+                                                              href="/admin/projects">All Projects</a></li>
+        <li class="pageBreadcrumbs__page-breadcrumbs-item"><a class="pageBreadcrumbs__page-breadcrumbs-link"
+                                                              href="/@Uri.EscapeDataString(ProjectKey)/launches/">@ProjectKey</a>
+        </li>
+        <li class="pageBreadcrumbs__page-breadcrumbs-item">Monitoring</li>
+    </ol>
+</nav>
+
+<div class="page-actions">
+    <button class="action-btn active" @onclick="NavigateToMonitoring">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path
+                d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM8 1.918l-.797.161A4.002 4.002 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4.002 4.002 0 0 0-3.203-3.92L8 1.917zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5.002 5.002 0 0 1 13 6c0 .88.32 4.2 1.22 6z"/>
+        </svg>
+        Project Monitoring
+    </button>
+    <button class="action-btn" @onclick="NavigateToMembers">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+            <path fill-rule="evenodd"
+                  d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+            <path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+        </svg>
+        Project Members
+    </button>
+</div>
+
+<div class="search-card">
+    <div class="search-input-wrapper">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"
+             class="search-icon">
+            <path
+                d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+        </svg>
+        <input type="text" class="search-input" placeholder="Search by user, action, object type, object name..."
+               @bind="SearchQuery" @bind:event="oninput"/>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="alert alert-danger" role="alert">@Error</div>
+}
+
+<div class="monitoring-table-container">
+    <table class="monitoring-table">
+        <caption class="visually-hidden">Project Activity</caption>
+        <thead>
+        <tr>
+            <th style="width: 15%;">Time</th>
+            <th style="width: 12%;">User</th>
+            <th style="width: 15%;">Action</th>
+            <th style="width: 13%;">Object Type</th>
+            <th style="width: 15%;">Object Name</th>
+            <th style="width: 15%;">Old Value</th>
+            <th style="width: 15%;">New Value</th>
+        </tr>
+        </thead>
+        <tbody>
+        @if (Activity is null)
+        {
+            <tr>
+                <td colspan="7" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="mt-3 text-muted">Loading activity...</div>
+                </td>
+            </tr>
+        }
+        else if (FilteredActivity.Count == 0)
+        {
+            <tr>
+                <td colspan="7">
+                    <div class="empty-state-monitoring">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor"
+                             viewBox="0 0 16 16">
+                            <path
+                                d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zM8 1.918l-.797.161A4.002 4.002 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4.002 4.002 0 0 0-3.203-3.92L8 1.917zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5.002 5.002 0 0 1 13 6c0 .88.32 4.2 1.22 6z"/>
+                        </svg>
+                        <h4>No activity found</h4>
+                        <p>There is no activity to display for this project yet</p>
+                    </div>
+                </td>
+            </tr>
+        }
+        else
+        {
+            @foreach (var entry in FilteredActivity.Skip(_skip).Take(_take))
+            {
+                <tr>
+                    <td>@FormatAgo(entry.TimestampUtc)</td>
+                    <td>@(entry.Actor ?? "—")</td>
+                    <td><span class="action-badge">@GetActionDisplay(entry)</span></td>
+                    <td><span class="object-type-badge">@GetObjectType(entry)</span></td>
+                    <td style="font-weight: 500;">@GetObjectName(entry)</td>
+                    <td style="color: var(--brand-muted); font-size: 0.85rem;">@GetOldValue(entry)</td>
+                    <td style="color: var(--brand-text); font-weight: 500; font-size: 0.85rem;">@GetNewValue(entry)</td>
+                </tr>
+            }
+        }
+        </tbody>
+    </table>
+</div>
+
+<Dashboard.Shared.Pager
+    Total="@TotalCount"
+    Skip="@_skip"
+    Take="@_take"
+    OnPrev="@PrevPage"
+    OnNext="@NextPage"/>
+
+@code {
+    [Parameter] public string ProjectKey { get; set; } = string.Empty;
+
+    private List<AuditEntry>? Activity { get; set; }
+    private string? Error;
+    private string SearchQuery = string.Empty;
+    private int _skip;
+    private readonly int _take = 50;
+    private int TotalCount => FilteredActivity?.Count ?? 0;
+
+    private List<AuditEntry> FilteredActivity
+    {
+        get
+        {
+            if (Activity == null) return new List<AuditEntry>();
+            if (string.IsNullOrWhiteSpace(SearchQuery)) return Activity;
+
+            var query = SearchQuery.ToLowerInvariant();
+            return Activity.Where(e =>
+                (e.Actor?.ToLowerInvariant().Contains(query) ?? false) ||
+                (e.Action?.ToLowerInvariant().Contains(query) ?? false) ||
+                (GetObjectType(e)?.ToLowerInvariant().Contains(query) ?? false) ||
+                (GetObjectName(e)?.ToLowerInvariant().Contains(query) ?? false)
+            ).ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadActivityAsync();
+    }
+
+    private async Task LoadActivityAsync()
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            // Pull recent admin audit entries and filter by project
+            var url = "/audit?skip=0&take=500&category=admin";
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                Error = $"Failed to load activity: {resp.StatusCode}";
+                Activity = new List<AuditEntry>();
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+            var items = JsonSerializer.Deserialize<List<AuditEntry>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<AuditEntry>();
+
+            // Filter by project key
+            var filtered = items.Where(e =>
+                e.Details != null && (
+                    (e.Details.TryGetValue("project", out var pk) && string.Equals(pk, ProjectKey, StringComparison.OrdinalIgnoreCase)) ||
+                    (e.Details.TryGetValue("key", out var k) && string.Equals(k, ProjectKey, StringComparison.OrdinalIgnoreCase)) ||
+                    (e.Details.TryGetValue("projectKey", out var pk2) && string.Equals(pk2, ProjectKey, StringComparison.OrdinalIgnoreCase))
+                )
+            ).ToList();
+
+            Activity = filtered;
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error loading activity: {ex.Message}";
+            Activity = new List<AuditEntry>();
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_skip + _take < TotalCount)
+        {
+            _skip += _take;
+        }
+    }
+
+    private void PrevPage()
+    {
+        _skip = Math.Max(0, _skip - _take);
+    }
+
+    private void NavigateToMonitoring()
+    {
+        // Already on monitoring page
+    }
+
+    private void NavigateToMembers()
+    {
+        Nav.NavigateTo($"/admin/projects/{Uri.EscapeDataString(ProjectKey)}/members");
+    }
+
+    private string FormatAgo(DateTime utc)
+    {
+        var ago = DateTime.UtcNow - utc;
+        if (ago.TotalSeconds < 60) return "just now";
+        if (ago.TotalMinutes < 60) return $"{(int)ago.TotalMinutes} minutes ago";
+        if (ago.TotalHours < 24) return $"{(int)ago.TotalHours} hours ago";
+        if (ago.TotalDays < 7) return $"{(int)ago.TotalDays} days ago";
+        return utc.ToString("MMM d, yyyy");
+    }
+
+    private string GetActionDisplay(AuditEntry entry)
+    {
+        // First check if action is in Details
+        if (entry.Details != null && entry.Details.TryGetValue("action", out var actionName))
+            return actionName;
+
+        return entry.Action switch
+        {
+            "membership.assigned" => "Assign user",
+            "membership.unassigned" => "Unassign user",
+            "membership.role.updated" => "Update role",
+            "user.assign" => "Assign user",
+            "user.unassign" => "Unassign user",
+            "user.role.update" => "Update role",
+            "project.create" => "Create project",
+            "project.update" => "Update project",
+            "project.delete" => "Delete project",
+            "launch.autoStop" => "Auto-stop launch",
+            "testItem.autoStop" => "Auto-stop test",
+            "ForceFinish" => "Force finish",
+            _ => entry.Action
+        };
+    }
+
+    private string GetObjectType(AuditEntry entry)
+    {
+        if (entry.Details == null) return "—";
+
+        // Determine object type based on action and details
+        if (entry.Action.Contains("launch", StringComparison.OrdinalIgnoreCase))
+            return "Launch";
+        if (entry.Action.Contains("testItem", StringComparison.OrdinalIgnoreCase) || entry.Action.Contains("test", StringComparison.OrdinalIgnoreCase))
+            return "Test";
+        if (entry.Action.Contains("user", StringComparison.OrdinalIgnoreCase))
+            return "User";
+        if (entry.Action.Contains("project", StringComparison.OrdinalIgnoreCase))
+            return "Project";
+
+        return "—";
+    }
+
+    private string GetObjectName(AuditEntry entry)
+    {
+        if (entry.Details == null) return "—";
+
+        // Launch-specific fields
+        if (entry.Details.TryGetValue("launchName", out var launchName))
+            return launchName;
+        if (entry.Details.TryGetValue("launchId", out var launchId))
+            return launchId;
+
+        // Test item-specific fields
+        if (entry.Details.TryGetValue("itemId", out var itemId))
+            return itemId;
+        if (entry.Details.TryGetValue("itemType", out var itemType))
+            return itemType;
+
+        // User/Project fields
+        if (entry.Details.TryGetValue("userId", out var userId))
+            return userId;
+        if (entry.Details.TryGetValue("user", out var user))
+            return user;
+        if (entry.Details.TryGetValue("username", out var username))
+            return username;
+        if (entry.Details.TryGetValue("project", out var project))
+            return project;
+        if (entry.Details.TryGetValue("key", out var key))
+            return key;
+
+        return "—";
+    }
+
+    private string GetOldValue(AuditEntry entry)
+    {
+        if (entry.Details == null) return "—";
+
+        // Launch/Test cleanup-specific
+        if (entry.Details.TryGetValue("previousStatus", out var prevStatus))
+            return prevStatus;
+
+        // User/Role fields
+        if (entry.Details.TryGetValue("oldRole", out var oldRole))
+            return oldRole;
+        if (entry.Details.TryGetValue("previousValue", out var prevValue))
+            return prevValue;
+
+        return "—";
+    }
+
+    private string GetNewValue(AuditEntry entry)
+    {
+        if (entry.Details == null) return "—";
+
+        // Launch/Test cleanup-specific - show stopped counts
+        if (entry.Action == "launch.autoStop")
+        {
+            var parts = new List<string>();
+            if (entry.Details.TryGetValue("stoppedRuns", out var runs) && runs != "0")
+                parts.Add($"{runs} runs");
+            if (entry.Details.TryGetValue("stoppedSuites", out var suites) && suites != "0")
+                parts.Add($"{suites} suites");
+            if (entry.Details.TryGetValue("releasedBrowsers", out var browsers) && browsers != "0")
+                parts.Add($"{browsers} browsers");
+            if (entry.Details.TryGetValue("newStatus", out var newStatus))
+                parts.Add($"→ {newStatus}");
+            return parts.Count > 0 ? string.Join(", ", parts) : "Stopped";
+        }
+
+        if (entry.Action == "testItem.autoStop")
+        {
+            var parts = new List<string>();
+            if (entry.Details.TryGetValue("outstanding", out var outstanding))
+                parts.Add($"{outstanding} browsers");
+            if (entry.Details.TryGetValue("released", out var released))
+                parts.Add($"{released} released");
+            return parts.Count > 0 ? string.Join(", ", parts) : "Stopped";
+        }
+
+        if (entry.Action == "ForceFinish")
+        {
+            var parts = new List<string>();
+            if (entry.Details.TryGetValue("testItemsStopped", out var items))
+                parts.Add($"{items} items");
+            if (entry.Details.TryGetValue("browsersReleased", out var browsers))
+                parts.Add($"{browsers} browsers");
+            if (entry.Details.TryGetValue("newStatus", out var newStatus))
+                parts.Add($"→ {newStatus}");
+            return parts.Count > 0 ? string.Join(", ", parts) : "Stopped";
+        }
+
+        // User/Role fields
+        if (entry.Details.TryGetValue("newRole", out var newRole))
+            return newRole;
+        if (entry.Details.TryGetValue("role", out var role))
+            return role;
+        if (entry.Details.TryGetValue("value", out var value))
+            return value;
+
+        return "—";
+    }
+
+    private sealed class AuditEntry
+    {
+        public DateTime TimestampUtc { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Action { get; } = string.Empty;
+        public string? Actor { get; set; }
+        public string? RemoteIp { get; set; }
+        public string? CorrelationId { get; set; }
+        public string? Severity { get; set; }
+        public Dictionary<string, string>? Details { get; set; }
+    }
+
+}

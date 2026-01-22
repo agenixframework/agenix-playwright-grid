@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -29,11 +29,15 @@ public class WorkerOptionsBorrowIdleTests
         var prevIdle = Environment.GetEnvironmentVariable("HUB_IDLE_TIMEOUT_SECONDS");
         var prevPool = Environment.GetEnvironmentVariable("POOL_CONFIG");
         var prevRegion = Environment.GetEnvironmentVariable("NODE_REGION");
+        var prevWsHost = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST");
+        var prevWsPort = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT");
         try
         {
             Environment.SetEnvironmentVariable("HUB_IDLE_TIMEOUT_SECONDS", null);
             Environment.SetEnvironmentVariable("POOL_CONFIG", "AppA:Chromium:Staging=1");
             Environment.SetEnvironmentVariable("NODE_REGION", "local");
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST", null);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT", null);
 
             var opts = WorkerOptions.FromEnvironment();
             Assert.That(opts.BorrowIdleTimeoutSeconds, Is.EqualTo(120));
@@ -43,6 +47,8 @@ public class WorkerOptionsBorrowIdleTests
             Environment.SetEnvironmentVariable("HUB_IDLE_TIMEOUT_SECONDS", prevIdle);
             Environment.SetEnvironmentVariable("POOL_CONFIG", prevPool);
             Environment.SetEnvironmentVariable("NODE_REGION", prevRegion);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST", prevWsHost);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT", prevWsPort);
         }
     }
 
@@ -52,10 +58,14 @@ public class WorkerOptionsBorrowIdleTests
         var prevIdle = Environment.GetEnvironmentVariable("HUB_IDLE_TIMEOUT_SECONDS");
         var prevPool = Environment.GetEnvironmentVariable("POOL_CONFIG");
         var prevRegion = Environment.GetEnvironmentVariable("NODE_REGION");
+        var prevWsHost = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST");
+        var prevWsPort = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT");
         try
         {
             Environment.SetEnvironmentVariable("POOL_CONFIG", "AppA:Chromium:Staging=1");
             Environment.SetEnvironmentVariable("NODE_REGION", "local");
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST", null);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT", null);
 
             Environment.SetEnvironmentVariable("HUB_IDLE_TIMEOUT_SECONDS", "300");
             var opts1 = WorkerOptions.FromEnvironment();
@@ -74,6 +84,8 @@ public class WorkerOptionsBorrowIdleTests
             Environment.SetEnvironmentVariable("HUB_IDLE_TIMEOUT_SECONDS", prevIdle);
             Environment.SetEnvironmentVariable("POOL_CONFIG", prevPool);
             Environment.SetEnvironmentVariable("NODE_REGION", prevRegion);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST", prevWsHost);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT", prevWsPort);
         }
     }
 }

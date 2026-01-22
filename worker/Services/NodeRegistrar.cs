@@ -1,11 +1,9 @@
-using WorkerService.Application.Ports;
-using WorkerService.Infrastructure;
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -18,29 +16,26 @@ using WorkerService.Infrastructure;
 // limitations under the License.
 #endregion
 
+using WorkerService.Application.Ports;
+using WorkerService.Infrastructure;
+
 namespace WorkerService.Services;
 
-public sealed class NodeRegistrar
+public sealed class NodeRegistrar(IHubClient hub, WorkerOptions options)
 {
-    private readonly IHubClient _hub;
-    private readonly WorkerOptions _options;
-
-    public NodeRegistrar(IHubClient hub, WorkerOptions options)
-    {
-        _hub = hub;
-        _options = options;
-    }
-
     public async Task RegisterAsync()
     {
-        var baseUrl = $"http://{Environment.GetEnvironmentVariable("HOSTNAME") ?? _options.NodeId}:5000";
-        await _hub.RegisterAsync(
-            _options.HubUrl,
-            _options.NodeSecret,
-            _options.NodeId,
+        var port = options.PublicWsPort ?? "5000";
+        var baseUrl = $"http://{Environment.GetEnvironmentVariable("HOSTNAME") ?? options.NodeId}:{port}";
+        var playwrightVersion = Environment.GetEnvironmentVariable("PLAYWRIGHT_VERSION");
+        await hub.RegisterAsync(
+            options.HubUrl,
+            options.NodeSecret,
+            options.NodeId,
             baseUrl,
-            _options.PoolConfig.Keys.ToArray(),
-            _options.PoolConfig.Values.Sum(),
-            _options.Labels.ToDictionary(k => k.Key, v => v.Value));
+            options.PoolConfig.Keys.ToArray(),
+            options.PoolConfig.Values.Sum(),
+            options.Labels.ToDictionary(k => k.Key, v => v.Value),
+            playwrightVersion);
     }
 }

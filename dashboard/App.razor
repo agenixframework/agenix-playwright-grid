@@ -1,15 +1,37 @@
-@using Dashboard.Shared
-@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Authorization
 <ErrorBoundary>
     <ChildContent>
-        <Router AppAssembly="@typeof(Program).Assembly">
-            <Found Context="routeData">
-                <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-            </Found>
-            <NotFound>
-                <p>Not found</p>
-            </NotFound>
-        </Router>
+        <CascadingAuthenticationState>
+            <Router AppAssembly="@typeof(Program).Assembly">
+                <Found Context="routeData">
+                    @if (routeData.PageType == typeof(Login))
+                    {
+                        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
+                    }
+                    else
+                    {
+                        <AuthorizeView>
+                            <Authorized>
+                                <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
+                            </Authorized>
+                            <NotAuthorized>
+                                <RedirectToLogin/>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    }
+                </Found>
+                <NotFound>
+                    <AuthorizeView>
+                        <Authorized>
+                            <NotFound/>
+                        </Authorized>
+                        <NotAuthorized>
+                            <RedirectToLogin/>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </NotFound>
+            </Router>
+        </CascadingAuthenticationState>
     </ChildContent>
     <ErrorContent>
         <div class="container mt-3">

@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #endregion
+
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using StackExchange.Redis;
@@ -57,6 +59,7 @@ public class HeartbeatServiceLoopTests
                 It.IsAny<bool>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
 
+        var logger = new Mock<ILogger<HeartbeatService>>(MockBehavior.Loose);
         var svc = new HeartbeatService(options, db.Object);
         using var cts = new CancellationTokenSource();
 

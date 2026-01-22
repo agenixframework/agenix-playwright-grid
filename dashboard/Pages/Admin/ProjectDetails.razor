@@ -1,0 +1,901 @@
+@page "/admin/projects/{Key}"
+@using System.Net
+@using System.Security.Claims
+@using System.Text.Json
+@using Agenix.PlaywrightGrid.Domain
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Nav
+@inject IHttpContextAccessor Accessor
+
+<Dashboard.Shared.AdminTabs/>
+
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path
+                    d="M1.5 1A1.5 1.5 0 0 0 0 2.5v11A1.5 1.5 0 0 0 1.5 15h13a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 14.5 4H9.793l-.854-.854A.5.5 0 0 0 8.586 3H1.5z"/>
+            </svg>
+        </div>
+        <div>
+            <h3>Project: @Key</h3>
+            <div class="subtitle">View and manage project details</div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <Dashboard.Shared.ValidationPanel Error="@Error" AriaLive="assertive"/>
+}
+
+@if (Project is null)
+{
+    <div class="text-muted">Loading…</div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button class="nav-link @(ActiveTab == "settings" ? "active" : "")" @onclick="SetTabSettings">Settings
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(ActiveTab == "members" ? "active" : "")" @onclick="SetTabMembers">Members</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(ActiveTab == "activity" ? "active" : "")" @onclick="SetTabActivity">Activity
+            </button>
+        </li>
+    </ul>
+
+    @if (ActiveTab == "settings")
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label">Project key</label>
+                        <input class="form-control" value="@Project.Key" disabled/>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Name</label>
+                        <input class="form-control" @bind="EditName" maxlength="128"/>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label">Owner (user id)</label>
+                        <input class="form-control" @bind="EditOwner"/>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label">Status</label>
+                        <div class="d-flex align-items-center gap-2">
+                            @StatusBadge(Project.Status)
+                            @if (Project.Status == ProjectStatus.Active)
+                            {
+                                <button class="btn btn-outline-warning btn-sm" disabled="@_busy"
+                                        @onclick="ArchiveAsync">Archive
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" disabled="@_busy" @onclick="DisableAsync">
+                                    Disable
+                                </button>
+                            }
+                            else if (Project.Status == ProjectStatus.Archived || Project.Status == ProjectStatus.Disabled)
+                            {
+                                <button class="btn btn-outline-success btn-sm" disabled="@_busy"
+                                        @onclick="RestoreAsync">Restore
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-12 d-flex align-items-center justify-content-end">
+                        <button class="btn btn-secondary me-2" @onclick="CancelSettings" disabled="@_busy">Cancel
+                        </button>
+                        <button class="btn btn-success" @onclick="SaveSettingsAsync" disabled="@_busy">
+                            @if (_busy)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"
+                                      aria-hidden="true"></span>
+                                <span>Save…</span>
+                            }
+                            else
+                            {
+                                <span>Save</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(SettingsError))
+                {
+                    <Dashboard.Shared.ValidationPanel Error="@SettingsError"/>
+                }
+            </div>
+        </div>
+    }
+    else if (ActiveTab == "members")
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-primary ms-auto" @onclick="OpenInvite">Invite user</button>
+                </div>
+
+                @if (_inviteOpen)
+                {
+                    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true"
+                         aria-labelledby="inviteTitle" style="background-color: rgba(0, 0, 0, 0.5);">
+                        <div class="modal-dialog modal-dialog-centered" role="document" @onkeydown="OnInviteKeyDown">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="inviteTitle">Invite user to project</h5>
+                                    <button type="button" class="btn-close" aria-label="Close"
+                                            @onclick="CloseInvite"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Login or email</label>
+                                        <input class="form-control" list="dlUserIds" @bind="NewMemberId"
+                                               @oninput="OnUserIdInput" placeholder="Type to search…"/>
+                                        <datalist id="dlUserIds">
+                                            @if (UserSuggestions is not null)
+                                            {
+                                                foreach (var u in UserSuggestions)
+                                                {
+                                                    <option value="@u.Id" label="@u.Display"></option>
+                                                }
+                                            }
+                                        </datalist>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Project role</label>
+                                        <select class="form-select" @bind="NewMemberRole">
+                                            @foreach (var role in Enum.GetValues<ProjectRole>())
+                                            {
+                                                <option value="@role.ToString()">@role.ToString()</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(MembersError))
+                                    {
+                                        <Dashboard.Shared.ValidationPanel Error="@MembersError"/>
+                                    }
+                                </div>
+                                <div class="modal-footer">
+                                    <button class="btn btn-secondary" @onclick="CloseInvite">Cancel</button>
+                                    <button class="btn btn-primary" disabled="@_busy"
+                                            @onclick="AddMemberFromModalAsync">Add member
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <caption class="visually-hidden">Project members</caption>
+                <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (Members is null)
+                {
+                    <tr>
+                        <td colspan="3"><span class="text-muted">Loading…</span></td>
+                    </tr>
+                }
+                else if (Members.Length == 0)
+                {
+                    <tr>
+                        <td colspan="3"><span class="text-muted">No members.</span></td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var m in Members)
+                    {
+                        <tr>
+                            <td>@m.UserId</td>
+                            <td>
+                                <select class="form-select form-select-sm" value="@m.Role.ToString()"
+                                        @onchange="e=>OnRoleChanged(m, e)" disabled="@IsSelf(m.UserId)">
+                                    @foreach (var role in Enum.GetValues<ProjectRole>())
+                                    {
+                                        <option value="@role.ToString()">@role.ToString()</option>
+                                    }
+                                </select>
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-outline-danger btn-sm" disabled="@IsSelf(m.UserId)"
+                                        @onclick="() => RemoveMemberAsync(m)">Remove
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (ActiveTab == "activity")
+    {
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <caption class="visually-hidden">Project activity</caption>
+                <thead>
+                <tr>
+                    <th>Time (UTC)</th>
+                    <th>Action</th>
+                    <th>Actor</th>
+                    <th>Details</th>
+                </tr>
+                </thead>
+                <tbody>
+                @if (Activity is null)
+                {
+                    <tr>
+                        <td colspan="4"><span class="text-muted">Loading…</span></td>
+                    </tr>
+                }
+                else if (Activity.Count == 0)
+                {
+                    <tr>
+                        <td colspan="4"><span class="text-muted">No activity.</span></td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var a in Activity)
+                    {
+                        <tr>
+                            <td><span title="@a.TimestampUtc.ToString("u")">@FormatAgo(a.TimestampUtc)</span></td>
+                            <td>@a.Action</td>
+                            <td>@(string.IsNullOrWhiteSpace(a.Actor) ? (MarkupString)"<span class='text-muted'>—</span>" : a.Actor)</td>
+                            <td>@FormatDetails(a.Details)</td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex">
+            <div class="small text-muted">@("Showing " + (Activity?.Count ?? 0) + " items")</div>
+            <div class="ms-auto">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" disabled="@(_activitySkip <= 0)" @onclick="PrevActivity">
+                        Prev
+                    </button>
+                    <button class="btn btn-outline-secondary" disabled="@((Activity?.Count ?? 0) < _activityTake)"
+                            @onclick="NextActivity">Next
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+<Dashboard.Shared.ConfirmDialog @ref="Confirm"/>
+
+<style>
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2rem 0 1.5rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .header-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .page-header h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--brand-text);
+        margin: 0;
+    }
+
+    .subtitle {
+        color: var(--brand-muted);
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
+@code {
+    [Parameter] public string Key { get; set; } = string.Empty;
+
+    private Project? Project { get; set; }
+    private string ActiveTab { get; set; } = "settings";
+    private string? Error { get; set; }
+
+    // Settings state
+    private string EditName { get; set; } = string.Empty;
+    private string? EditOwner { get; set; }
+    private string? SettingsError { get; set; }
+
+    // Members state
+    private Membership[]? Members { get; set; }
+    private string NewMemberId { get; set; } = string.Empty;
+    private string NewMemberRole { get; set; } = ProjectRole.Client.ToString();
+    private string? MembersError { get; set; }
+
+    // Invite modal state
+    private bool _inviteOpen;
+
+    private void OpenInvite()
+    {
+        MembersError = null;
+        _inviteOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseInvite()
+    {
+        _inviteOpen = false;
+        StateHasChanged();
+    }
+
+    private void OnInviteKeyDown(KeyboardEventArgs e)
+    {
+        if (e?.Key == "Escape") CloseInvite();
+    }
+
+    private async Task AddMemberFromModalAsync()
+    {
+        await AddMemberAsync();
+        if (string.IsNullOrEmpty(MembersError))
+        {
+            _inviteOpen = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Suggestions for user search
+    private sealed record UserSuggestion(string Id, string Display);
+
+    private List<UserSuggestion>? UserSuggestions { get; set; }
+    private string _lastUserQuery = string.Empty;
+
+    private async Task OnUserIdInput(ChangeEventArgs e)
+    {
+        var v = e?.Value?.ToString() ?? string.Empty;
+        if (v == _lastUserQuery) return;
+        _lastUserQuery = v;
+        await LoadUserSuggestionsAsync(v);
+    }
+
+    private async Task LoadUserSuggestionsAsync(string q)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(q))
+            {
+                UserSuggestions = null;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.GetAsync($"/admin/users?q={Uri.EscapeDataString(q)}&take=10");
+            if (!resp.IsSuccessStatusCode)
+            {
+                UserSuggestions = null;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var list = new List<UserSuggestion>();
+            if (doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in items.EnumerateArray())
+                {
+                    var id = el.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String ? idEl.GetString() ?? string.Empty : string.Empty;
+                    var username = el.TryGetProperty("username", out var un) && un.ValueKind == JsonValueKind.String ? un.GetString() ?? string.Empty : string.Empty;
+                    var email = el.TryGetProperty("email", out var em) && em.ValueKind == JsonValueKind.String ? em.GetString() ?? string.Empty : string.Empty;
+                    var display = string.IsNullOrEmpty(email) ? username : $"{username} ({email})";
+                    if (!string.IsNullOrEmpty(id)) list.Add(new UserSuggestion(id, display));
+                }
+            }
+
+            UserSuggestions = list;
+        }
+        catch
+        {
+            UserSuggestions = null;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Current user context
+    private string? CurrentUserId { get; set; }
+
+    private bool IsSelf(string? id)
+    {
+        return !string.IsNullOrWhiteSpace(CurrentUserId) && !string.IsNullOrWhiteSpace(id) && string.Equals(CurrentUserId, id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Activity state
+    private List<AuditView>? Activity { get; set; }
+    private int _activitySkip;
+    private readonly int _activityTake = 20;
+
+    private bool _busy;
+    private ConfirmDialog? Confirm;
+
+    private void SetTabSettings()
+    {
+        SetTab("settings");
+    }
+
+    private void SetTabMembers()
+    {
+        SetTab("members");
+    }
+
+    private void SetTabActivity()
+    {
+        SetTab("activity");
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            var principal = Accessor?.HttpContext?.User;
+            var name = principal?.Identity?.Name;
+            CurrentUserId = principal?.FindFirst("preferred_username")?.Value
+                            ?? principal?.FindFirst(ClaimTypes.Email)?.Value
+                            ?? name
+                            ?? principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+        catch
+        {
+        }
+
+        await LoadProjectAsync();
+        await LoadMembersAsync();
+        await LoadActivityAsync();
+    }
+
+    private void SetTab(string tab)
+    {
+        ActiveTab = tab;
+        StateHasChanged();
+        if (tab == "members" && Members is null) _ = LoadMembersAsync();
+        if (tab == "activity" && Activity is null) _ = LoadActivityAsync();
+    }
+
+    private async Task LoadProjectAsync()
+    {
+        try
+        {
+            Error = null;
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.GetAsync($"/admin/projects/{Uri.EscapeDataString(Key)}");
+            if (!resp.IsSuccessStatusCode)
+            {
+                Error = $"Failed to load project: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+            Project = JsonSerializer.Deserialize<Project>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            EditName = Project?.Name ?? string.Empty;
+            EditOwner = Project?.OwnerUserId;
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        if (Project is null) return;
+        if (_busy) return;
+        SettingsError = null;
+        if (string.IsNullOrWhiteSpace(EditName))
+        {
+            SettingsError = "Name is required";
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new Dictionary<string, object?>
+            {
+                ["name"] = EditName.Trim(),
+                ["ownerUserId"] = string.IsNullOrWhiteSpace(EditOwner) ? null : EditOwner!.Trim()
+            };
+            var resp = await client.PatchAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(Project.Key)}", payload);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                SettingsError = ParseErrorMessage(text) ?? $"Save failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            // refresh
+            await LoadProjectAsync();
+        }
+        catch (Exception ex)
+        {
+            SettingsError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void CancelSettings()
+    {
+        if (Project is null) return;
+        EditName = Project.Name;
+        EditOwner = Project.OwnerUserId;
+        SettingsError = null;
+    }
+
+    private async Task ArchiveAsync()
+    {
+        if (Project is null || Confirm is null) return;
+        var ok = await Confirm.Show($"Archive project '{Project.Key}'? This is reversible.", "Archive project", "Archive", "Cancel");
+        if (!ok) return;
+        await PostActionAsync($"/admin/projects/{Uri.EscapeDataString(Project.Key)}/archive");
+    }
+
+    private async Task RestoreAsync()
+    {
+        if (Project is null) return;
+        await PostActionAsync($"/admin/projects/{Uri.EscapeDataString(Project.Key)}/restore");
+    }
+
+    private async Task DisableAsync()
+    {
+        if (Project is null || Confirm is null) return;
+        var ok = await Confirm.Show($"Disable project '{Project.Key}'? Members will lose access.", "Disable project", "Disable", "Cancel");
+        if (!ok) return;
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.DeleteAsync($"/admin/projects/{Uri.EscapeDataString(Project.Key)}");
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                SettingsError = ParseErrorMessage(text) ?? $"Disable failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            await LoadProjectAsync();
+        }
+        catch (Exception ex)
+        {
+            SettingsError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task PostActionAsync(string url)
+    {
+        try
+        {
+            _busy = true;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.PostAsync(url, null);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                SettingsError = ParseErrorMessage(text) ?? $"Action failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            await LoadProjectAsync();
+        }
+        catch (Exception ex)
+        {
+            SettingsError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        MembersError = null;
+        try
+        {
+            Members = null;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.GetAsync($"/admin/projects/{Uri.EscapeDataString(Key)}/members");
+            if (!resp.IsSuccessStatusCode)
+            {
+                MembersError = $"Failed to load members: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                Members = Array.Empty<Membership>();
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+            var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<Membership>();
+                foreach (var el in items.EnumerateArray())
+                {
+                    try
+                    {
+                        var m = JsonSerializer.Deserialize<Membership>(el.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (m != null) list.Add(m);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                Members = list.ToArray();
+            }
+            else
+            {
+                Members = Array.Empty<Membership>();
+            }
+        }
+        catch (Exception ex)
+        {
+            MembersError = ex.Message;
+            Members = Array.Empty<Membership>();
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewMemberId))
+        {
+            MembersError = "User id is required";
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            MembersError = null;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new Dictionary<string, object?> { ["role"] = NewMemberRole };
+            var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(Key)}/members/{Uri.EscapeDataString(NewMemberId.Trim())}", payload);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                MembersError = ParseErrorMessage(text) ?? $"Add member failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            NewMemberId = string.Empty;
+            NewMemberRole = ProjectRole.Client.ToString();
+            await LoadMembersAsync();
+        }
+        catch (Exception ex)
+        {
+            MembersError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnRoleChanged(Membership m, ChangeEventArgs e)
+    {
+        var role = e?.Value?.ToString() ?? ProjectRole.Client.ToString();
+        _ = ChangeRoleAsync(m, role);
+    }
+
+    private async Task ChangeRoleAsync(Membership m, string role)
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var payload = new Dictionary<string, object?> { ["role"] = role };
+            var resp = await client.PutAsJsonAsync($"/admin/projects/{Uri.EscapeDataString(Key)}/members/{Uri.EscapeDataString(m.UserId)}", payload);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                MembersError = ParseErrorMessage(text) ?? $"Change role failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                await LoadMembersAsync();
+                return;
+            }
+
+            // Re-load to reflect init-only role change
+            await LoadMembersAsync();
+        }
+        catch (Exception ex)
+        {
+            MembersError = ex.Message;
+        }
+    }
+
+    private async Task RemoveMemberAsync(Membership m)
+    {
+        if (Confirm is null) return;
+        // Warning if removing the owner
+        if (!string.IsNullOrWhiteSpace(Project?.OwnerUserId) && string.Equals(Project.OwnerUserId, m.UserId, StringComparison.OrdinalIgnoreCase))
+        {
+            var proceedOwner = await Confirm.Show($"User '{m.UserId}' is the owner. Remove anyway?", "Remove owner?", "Remove", "Cancel");
+            if (!proceedOwner) return;
+        }
+
+        var ok = await Confirm.Show($"Remove '{m.UserId}' from project '{Key}'?", "Remove member", "Remove", "Cancel");
+        if (!ok) return;
+        try
+        {
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var resp = await client.DeleteAsync($"/admin/projects/{Uri.EscapeDataString(Key)}/members/{Uri.EscapeDataString(m.UserId)}");
+            if (!resp.IsSuccessStatusCode)
+            {
+                var text = await resp.Content.ReadAsStringAsync();
+                MembersError = ParseErrorMessage(text) ?? $"Remove member failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                return;
+            }
+
+            await LoadMembersAsync();
+        }
+        catch (Exception ex)
+        {
+            MembersError = ex.Message;
+        }
+    }
+
+    private async Task LoadActivityAsync()
+    {
+        try
+        {
+            Activity = null;
+            await InvokeAsync(StateHasChanged);
+            var client = HttpFactory.CreateClient(HttpClientNames.Hub);
+            // Pull recent admin audit entries and filter client-side by project key in details
+            var url = $"/audit?skip={_activitySkip}&take={_activityTake}&category=admin";
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                Activity = new List<AuditView>();
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+            var items = JsonSerializer.Deserialize<List<AuditView>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<AuditView>();
+            // Client filter: include entries where Details contains project Key or project action
+            var filtered = items.Where(e => e.Details != null && ((e.Details!.TryGetValue("project", out var pk) && string.Equals(pk, Key, StringComparison.OrdinalIgnoreCase)) ||
+                                                                  (e.Details!.TryGetValue("key", out var k) && string.Equals(k, Key, StringComparison.OrdinalIgnoreCase)))
+            ).ToList();
+            Activity = filtered;
+        }
+        catch
+        {
+            Activity = new List<AuditView>();
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void NextActivity()
+    {
+        _activitySkip += _activityTake;
+        _ = LoadActivityAsync();
+    }
+
+    private void PrevActivity()
+    {
+        _activitySkip = Math.Max(0, _activitySkip - _activityTake);
+        _ = LoadActivityAsync();
+    }
+
+    private static MarkupString StatusBadge(ProjectStatus status)
+    {
+        var css = status switch
+        {
+            ProjectStatus.Active => "badge bg-success-subtle text-success-emphasis border border-success-subtle",
+            ProjectStatus.Archived => "badge bg-warning-subtle text-warning-emphasis border border-warning-subtle",
+            ProjectStatus.Disabled => "badge bg-danger-subtle text-danger-emphasis border border-danger-subtle",
+            _ => "badge bg-secondary"
+        };
+        return (MarkupString)$"<span class='{css}'>{status}</span>";
+    }
+
+    private static string FormatAgo(DateTime utc)
+    {
+        var delta = DateTime.UtcNow - utc;
+        if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return utc.ToString("u");
+    }
+
+    private static MarkupString FormatDetails(Dictionary<string, string>? details)
+    {
+        if (details is null || details.Count == 0) return (MarkupString)"<span class='text-muted'>—</span>";
+        var parts = details.Select(kv => $"<span class='badge text-bg-light me-1'>{WebUtility.HtmlEncode(kv.Key)}: {WebUtility.HtmlEncode(kv.Value)}</span>");
+        return (MarkupString)string.Join(" ", parts);
+    }
+
+    private static string? ParseErrorMessage(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String)
+            {
+                return e.GetString();
+            }
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
+
+    private sealed class AuditView
+    {
+        public DateTime TimestampUtc { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Action { get; } = string.Empty;
+        public string? Actor { get; set; }
+        public string? RemoteIp { get; set; }
+        public string? CorrelationId { get; set; }
+        public string? Severity { get; set; }
+        public Dictionary<string, string>? Details { get; set; }
+    }
+
+}

@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -15,9 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #endregion
-
-using System;
-using System.IO;
 
 namespace WorkerService.Infrastructure;
 
@@ -38,29 +35,48 @@ internal static class DotEnv
         try
         {
             if (string.Equals(Environment.GetEnvironmentVariable("DISABLE_DOTENV"), "1", StringComparison.Ordinal))
+            {
                 return;
+            }
 
             var filePath = path ?? FindEnvFile();
-            if (filePath == null || !File.Exists(filePath)) return;
+            if (filePath == null || !File.Exists(filePath))
+            {
+                return;
+            }
 
             foreach (var rawLine in File.ReadAllLines(filePath))
             {
                 var line = rawLine.Trim();
-                if (line.Length == 0 || line.StartsWith("#")) continue;
+                if (line.Length == 0 || line.StartsWith("#"))
+                {
+                    continue;
+                }
+
                 var idx = line.IndexOf('=');
-                if (idx <= 0) continue;
+                if (idx <= 0)
+                {
+                    continue;
+                }
 
                 var key = line[..idx].Trim();
                 var value = line[(idx + 1)..].Trim();
 
                 // Strip optional surrounding quotes for common cases
                 if (value.Length >= 2 && value.StartsWith("\"") && value.EndsWith("\""))
+                {
                     value = value.Substring(1, value.Length - 2);
+                }
 
-                if (key.Length == 0) continue;
+                if (key.Length == 0)
+                {
+                    continue;
+                }
 
                 if (!overrideExisting && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+                {
                     continue;
+                }
 
                 Environment.SetEnvironmentVariable(key, value);
             }
@@ -77,9 +93,14 @@ internal static class DotEnv
         while (!string.IsNullOrEmpty(dir))
         {
             var candidate = Path.Combine(dir, ".env");
-            if (File.Exists(candidate)) return candidate;
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
             dir = Directory.GetParent(dir)?.FullName ?? string.Empty;
         }
+
         return null;
     }
 }

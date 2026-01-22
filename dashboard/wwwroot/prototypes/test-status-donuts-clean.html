@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Test Status Donuts - Clean</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 40px;
+      font-size: 2rem;
+    }
+
+    /* Table example */
+    .table-example {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 40px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: center;
+      padding: 12px;
+      border-bottom: 2px solid #e0e0e0;
+      color: #666;
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      text-align: center;
+      padding: 20px 12px;
+    }
+
+    /* Donut styles */
+    .donut-wrapper {
+      display: inline-block;
+      position: relative;
+    }
+
+    .donut-svg {
+      transform: rotate(-90deg);
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    }
+
+    .donut-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .percentage-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: #667eea;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .percentage-badge.passed {
+      background: #10B981;
+    }
+
+    .percentage-badge.failed {
+      background: #EF4444;
+    }
+
+    .percentage-badge.skipped {
+      background: #F59E0B;
+    }
+
+    .percentage-badge.timedout {
+      background: #8B5CF6;
+    }
+
+    /* Card grid example */
+    .cards-section {
+      margin-bottom: 40px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      border: 2px solid #e0e0e0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card.total {
+      border-color: #9CA3AF;
+    }
+
+    .stat-card.passed {
+      border-color: #10B981;
+    }
+
+    .stat-card.failed {
+      border-color: #EF4444;
+    }
+
+    .stat-card.skipped {
+      border-color: #F59E0B;
+    }
+
+    .stat-card.timedout {
+      border-color: #8B5CF6;
+    }
+
+    h2 {
+      color: #666;
+      margin-bottom: 20px;
+      font-size: 1.2rem;
+    }
+
+    /* Size variants */
+    .size-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .size-btn {
+      padding: 8px 16px;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .size-btn:hover, .size-btn.active {
+      background: #667eea;
+      color: white;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .cards-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🍩 Test Status Donuts - Clean (No Labels)</h1>
+
+  <!-- Table Example -->
+  <div class="table-example">
+    <h2>Example 1: Table with Column Headers</h2>
+    <table>
+      <thead>
+      <tr>
+        <th>Total</th>
+        <th>Passed</th>
+        <th>Failed</th>
+        <th>Skipped</th>
+        <th>Timed Out</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td>
+          <div class="donut-wrapper" id="total-donut"></div>
+        </td>
+        <td>
+          <div class="donut-wrapper" id="passed-donut"></div>
+        </td>
+        <td>
+          <div class="donut-wrapper" id="failed-donut"></div>
+        </td>
+        <td>
+          <div class="donut-wrapper" id="skipped-donut"></div>
+        </td>
+        <td>
+          <div class="donut-wrapper" id="timedout-donut"></div>
+        </td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Card Grid Example -->
+  <div class="cards-section">
+    <h2>Example 2: Card Grid (for comparison)</h2>
+    <div class="size-controls">
+      <button class="size-btn" onclick="changeSize(80)">Small (80px)</button>
+      <button class="size-btn active" onclick="changeSize(100)">Medium (100px)</button>
+      <button class="size-btn" onclick="changeSize(120)">Large (120px)</button>
+    </div>
+    <div class="cards-grid">
+      <div class="stat-card total">
+        <div class="donut-wrapper" id="card-total"></div>
+      </div>
+      <div class="stat-card passed">
+        <div class="donut-wrapper" id="card-passed"></div>
+      </div>
+      <div class="stat-card failed">
+        <div class="donut-wrapper" id="card-failed"></div>
+      </div>
+      <div class="stat-card skipped">
+        <div class="donut-wrapper" id="card-skipped"></div>
+      </div>
+      <div class="stat-card timedout">
+        <div class="donut-wrapper" id="card-timedout"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Test data - matching actual data (3 tests total)
+  const data = {
+    total: 3,
+    passed: 1,
+    failed: 1,
+    skipped: 1,
+    timedout: 0
+  };
+
+  let currentSize = 100;
+
+  function createDonut(value, segments, size = 100, showPercentage = false, percentageType = '') {
+    const radius = size * 0.4;
+    const strokeWidth = size * 0.2;
+    const circumference = 2 * Math.PI * radius;
+
+    let html = `
+                <svg class="donut-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+                    <circle cx="${size / 2}" cy="${size / 2}" r="${radius}"
+                            fill="none" stroke="#E5E7EB" stroke-width="${strokeWidth}" />
+            `;
+
+    let offset = 0;
+    segments.forEach(segment => {
+      const segmentLength = (segment.value / data.total) * circumference;
+      html += `
+                    <circle cx="${size / 2}" cy="${size / 2}" r="${radius}"
+                            fill="none"
+                            stroke="${segment.color}"
+                            stroke-width="${strokeWidth}"
+                            stroke-dasharray="${segmentLength} ${circumference}"
+                            stroke-dashoffset="${-offset}"
+                            opacity="0.9" />
+                `;
+      offset += segmentLength;
+    });
+
+    html += `</svg>`;
+    html += `<div class="donut-center" style="font-size: ${size * 0.15}px;">${value}</div>`;
+
+    if (showPercentage && value !== data.total) {
+      const percentage = ((value / data.total) * 100).toFixed(1);
+      html += `<div class="percentage-badge ${percentageType}">${percentage}%</div>`;
+    }
+
+    return html;
+  }
+
+  function renderDonuts(size = 100) {
+    currentSize = size;
+
+    // Total donut
+    document.getElementById('total-donut').innerHTML = createDonut(
+      data.total,
+      [
+        {value: data.passed, color: '#10B981'},
+        {value: data.failed, color: '#EF4444'},
+        {value: data.skipped, color: '#F59E0B'},
+        {value: data.timedout, color: '#8B5CF6'}
+      ],
+      size
+    );
+
+    // Passed donut
+    document.getElementById('passed-donut').innerHTML = createDonut(
+      data.passed,
+      [{value: data.passed, color: '#10B981'}],
+      size,
+      true,
+      'passed'
+    );
+
+    // Failed donut
+    document.getElementById('failed-donut').innerHTML = createDonut(
+      data.failed,
+      [{value: data.failed, color: '#EF4444'}],
+      size,
+      true,
+      'failed'
+    );
+
+    // Skipped donut
+    document.getElementById('skipped-donut').innerHTML = createDonut(
+      data.skipped,
+      [{value: data.skipped, color: '#F59E0B'}],
+      size,
+      true,
+      'skipped'
+    );
+
+    // Timed out donut
+    document.getElementById('timedout-donut').innerHTML = createDonut(
+      data.timedout,
+      [{value: data.timedout, color: '#8B5CF6'}],
+      size,
+      true,
+      'timedout'
+    );
+
+    // Card donuts
+    document.getElementById('card-total').innerHTML = createDonut(
+      data.total,
+      [
+        {value: data.passed, color: '#10B981'},
+        {value: data.failed, color: '#EF4444'},
+        {value: data.skipped, color: '#F59E0B'},
+        {value: data.timedout, color: '#8B5CF6'}
+      ],
+      size
+    );
+
+    document.getElementById('card-passed').innerHTML = createDonut(
+      data.passed,
+      [{value: data.passed, color: '#10B981'}],
+      size,
+      true,
+      'passed'
+    );
+
+    document.getElementById('card-failed').innerHTML = createDonut(
+      data.failed,
+      [{value: data.failed, color: '#EF4444'}],
+      size,
+      true,
+      'failed'
+    );
+
+    document.getElementById('card-skipped').innerHTML = createDonut(
+      data.skipped,
+      [{value: data.skipped, color: '#F59E0B'}],
+      size,
+      true,
+      'skipped'
+    );
+
+    document.getElementById('card-timedout').innerHTML = createDonut(
+      data.timedout,
+      [{value: data.timedout, color: '#8B5CF6'}],
+      size,
+      true,
+      'timedout'
+    );
+  }
+
+  function changeSize(size) {
+    const buttons = document.querySelectorAll('.size-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    renderDonuts(size);
+  }
+
+  // Initial render
+  renderDonuts(100);
+</script>
+</body>
+</html>

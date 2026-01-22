@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -17,6 +17,7 @@
 #endregion
 
 using System.Net;
+using Agenix.PlaywrightGrid.Shared.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -28,7 +29,8 @@ namespace WorkerService.Tests;
 
 public class BorrowTtlSweeperServiceTests
 {
-    [Test, Ignore("Flaky due to background timing and RedisResult mocking; covered by integration flows.")]
+    [Test]
+    [Ignore("Flaky due to background timing and RedisResult mocking; covered by integration flows.")]
     public async Task Cleans_up_when_idle_expired_and_deletes_borrow_idle()
     {
         // Arrange mocks
@@ -56,17 +58,18 @@ public class BorrowTtlSweeperServiceTests
         // Session hash has labelKey
         var sessionEntries = new[]
         {
-            new HashEntry("labelKey", "App:Chromium:UAT"),
-            new HashEntry("browserId", "bid1"),
+            new HashEntry("labelKey", "App:Chromium:UAT"), new HashEntry("browserId", "bid1")
         };
         db.Setup(d => d.HashGetAllAsync("session:bid1", CommandFlags.None)).ReturnsAsync(sessionEntries);
 
         // Lua to move from inuse -> available returns null (no inuse match) leading to cleanup branch
         db.Setup(d => d.ScriptEvaluateAsync(It.IsAny<string>(),
-                It.Is<RedisKey[]>(keys => keys.Length == 2 && keys[0] == (RedisKey)"inuse:App:Chromium:UAT" && keys[1] == (RedisKey)"available:App:Chromium:UAT"),
+                It.Is<RedisKey[]>(keys =>
+                    keys.Length == 2 && keys[0] == (RedisKey)"inuse:App:Chromium:UAT" &&
+                    keys[1] == (RedisKey)"available:App:Chromium:UAT"),
                 It.Is<RedisValue[]>(argv => argv.Length == 1 && argv[0] == (RedisValue)"bid1"),
                 CommandFlags.None))
-            .Returns(System.Threading.Tasks.Task.FromResult<RedisResult>(default!));
+            .Returns(Task.FromResult<RedisResult>(default!));
 
 
         // Expect deletions to succeed
@@ -75,7 +78,8 @@ public class BorrowTtlSweeperServiceTests
         db.Setup(d => d.KeyDeleteAsync("session:bid1", It.IsAny<CommandFlags>())).ReturnsAsync(true);
 
         var logger = new Mock<ILogger<BorrowTtlSweeperService>>(MockBehavior.Loose);
-        var svc = new BorrowTtlSweeperService(db.Object, mux.Object, cfg, logger.Object);
+        var chunkedLogger = new ChunkedLogger<BorrowTtlSweeperService>(logger.Object);
+        var svc = new BorrowTtlSweeperService(db.Object, mux.Object, cfg, logger.Object, chunkedLogger);
 
         // Act: run briefly
         await svc.StartAsync(CancellationToken.None);

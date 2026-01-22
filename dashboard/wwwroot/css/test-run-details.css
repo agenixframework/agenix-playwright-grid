@@ -1,0 +1,479 @@
+/* Container */
+.container {
+  max-width: 1600px;
+}
+
+/* Tab Navigation */
+.nav-tabs {
+  border-bottom: 2px solid #dee2e6;
+}
+
+.nav-tabs .nav-link {
+  color: #666;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.nav-tabs .nav-link:hover {
+  color: #667eea;
+  border-bottom-color: #667eea30;
+}
+
+.nav-tabs .nav-link.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+  background: none;
+}
+
+/* Test Statistics */
+.test-stats {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.test-stats .badge {
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+}
+
+/* Test Case Card */
+.test-case-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.test-case-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.test-case-card.passed {
+  border-left: 4px solid #28a745;
+}
+
+.test-case-card.failed {
+  border-left: 4px solid #dc3545;
+}
+
+.test-case-card.skipped {
+  border-left: 4px solid #6c757d;
+}
+
+.test-case-card.running {
+  border-left: 4px solid #ffc107;
+}
+
+.test-case-header {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.test-title {
+  font-size: 1.1rem;
+}
+
+.test-file {
+  font-family: monospace;
+  margin-top: 0.5rem;
+}
+
+.test-tags {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.test-case-body {
+  padding: 1rem;
+}
+
+/* Console Output */
+.console-output pre {
+  background: #f8f8f8;
+  padding: 0.75rem;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.console-stdout pre {
+  background: #f0f9f0;
+}
+
+.console-stderr pre {
+  background: #fff5f5;
+}
+
+/* Details/Summary Styling */
+details summary {
+  cursor: pointer;
+  user-select: none;
+  padding: 0.5rem;
+  background: #f5f5f5;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+details summary:hover {
+  background: #e9ecef;
+}
+
+details[open] summary {
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #667eea;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .test-case-header {
+    padding: 0.75rem;
+  }
+
+  .test-title {
+    font-size: 1rem;
+  }
+
+  .nav-tabs .nav-link {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Test Title Link */
+.test-title-link {
+  color: #667eea;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.test-title-link:hover {
+  color: #764ba2;
+  text-decoration: underline;
+}
+
+.test-title-link .test-title {
+  color: inherit;
+}
+
+/* Main Tabs - Same as view tabs style */
+.main-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Info Panel with View Tabs */
+.info-panel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.info-line {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* View tabs and main tabs - exact match styling */
+.view-tabs,
+.main-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-right: auto;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: 8px;
+}
+
+/* View tab buttons - shared style for both main tabs and info panel tabs */
+.view-tab,
+.main-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  /* Reset button defaults */
+  outline: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.view-tab:hover:not(.active),
+.main-tab:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.view-tab:focus,
+.main-tab:focus {
+  outline: none;
+}
+
+.view-tab.active,
+.main-tab.active {
+  background: #ffffff;
+  color: #667eea;
+  box-shadow: 0 1px 3px rgba(102, 126, 234, 0.15), 0 1px 2px rgba(102, 126, 234, 0.1);
+}
+
+.view-tab .tab-icon,
+.main-tab .tab-icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.view-tab.active .tab-icon,
+.main-tab.active .tab-icon {
+  opacity: 1;
+}
+
+.test-summary-stats {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.test-stat {
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
+.test-stat strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.test-stat-dot {
+  font-size: 1rem;
+  margin: 0 0.25rem;
+}
+
+.test-stat-dot.failed {
+  color: #ef4444;
+}
+
+.test-stat-dot.running {
+  color: #fbbf24;
+}
+
+.test-stat-dot.skipped {
+  color: #3b82f6;
+}
+
+.test-stat-dot.passed {
+  color: #10b981;
+}
+
+/* Sub Tabs Container */
+.sub-tabs-container {
+  background-color: #f8f9fa;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.sub-tabs {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.sub-tabs .nav-link {
+  color: #495057;
+  font-size: 0.938rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.sub-tabs .nav-link:hover {
+  color: #212529;
+  background-color: #e9ecef;
+}
+
+.sub-tabs .nav-link.active {
+  color: #fff;
+  background-color: #667eea;
+}
+
+/* Test Cases Section */
+.test-cases-section {
+  margin-top: 1.5rem;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212529;
+  margin-bottom: 1rem;
+}
+
+/* Test Case Card */
+.rp-test-case-card {
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  background: white;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.rp-test-case-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.rp-test-header {
+  padding: 1rem;
+  background-color: #fafbfc;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.rp-status-badges {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.rp-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.813rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rp-badge-passed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.rp-badge-failed {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.rp-badge-skipped {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+.rp-badge-interrupted {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.rp-test-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.rp-test-time {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+
+.rp-duration {
+  font-weight: 500;
+}
+
+.rp-timestamp {
+  color: #adb5bd;
+}
+
+.rp-test-file {
+  font-size: 0.813rem;
+  color: #6c757d;
+  margin-top: 0.5rem;
+}
+
+.rp-test-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.rp-tag {
+  padding: 0.188rem 0.5rem;
+  background-color: #e9ecef;
+  color: #495057;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Expandable Sections */
+.rp-test-body {
+  padding: 0;
+}
+
+.rp-expandable-section {
+  border-top: 1px solid #e9ecef;
+}
+
+.rp-expandable-section summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.rp-expandable-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.rp-section-header {
+  padding: 0.75rem 1rem;
+  background-color: #fafbfc;
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.rp-section-header:hover {
+  background-color: #f1f3f5;
+}
+
+.rp-expand-icon {
+  transition: transform 0.2s ease;
+}
+
+.rp-expandable-section[open] .rp-expand-icon {
+  transform: rotate(180deg);
+}
+
+.rp-section-content {
+  padding: 1rem;
+  background-color: white;
+}

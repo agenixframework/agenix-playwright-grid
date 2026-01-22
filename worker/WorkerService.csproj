@@ -15,6 +15,8 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.8.1"/>
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.8.1"/>
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.8.1"/>
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3"/>
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0"/>
   </ItemGroup>
   <ItemGroup>
     <None Update="launch_playwright_server.js">
@@ -22,6 +24,13 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>WorkerService.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj"/>
+    <ProjectReference Include="..\Agenix.PlaywrightGrid.Shared\Agenix.PlaywrightGrid.Shared.csproj"/>
   </ItemGroup>
 </Project>

@@ -5,9 +5,15 @@
 @using Microsoft.Extensions.Configuration
 @using Microsoft.JSInterop
 @using Dashboard
+@using Dashboard.Application
 @using Dashboard.Shared
+@using Dashboard.Pages
+@using Dashboard.Components
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.Extensions.Http
 @using System.Net.Http
 @using System.Collections.Generic
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize]

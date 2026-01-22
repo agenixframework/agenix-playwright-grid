@@ -1,0 +1,3809 @@
+@page "/{projectKey}/test-items/{itemId:guid}"
+@page "/{projectKey}/launches/{launchId:long}/suites/{suiteId:long}/tests/{dbId:long}/test-item"
+@inject IHttpClientFactory HttpFactory
+@inject IConfiguration Config
+@inject ILogger<TestItemDetails> Logger
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using System.Net
+@using System.Text
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@implements IDisposable
+
+<link href="/css/launch-details.css" rel="stylesheet" />
+<link href="/css/suite-details.css" rel="stylesheet" />
+<link href="/css/test-item-components.css" rel="stylesheet" />
+<link href="/css/test-item-details.css" rel="stylesheet" />
+<link href="/css/artifact-viewer.css" rel="stylesheet" />
+<script src="/js/test-item-details.js"></script>
+<script src="/js/artifact-cache.js"></script>
+
+<style>
+    /* Test Navigation Controls */
+    .test-navigation-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.375rem 0.5rem;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        color: #495057;
+    }
+
+    .nav-btn:hover:not(:disabled) {
+        background: #f8f9fa;
+        border-color: #adb5bd;
+    }
+
+    .nav-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: #fff;
+    }
+
+    .nav-btn i {
+        font-size: 14px;
+    }
+
+    @@media (max-width: 768px) {
+        .test-navigation-actions {
+            gap: 0.25rem;
+        }
+
+        .nav-btn {
+            padding: 0.25rem 0.375rem;
+        }
+
+        .nav-btn i {
+            font-size: 12px;
+        }
+    }
+</style>
+
+<div class="test-item-details">
+@if (_loading)
+{
+    <div class="loading-container">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="mt-3 text-muted">Loading test item details...</div>
+    </div>
+}
+else if (_error != null)
+{
+    <div class="alert alert-danger m-4" role="alert">
+        <h4 class="alert-heading">Error Loading Test Item</h4>
+        <p>@_error</p>
+        <hr>
+        <button class="btn btn-primary" @onclick="LoadTestItem">Retry</button>
+        <button class="btn btn-secondary" @onclick="NavigateBack">Go Back</button>
+    </div>
+}
+else if (_testItem != null)
+{
+    @* Breadcrumbs and Navigation Panel *@
+    <div class="action-panel @(_isBreadcrumbCollapsed ? "collapsed" : "")">
+        <div class="breadcrumbs-section">
+            <button class="collapse-btn" @onclick="ToggleBreadcrumbCollapse" title="@(_isBreadcrumbCollapsed ? "Expand breadcrumbs" : "Collapse breadcrumbs")">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+                </svg>
+            </button>
+
+            @if (_isBreadcrumbCollapsed)
+            {
+                @* Collapsed breadcrumb: show only current item (full name, no truncation) *@
+                <span class="breadcrumb-separator" style="margin: 0 0.5rem;">...</span>
+                @if (GetBreadcrumbs().Any())
+                {
+                    var currentItem = GetBreadcrumbs().Last();
+                    <span class="breadcrumb-current" title="@currentItem.Text">
+                        @if (!string.IsNullOrEmpty(currentItem.GetIconSvg()))
+                        {
+                            <span class="breadcrumb-icon">@((MarkupString)currentItem.GetIconSvg())</span>
+                        }
+                        <span class="breadcrumb-text">@currentItem.Text</span>
+                    </span>
+                }
+            }
+            else
+            {
+                @* Render full breadcrumb items *@
+                @foreach (var (item, index) in GetBreadcrumbs().Select((i, idx) => (i, idx)))
+                {
+                    @if (index > 0)
+                    {
+                        <span class="breadcrumb-separator">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+                                <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+                            </svg>
+                        </span>
+                    }
+
+                    @if (item.IsLink)
+                    {
+                        <a href="@item.Url" class="breadcrumb-link" title="@item.Text">
+                            @if (!string.IsNullOrEmpty(item.GetIconSvg()))
+                            {
+                                <span class="breadcrumb-icon">@((MarkupString)item.GetIconSvg())</span>
+                            }
+                            <span class="breadcrumb-text">@(item.Text.Length > 50 ? item.Text.Substring(0, 47) + "..." : item.Text)</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="breadcrumb-current" title="@item.Text">
+                            @if (!string.IsNullOrEmpty(item.GetIconSvg()))
+                            {
+                                <span class="breadcrumb-icon">@((MarkupString)item.GetIconSvg())</span>
+                            }
+                            <span class="breadcrumb-text">@item.Text</span>
+                        </span>
+                    }
+                }
+            }
+        </div>
+
+        <div class="test-navigation-actions">
+            <button class="nav-btn"
+                    title="Previous Test"
+                    disabled="@(_previousTestId == null)"
+                    @onclick="NavigateToPreviousTest">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+
+            <button class="nav-btn"
+                    title="Next Test"
+                    disabled="@(_nextTestId == null)"
+                    @onclick="NavigateToNextTest">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+
+            <button class="action-icon-btn" @onclick="RefreshAsync" title="Refresh data">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    @* Phase 3: Test History Line *@
+    @if (_historyItems.Count > 1)
+    {
+        <div style="display: flex; align-items: center; gap: 1rem; margin: 5px 25px 8px;">
+            <label style="font-size: 12px; font-weight: 600; color: #667eea; margin: 0;">Filter History:</label>
+            <select class="form-select form-select-sm"
+                    style="width: auto; font-size: 12px;"
+                    @bind="_historyStatusFilter"
+                    @bind:after="ApplyHistoryFilter">
+                <option value="">All Statuses</option>
+                <option value="Failed">Failed Only</option>
+                <option value="Passed">Passed Only</option>
+                <option value="Skipped">Skipped Only</option>
+                <option value="Stopped">Stopped Only</option>
+            </select>
+            @if (!string.IsNullOrEmpty(_historyStatusFilter))
+            {
+                <span style="font-size: 11px; color: #6c757d;">
+                    Showing @FilteredHistoryItems.Count of @_allHistoryItems.Count
+                </span>
+            }
+        </div>
+
+        <div class="history-line">
+            <button class="history-nav-btn history-nav-prev"
+                    id="prevLaunchBtn"
+                    title="Previous Launch (←)"
+                    disabled="@(_currentHistoryIndex == 0)"
+                    @onclick="NavigateToPreviousLaunch">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+
+            <div class="history-line-scroll" @ref="_historyScrollRef">
+                <div class="history-line-items">
+                    @foreach (var (historyItem, index) in FilteredHistoryItems.Select((item, i) => (item, i)))
+                    {
+                        <div class="history-line-item @GetHistoryItemClass(index)"
+                             data-launch-number="@historyItem.LaunchNumber"
+                             data-launch-status="@historyItem.Status"
+                             data-launch-duration="@FormatDuration(historyItem.Duration)"
+                             data-launch-error-count="@historyItem.ErrorCount"
+                             data-launch-attributes="@string.Join(",", historyItem.Attributes ?? [])"
+                             @onclick="() => NavigateToHistoryLaunch(index)"
+                             @onmouseenter="@(e => ShowTooltip(e, historyItem))"
+                             @onmouseleave="HideTooltip">
+                            <div class="history-status-block @GetStatusClass(historyItem.Status)">
+                                #@historyItem.LaunchNumber
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* Tooltip portal - rendered outside scroll container *@
+            @if (_tooltipVisible && _tooltipData != null)
+            {
+                <div class="history-item-tooltip" style="@_tooltipStyle">
+                    <div class="tooltip-header">
+                        <span class="tooltip-launch-number">Launch #@_tooltipData.LaunchNumber</span>
+                        <span class="tooltip-status-badge @GetStatusClass(_tooltipData.Status).ToLower()">
+                            @_tooltipData.Status.ToUpper()
+                        </span>
+                    </div>
+
+                    @if (_tooltipData.Attributes?.Any() == true)
+                    {
+                        <div class="tooltip-section">
+                            <div class="tooltip-label">Launch Attributes:</div>
+                            <div class="tooltip-attributes">
+                                @foreach (var attr in _tooltipData.Attributes.Take(5))
+                                {
+                                    <span class="tooltip-attribute">@attr</span>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="tooltip-section">
+                        <div class="tooltip-label">Duration:</div>
+                        <div class="tooltip-duration">
+                            <span class="tooltip-value">@FormatDuration(_tooltipData.Duration)</span>
+                        </div>
+                    </div>
+
+                    @if (_tooltipData.ErrorCount > 0)
+                    {
+                        <div class="tooltip-section">
+                            <div class="tooltip-label">Item Details:</div>
+                            <span class="tooltip-value">@_tooltipData.ErrorCount Error</span>
+                        </div>
+                    }
+
+                    <div class="tooltip-arrow"></div>
+                </div>
+            }
+
+            <button class="history-nav-btn history-nav-next"
+                    id="nextLaunchBtn"
+                    title="Next Launch (→)"
+                    disabled="@(_currentHistoryIndex >= FilteredHistoryItems.Count - 1)"
+                    @onclick="NavigateToNextLaunch">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+
+            <span class="launch-position-indicator" id="launchPosition">
+                @(_currentHistoryIndex + 1) / @FilteredHistoryItems.Count
+            </span>
+        </div>
+    }
+
+    @* Phase 4: Main Tabs *@
+    <div class="main-tabs">
+        <button class="main-tab @(_activeTab == "logs" ? "active" : "")"
+                @onclick='async () => await SwitchTabAsync("logs")'>
+            <i class="bi bi-terminal"></i>
+            EXECUTION LOGS
+        </button>
+        <button class="main-tab @(_activeTab == "stack" ? "active" : "")"
+                @onclick='async () => await SwitchTabAsync("stack")'>
+            <i class="bi bi-exclamation-triangle"></i>
+            STACK TRACE
+        </button>
+        <button class="main-tab @(_activeTab == "details" ? "active" : "")"
+                @onclick='async () => await SwitchTabAsync("details")'>
+            <i class="bi bi-info-circle"></i>
+            ITEM DETAILS
+        </button>
+        <button class="main-tab @(_activeTab == "artifacts" ? "active" : "")"
+                @onclick='async () => await SwitchTabAsync("artifacts")'>
+            <i class="bi bi-paperclip"></i>
+            ARTIFACTS
+        </button>
+        @if (HasBrowserSession())
+        {
+            <button class="main-tab @(_activeTab == "browser" ? "active" : "")"
+                    @onclick='async () => await SwitchTabAsync("browser")'>
+                <i class="bi bi-browser-chrome"></i>
+                BROWSER SESSION
+            </button>
+            <button class="main-tab @(_activeTab == "commands" ? "active" : "")"
+                    @onclick='async () => await SwitchTabAsync("commands")'>
+                <i class="bi bi-code-slash"></i>
+                PLAYWRIGHT SERVER COMMANDS
+            </button>
+        }
+    </div>
+
+    @* Filter Panel (only for Logs tab) *@
+    @if (_activeTab == "logs")
+    {
+        <div class="info-panel">
+            <div class="compact-filter-bar">
+                <div class="filter-bar-left">
+                    <input type="text" class="filter-text-input compact"
+                           placeholder="Filter log messages..."
+                           @bind="_logFilterText"
+                           @bind:event="oninput">
+                </div>
+                <div class="filter-bar-right">
+                    <div class="view-mode-toggle compact">
+                        <button class="view-mode-btn @(_viewMode == "markdown" ? "active" : "")"
+                                @onclick='() => _viewMode = "markdown"'
+                                title="Markdown View">
+                            <i class="bi bi-list-ul"></i>
+                        </button>
+                        <button class="view-mode-btn @(_viewMode == "console" ? "active" : "")"
+                                @onclick='() => _viewMode = "console"'
+                                title="Console View">
+                            <i class="bi bi-terminal"></i>
+                        </button>
+                    </div>
+                    @if (_viewMode == "console")
+                    {
+                        <div class="theme-toggle compact">
+                            <button class="theme-btn @(_consoleTheme == "light" ? "active" : "")"
+                                    @onclick='() => _consoleTheme = "light"'
+                                    title="Light Theme">
+                                <i class="bi bi-sun"></i>
+                            </button>
+                            <button class="theme-btn @(_consoleTheme == "dark" ? "active" : "")"
+                                    @onclick='() => _consoleTheme = "dark"'
+                                    title="Dark Theme">
+                                <i class="bi bi-moon"></i>
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Tab Content Container *@
+    <div class="log-content">
+        @if (_activeTab == "logs")
+        {
+            @* Phase 5: Execution Logs Tab *@
+            <div class="test-summary-bar">
+                <div class="summary-left">
+                    <div class="summary-action-btns">
+                        <button class="summary-btn" @onclick="ToggleExpandAll">
+                            <i class="bi @(_allExpanded ? "bi-dash-square" : "bi-plus-square")"></i>
+                            <span>@(_allExpanded ? "Collapse all" : "Expand all")</span>
+                        </button>
+                        <span class="summary-divider"></span>
+                        <button class="summary-btn" @onclick="CycleDensity">
+                            <i class="bi bi-speedometer2"></i>
+                            <span>@_densityMode</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="summary-filters">
+                    <div class="filter-group">
+                        <span class="filter-label-inline">Log Level:</span>
+                        <fieldset class="segmented-control" aria-label="Log level">
+                            <label class="segment">
+                                <input type="radio" name="logLevel" value="" checked="@(_logLevelFilter == "")" @onchange='() => _logLevelFilter = ""' />
+                                <span>All</span>
+                            </label>
+                            <label class="segment">
+                                <input type="radio" name="logLevel" value="fatal" checked="@(_logLevelFilter == "fatal")" @onchange='() => _logLevelFilter = "fatal"' />
+                                <span>Fatal</span>
+                            </label>
+                            <label class="segment">
+                                <input type="radio" name="logLevel" value="error" checked="@(_logLevelFilter == "error")" @onchange='() => _logLevelFilter = "error"' />
+                                <span>Error</span>
+                            </label>
+                            <label class="segment">
+                                <input type="radio" name="logLevel" value="warn" checked="@(_logLevelFilter == "warn")" @onchange='() => _logLevelFilter = "warn"' />
+                                <span>Warn+</span>
+                            </label>
+                            <label class="segment">
+                                <input type="radio" name="logLevel" value="info" checked="@(_logLevelFilter == "info")" @onchange='() => _logLevelFilter = "info"' />
+                                <span>Info+</span>
+                            </label>
+                        </fieldset>
+                    </div>
+                    @if (HasSteps)
+                    {
+                        <div class="filter-group">
+                            <span class="filter-label-inline">Status:</span>
+                            <fieldset class="segmented-control" aria-label="Status">
+                                <label class="segment">
+                                    <input type="radio" name="status" value="" checked="@(_statusFilter == "")" @onchange='() => _statusFilter = ""' />
+                                    <span>All</span>
+                                </label>
+                                <label class="segment">
+                                    <input type="radio" name="status" value="passed" checked="@(_statusFilter == "passed")" @onchange='() => _statusFilter = "passed"' />
+                                    <span>Passed</span>
+                                </label>
+                                <label class="segment">
+                                    <input type="radio" name="status" value="failed" checked="@(_statusFilter == "failed")" @onchange='() => _statusFilter = "failed"' />
+                                    <span>Failed</span>
+                                </label>
+                                <label class="segment">
+                                    <input type="radio" name="status" value="skipped" checked="@(_statusFilter == "skipped")" @onchange='() => _statusFilter = "skipped"' />
+                                    <span>Skipped</span>
+                                </label>
+                            </fieldset>
+                        </div>
+                    }
+                    @if (HasAttachments)
+                    {
+                        <div class="filter-group">
+                            <div class="checkbox-filter-inline">
+                                <input type="checkbox" id="with-attachment-inline" @bind="_showOnlyWithAttachments">
+                                <label for="with-attachment-inline">
+                                    <i class="bi bi-paperclip"></i>
+                                    With Attachments
+                                </label>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (_viewMode == "markdown")
+            {
+                <div class="log-entries @GetDensityClass()">
+                    @if (!_logEntries.Any())
+                    {
+                        <div class="p-4 text-center text-muted">
+                            No log entries available for this test item.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in FilteredLogEntries)
+                        {
+                            @* Step headers: Show if NestLevel 0 (top-level) OR if parent step is expanded *@
+                            @if (entry.IsStepHeader && (entry.NestLevel == 0 || (entry.ParentId.HasValue && IsExpanded(entry.ParentId.Value))))
+                            {
+                                <div class="log-entry step-header @(entry.IsNested ? "nested-step" : "") @(IsExpanded(entry.Id) ? "expanded" : "") status-@(entry.Status.ToLower())-header"
+                                     id="log-entry-@entry.Id"
+                                     style="@(entry.IsNested ? $"margin-left: {entry.NestLevel * 40}px" : "")"
+                                     data-parent="@entry.Id">
+                                    <div class="step-name-cell">
+                                        <button class="expand-collapse-btn @(IsExpanded(entry.Id) ? "expanded" : "")"
+                                                @onclick="() => ToggleExpand(entry.Id)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+                                                <path d="M14 29.17L22.657 20 14 10.83 16.672 8 28 20 16.672 32z"></path>
+                                            </svg>
+                                        </button>
+                                        <div class="step-name-text">
+                                            @entry.Name
+                                            @if (StepContainsErrorLogs(entry.Id))
+                                            {
+                                                <i class="bi bi-exclamation-triangle-fill text-danger ms-2" title="This step contains ERROR or FATAL logs"></i>
+                                            }
+                                            @if (!string.IsNullOrEmpty(entry.Description))
+                                            {
+                                                <small>@entry.Description</small>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="step-status-cell">
+                                        <div class="status-indicator @entry.Status.ToLower()">@entry.Status.ToUpper()</div>
+                                    </div>
+                                    <div class="step-stats-cell">
+                                        @if (entry.AttachmentCount > 0)
+                                        {
+                                            <div class="attachment-count">
+                                                <i class="bi bi-paperclip"></i>
+                                                <span>@entry.AttachmentCount</span>
+                                            </div>
+                                        }
+                                        <div class="duration-block">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14">
+                                                <path fill-rule="evenodd" d="M6.997 0A6.995 6.995 0 0 0 0 7c0 3.867 3.129 7 6.997 7a7.001 7.001 0 1 0 0-14zM7 12.6A5.598 5.598 0 0 1 1.4 7c0-3.094 2.506-5.6 5.6-5.6s5.6 2.506 5.6 5.6-2.506 5.6-5.6 5.6zm.35-9.1H6.3v4.2l3.672 2.205.528-.861-3.15-1.869V3.5z"></path>
+                                            </svg>
+                                            <span>@FormatDuration(entry.DurationMs)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            else if (!entry.IsStepHeader && (!entry.ParentId.HasValue || IsExpanded(entry.ParentId.Value)))
+                            {
+                                <div class="log-entry @(entry.IsNested ? "nested-step" : "")"
+                                     id="log-entry-@entry.Id"
+                                     style="@(entry.IsNested ? $"padding-left: {entry.NestLevel * 40 + 8}px" : "")"
+                                     data-child-of="@entry.ParentId">
+                                    <span class="log-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                    <span class="log-level @entry.Level.ToLower()">@entry.Level.ToUpper()</span>
+                                    <span class="log-message @(entry.IsTruncated && !IsMessageExpanded(entry.Id) ? "truncated" : "")"
+                                          data-message-id="@entry.Id">
+                                        @(IsMessageExpanded(entry.Id) ? entry.Message : entry.IsTruncated ? entry.Message.Substring(0, 300) + "..." : entry.Message)
+                                    </span>
+                                    @if (entry.IsTruncated)
+                                    {
+                                        <a href="javascript:void(0)" class="show-more-link"
+                                           @onclick="() => ToggleMessageExpansion(entry.Id)">
+                                            <span>@(IsMessageExpanded(entry.Id) ? "show less" : "show more")</span>
+                                            <i class="bi bi-chevron-down"></i>
+                                        </a>
+                                    }
+                                    @if (entry.HasAttachment && entry.ArtifactId.HasValue && !string.IsNullOrEmpty(entry.AttachmentName))
+                                    {
+                                        <div class="log-attachment-icon-wrapper">
+                                            <button class="log-attachment-icon" type="button">
+                                                <i class="bi @GetFileTypeIcon(entry.AttachmentName)"></i>
+                                            </button>
+                                            <div class="attachment-tooltip">
+                                                <div class="tooltip-filename">@entry.AttachmentName</div>
+                                                <div class="tooltip-actions">
+                                                    <a href="@GetInlineArtifactUrl(entry.ArtifactId.Value)"
+                                                       target="_blank"
+                                                       class="tooltip-action">
+                                                        <i class="bi bi-box-arrow-up-right"></i> Open in new tab
+                                                    </a>
+                                                    <button type="button"
+                                                            class="tooltip-action"
+                                                            @onclick="() => DownloadArtifact(entry.ArtifactId.Value, entry.AttachmentName)">
+                                                        <i class="bi bi-download"></i> Download
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="console-view @(_consoleTheme == "dark" ? "dark-theme" : "")">
+                    @if (!_logEntries.Any())
+                    {
+                        <div>No log entries available.</div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in FilteredLogEntries)
+                        {
+                            @* Step headers: Show if NestLevel 0 (top-level) OR if parent step is expanded *@
+                            @if (entry.IsStepHeader && (entry.NestLevel == 0 || (entry.ParentId.HasValue && IsExpanded(entry.ParentId.Value))))
+                            {
+                                @* Step Header *@
+                                <div class="console-entry console-step-header @(IsExpanded(entry.Id) ? "expanded" : "collapsed")" style="@(entry.NestLevel > 0 ? $"padding-left: {entry.NestLevel * 20}px" : "")">
+                                    <span class="console-expand-btn" @onclick="() => ToggleExpand(entry.Id)" title="@(IsExpanded(entry.Id) ? "Collapse" : "Expand")">
+                                        @(IsExpanded(entry.Id) ? "▼" : "▶")
+                                    </span>
+                                    <span class="console-step-marker">[STEP]</span>
+                                    <span class="console-step-name">
+                                        @entry.Name
+                                        @if (StepContainsErrorLogs(entry.Id))
+                                        {
+                                            <span class="text-danger" title="This step contains ERROR or FATAL logs"> ⚠️</span>
+                                        }
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(entry.Description))
+                                    {
+                                        <span class="console-step-description">- @entry.Description</span>
+                                    }
+                                    <span class="console-step-status @entry.Status.ToLower()">[@entry.Status.ToUpper()]</span>
+                                    @if (entry.DurationMs.HasValue)
+                                    {
+                                        <span class="console-step-duration">(@FormatDuration(entry.DurationMs))</span>
+                                    }
+                                </div>
+                            }
+                            else if (!entry.IsStepHeader && (!entry.ParentId.HasValue || IsExpanded(entry.ParentId.Value)))
+                            {
+                                @* Log Message - only show if parent is expanded *@
+                                <div class="console-entry" style="@(entry.NestLevel > 0 ? $"padding-left: {entry.NestLevel * 20 + 8}px" : "")">
+                                    <span class="console-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                    <span class="console-level @entry.Level.ToLower()">[@entry.Level.ToUpper()]</span>
+                                    <span class="console-message">@entry.Message</span>
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+            }
+
+            <div class="compact-pagination">
+                <div class="pagination-info-left">
+                    <strong>@_currentPageStart - @_currentPageEnd</strong> of <strong>@_totalEntries</strong> entries
+                </div>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_currentPage == 1)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M12 8a.5.5 0 0 1-.5.5H5.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L5.707 7.5H11.5a.5.5 0 0 1 .5.5z"></path>
+                        </svg>
+                        Previous
+                    </button>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_currentPage >= _totalPages)">
+                        Next
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="pagination-info-right">
+                    <select class="per-page-select" @bind="_itemsPerPage" @bind:event="onchange">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                    <span>per page</span>
+                </div>
+            </div>
+        }
+        else if (_activeTab == "stack")
+        {
+            @* Phase 6: Stack Trace Tab *@
+            <div class="stack-trace-view">
+                @if (_stackTraceEntries == null || _stackTraceEntries.Count == 0)
+                {
+                    <div class="stack-trace-empty">
+                        <i class="bi bi-check-circle"></i>
+                        <p>No errors or stack traces found for this test item.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var entry in _stackTraceEntries)
+                    {
+                        <div class="stack-trace-entry">
+                            <div class="stack-trace-header">
+                                <div class="stack-trace-main">
+                                    <div class="stack-trace-time-context">
+                                        <span class="stack-trace-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                        <span class="stack-trace-level-badge @entry.Level.ToLower()">@entry.Level.ToUpper()</span>
+                                    </div>
+                                    <div class="stack-trace-message">
+                                        @{
+                                            // Split the error message into display lines (wrapping at reasonable length)
+                                            var messageLines = new List<string>();
+                                            if (!string.IsNullOrEmpty(entry.Message))
+                                            {
+                                                // First try splitting by newlines
+                                                var lines = entry.Message.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                                                    .Select(l => l.Trim())
+                                                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                                                    .ToList();
+
+                                                if (lines.Count > 1)
+                                                {
+                                                    messageLines = lines;
+                                                }
+                                                else
+                                                {
+                                                    // Single long line - split by sentences or every 100 characters
+                                                    var msg = entry.Message;
+                                                    var maxCharsPerLine = 100;
+
+                                                    // Try splitting by sentences first
+                                                    var sentences = msg.Split(new[] { ". ", "! ", "? " }, StringSplitOptions.RemoveEmptyEntries);
+                                                    foreach (var sentence in sentences)
+                                                    {
+                                                        if (sentence.Length > maxCharsPerLine)
+                                                        {
+                                                            // Further split long sentences at word boundaries
+                                                            var words = sentence.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                                                            var currentLine = new StringBuilder();
+
+                                                            foreach (var word in words)
+                                                            {
+                                                                if (currentLine.Length + word.Length + 1 > maxCharsPerLine)
+                                                                {
+                                                                    if (currentLine.Length > 0)
+                                                                    {
+                                                                        messageLines.Add(currentLine.ToString());
+                                                                        currentLine.Clear();
+                                                                    }
+                                                                }
+
+                                                                if (currentLine.Length > 0)
+                                                                    currentLine.Append(' ');
+                                                                currentLine.Append(word);
+                                                            }
+
+                                                            if (currentLine.Length > 0)
+                                                                messageLines.Add(currentLine.ToString());
+                                                        }
+                                                        else
+                                                        {
+                                                            messageLines.Add(sentence);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Calculate total lines: message lines + http info + exception messages + stack trace lines
+                                            var totalLines = messageLines.Count;
+                                            var hasHttpInfo = !string.IsNullOrEmpty(entry.HttpMethod) || entry.StatusCode.HasValue;
+                                            if (hasHttpInfo) totalLines++;
+                                            totalLines += entry.ExceptionMessages.Count;
+                                            totalLines += entry.StackTraceLines.Count;
+
+                                            var maxLinesToShow = 5;
+                                            var isTruncated = totalLines > maxLinesToShow;
+                                            var isExpanded = IsStackTraceDetailsExpanded(entry.Id);
+
+                                            // Calculate how many lines we've shown so far for progressive rendering
+                                            var linesShown = 0;
+                                        }
+
+                                        <div class="stack-trace-main-content">
+                                            @* Main error message - split into multiple lines if necessary *@
+                                            @* Don't show generic "Error:" label if exception class is just "Error" - the badge already shows severity *@
+                                            @if (!string.IsNullOrEmpty(entry.ExceptionClass) && entry.ExceptionClass != "Error")
+                                            {
+                                                <div class="stack-trace-header-line">
+                                                    <span class="stack-trace-class">⚠️ @entry.ExceptionClass</span>
+                                                </div>
+                                            }
+                                            @foreach (var (line, index) in messageLines.Select((l, i) => (l, i)))
+                                            {
+                                                @if (isExpanded || linesShown < maxLinesToShow)
+                                                {
+                                                    <div class="stack-trace-message-line @(index == 0 ? "primary-message" : "")">@line</div>
+                                                    linesShown++;
+                                                }
+                                                else
+                                                {
+                                                    break;
+                                                }
+                                            }
+
+                                            @* HTTP method and status code inline (show if within limit or expanded) *@
+                                            @if (hasHttpInfo && (isExpanded || linesShown < maxLinesToShow))
+                                            {
+                                                <p class="stack-trace-detail-line">
+                                                    @if (!string.IsNullOrEmpty(entry.HttpMethod))
+                                                    {
+                                                        <span class="stack-trace-http-method">@entry.HttpMethod</span>
+                                                        <text> </text>
+                                                    }
+                                                    @if (entry.StatusCode.HasValue)
+                                                    {
+                                                        <span class="status-code">@entry.StatusCode</span>
+                                                        @if (!string.IsNullOrEmpty(entry.StatusMessage))
+                                                        {
+                                                            <text> @entry.StatusMessage</text>
+                                                        }
+                                                    }
+                                                </p>
+                                                linesShown++;
+                                            }
+
+                                            @* Exception messages (including "Caused by:" chains) - show progressively *@
+                                            @if (entry.ExceptionMessages.Any())
+                                            {
+                                                @foreach (var message in entry.ExceptionMessages)
+                                                {
+                                                    @if (isExpanded || linesShown < maxLinesToShow)
+                                                    {
+                                                        <p class="stack-trace-detail-line">@message</p>
+                                                        linesShown++;
+                                                    }
+                                                    else
+                                                    {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            @* Stack trace code lines - show progressively *@
+                                            @if (entry.StackTraceLines.Any())
+                                            {
+                                                @foreach (var line in entry.StackTraceLines)
+                                                {
+                                                    @if (isExpanded || linesShown < maxLinesToShow)
+                                                    {
+                                                        <span class="code-line">@line</span>
+                                                        linesShown++;
+                                                    }
+                                                    else
+                                                    {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            @* Show more/less button *@
+                                            @if (isTruncated)
+                                            {
+                                                <button class="show-more-btn" @onclick="() => ToggleStackTraceDetails(entry.Id)">
+                                                    @if (isExpanded)
+                                                    {
+                                                        <span>Show less</span>
+                                                        <i class="bi bi-chevron-up"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>Show more (@(totalLines - maxLinesToShow) more lines)</span>
+                                                        <i class="bi bi-chevron-down"></i>
+                                                    }
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                @if (entry.LogEntryId.HasValue)
+                                {
+                                    <a class="stack-trace-jump"
+                                       @onclick="async () => await JumpToLogEntry(entry.LogEntryId.Value)"
+                                       href="javascript:void(0)">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                        Jump to log
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else if (_activeTab == "details")
+        {
+            <div class="item-details-container">
+                @* Header *@
+                <div class="item-details-header">
+                    <div class="item-details-title-section">
+                        <span class="item-details-name">@_testItem.Name</span>
+                        @if (!string.IsNullOrEmpty(_testItem.ComputedStatus))
+                        {
+                            <span class="item-status-badge @(_testItem.ComputedStatus.ToLower() == "passed" ? "passed" : _testItem.ComputedStatus.ToLower() == "failed" ? "failed" : "")">@_testItem.ComputedStatus.ToUpper()</span>
+                        }
+                    </div>
+                    @if (_testItem.DurationMs.HasValue)
+                    {
+                        <div class="item-details-duration">
+                            <i class="bi bi-clock"></i>
+                            <span>@FormatDuration(_testItem.DurationMs.Value)</span>
+                        </div>
+                    }
+                </div>
+
+                @* Content *@
+                <div class="item-details-content">
+                    @* Finished Time *@
+                    <div class="item-details-row">
+                        <div class="item-details-label">Finished time:</div>
+                        <div class="item-details-value">
+                            @if (_testItem.FinishTime.HasValue)
+                            {
+                                <div class="abs-rel-time">
+                                    <span class="relative-time">@FormatRelativeTime(_testItem.FinishTime.Value)</span>
+                                    <span class="absolute-time">@_testItem.FinishTime.Value.ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Not finished yet</span>
+                            }
+                        </div>
+                    </div>
+
+                    @* Tags (from Attributes) *@
+                    <div class="item-details-row">
+                        <div class="item-details-label">Tags:</div>
+                        <div class="item-details-value">
+                            @if (_testItem.Attributes != null && _testItem.Attributes.Any())
+                            {
+                                @foreach (var attr in _testItem.Attributes)
+                                {
+                                    <span class="item-tag">
+                                        <i class="bi bi-tag-fill"></i>
+                                        @attr
+                                    </span>
+                                }
+                            }
+                            else if (_testItem.Tags != null && _testItem.Tags.Any())
+                            {
+                                @foreach (var tag in _testItem.Tags)
+                                {
+                                    <span class="item-tag">
+                                        <i class="bi bi-tag-fill"></i>
+                                        @tag
+                                    </span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">No tags</span>
+                            }
+                        </div>
+                    </div>
+
+                    @* Code Reference *@
+                    <div class="item-details-row">
+                        <div class="item-details-label">Code reference:</div>
+                        <div class="item-details-value">
+                            @if (!string.IsNullOrEmpty(_testItem.CodeRef))
+                            {
+                                <code>@_testItem.CodeRef</code>
+                                <button class="item-copy-button" @onclick="() => CopyToClipboard(_testItem.CodeRef)">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="text-muted">No code reference</span>
+                            }
+                        </div>
+                    </div>
+
+                    @* Test Case ID *@
+                    <div class="item-details-row">
+                        <div class="item-details-label">Test case id:</div>
+                        <div class="item-details-value">
+                            @if (!string.IsNullOrEmpty(_testItem.TestCaseId))
+                            {
+                                <code>@_testItem.TestCaseId</code>
+                            }
+                            else if (!string.IsNullOrEmpty(_testItem.TestTitle))
+                            {
+                                <code>@_testItem.TestTitle</code>
+                            }
+                            else
+                            {
+                                <span class="text-muted">No test case ID</span>
+                            }
+                        </div>
+                    </div>
+
+                    @* Description *@
+                    <div class="item-details-row">
+                        <div class="item-details-label">Description:</div>
+                        <div class="item-details-value">
+                            @if (!string.IsNullOrEmpty(_testItem.Description))
+                            {
+                                <div class="item-description-box">
+                                    @_testItem.Description
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-muted">No description</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_activeTab == "artifacts")
+        {
+            @if (_testItem?.Attachments == null || !_testItem.Attachments.Any())
+            {
+                <div class="artifacts-viewer">
+                    <div class="artifact-preview">
+                        <div class="artifact-empty-state">
+                            <i class="bi bi-file-earmark"></i>
+                            <h5>No Artifacts Available</h5>
+                            <p>This test item has no attached artifacts.</p>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                var currentArtifact = _testItem.Attachments[_currentArtifactIndex];
+                var artifactUrl = GetArtifactUrl(currentArtifact.Id);
+
+                <div class="artifacts-viewer">
+                    @* Main Preview Area *@
+                    <div class="artifact-preview">
+                        @* Navigation Arrows *@
+                        <div class="artifact-navigation">
+                            <button class="artifact-nav-btn"
+                                    disabled="@(_currentArtifactIndex == 0)"
+                                    @onclick="NavigateToPreviousArtifact"
+                                    title="Previous artifact">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                                </svg>
+                            </button>
+
+                            <button class="artifact-nav-btn"
+                                    disabled="@(_currentArtifactIndex >= _testItem.Attachments.Count - 1)"
+                                    @onclick="NavigateToNextArtifact"
+                                    title="Next artifact">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        @* Main Display *@
+                        <div class="artifact-main-display">
+                            @if (IsImage(currentArtifact.ContentType))
+                            {
+                                <img src="@artifactUrl"
+                                     alt="@currentArtifact.Name"
+                                     class="artifact-image-preview" />
+                            }
+                            else
+                            {
+                                <div class="artifact-file-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M5 4a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm-.5 2.5A.5.5 0 0 1 5 6h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zM5 8a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+                                        <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/>
+                                    </svg>
+                                </div>
+                            }
+
+                            <h5 class="mt-3">@currentArtifact.Name</h5>
+                            <p class="text-muted mb-2">@FormatFileSize(currentArtifact.Size)</p>
+
+                            @* Action Buttons *@
+                            <div class="artifact-actions">
+                                <a href="@GetInlineArtifactUrl(artifactUrl)"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="artifact-action-link">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                    Open in new tab
+                                </a>
+                                <button type="button"
+                                        class="artifact-action-link"
+                                        @onclick="() => DownloadArtifact(GetDownloadArtifactUrl(artifactUrl), currentArtifact.Name)">
+                                    <i class="bi bi-download"></i>
+                                    Download
+                                </button>
+                                @if (_testItem.Attachments.Count > 1)
+                                {
+                                    <button type="button"
+                                            class="artifact-action-link"
+                                            @onclick="DownloadAllArtifactsAsZip"
+                                            title="Download all @(_testItem.Attachments.Count) artifacts as ZIP">
+                                        <i class="bi bi-file-zip"></i>
+                                        Download All (ZIP)
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Thumbnail Strip *@
+                    <div class="artifact-thumbnails">
+                        @* Left Scroll Arrow *@
+                        <button class="artifact-nav-arrow @(_currentArtifactIndex == 0 ? "disabled" : "")"
+                                disabled="@(_currentArtifactIndex == 0)"
+                                @onclick="ScrollThumbnailsLeft"
+                                title="Scroll left">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                            </svg>
+                        </button>
+
+                        @* Thumbnails *@
+                        @for (var i = 0; i < _testItem.Attachments.Count; i++)
+                        {
+                            var index = i;
+                            var artifact = _testItem.Attachments[i];
+                            var thumbnailUrl = GetArtifactUrl(artifact.Id);
+                            var isActive = i == _currentArtifactIndex;
+
+                            <div class="artifact-thumbnail @(isActive ? "active" : "")"
+                                 @onclick="() => SelectArtifact(index)"
+                                 title="@artifact.Name">
+                                @if (IsImage(artifact.ContentType))
+                                {
+                                    <img src="@thumbnailUrl"
+                                         alt="@artifact.Name"
+                                         class="artifact-thumbnail-image" />
+                                }
+                                else
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="artifact-thumbnail-icon" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M5 4a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm-.5 2.5A.5.5 0 0 1 5 6h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zM5 8a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+                                        <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/>
+                                    </svg>
+                                }
+                                <div class="artifact-thumbnail-label">@GetFileExtension(artifact.Name).ToUpper()</div>
+                            </div>
+                        }
+
+                        @* Right Scroll Arrow *@
+                        <button class="artifact-nav-arrow @(_currentArtifactIndex >= _testItem.Attachments.Count - 1 ? "disabled" : "")"
+                                disabled="@(_currentArtifactIndex >= _testItem.Attachments.Count - 1)"
+                                @onclick="ScrollThumbnailsRight"
+                                title="Scroll right">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+        else if (_activeTab == "browser")
+        {
+            <div class="browser-session-view">
+                <div class="browser-session-container">
+                    @* Hero Section *@
+                    <div class="session-hero">
+                        <div class="session-hero-top">
+                            <div class="session-hero-title">
+                                <div class="session-hero-icon">
+                                    <i class="bi bi-browser-chrome"></i>
+                                </div>
+                                <div class="session-hero-text">
+                                    <h2>Browser Session Information</h2>
+                                    <p>Detailed information about the browser session and environment</p>
+                                </div>
+                            </div>
+                            @if (!string.IsNullOrEmpty(_testItem.SessionStatus))
+                            {
+                                <div class="status-badge-hero">@_testItem.SessionStatus</div>
+                            }
+                        </div>
+
+                        @* Quick Stats *@
+                        <div class="session-stats">
+                            <div class="session-stat-item">
+                                <div class="session-stat-label">Browser Type</div>
+                                <div class="session-stat-value">
+                                    <i class="bi bi-browser-chrome"></i>
+                                    <span>@(_testItem.BrowserType ?? "N/A")</span>
+                                </div>
+                            </div>
+                            <div class="session-stat-item">
+                                <div class="session-stat-label">Node</div>
+                                <div class="session-stat-value">
+                                    <i class="bi bi-hdd-network"></i>
+                                    <span>@(_testItem.WorkerNodeId ?? "N/A")</span>
+                                </div>
+                            </div>
+                            <div class="session-stat-item">
+                                <div class="session-stat-label">Region/OS</div>
+                                <div class="session-stat-value">
+                                    <i class="bi bi-globe"></i>
+                                    <span>@(_testItem.RegionOs ?? "N/A")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Content Sections *@
+                    <div class="session-content">
+                        @* Version Information *@
+                        <div class="session-section">
+                            <h3 class="session-section-title">Version Information</h3>
+                            <div class="session-info-grid">
+                                <div class="session-info-item">
+                                    <div class="session-info-label">Playwright Version</div>
+                                    <div class="session-info-value">@(_testItem.PlaywrightVersion ?? "N/A")</div>
+                                </div>
+                                <div class="session-info-item">
+                                    <div class="session-info-label">Browser Version</div>
+                                    <div class="session-info-value">@(_testItem.BrowserVersion ?? "N/A")</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Connection Details *@
+                        <div class="session-section">
+                            <h3 class="session-section-title">Connection Details</h3>
+                            <div class="session-info-grid">
+                                <div class="session-info-item">
+                                    <div class="session-info-label">Browser ID</div>
+                                    <div class="session-info-value">
+                                        @if (!string.IsNullOrEmpty(_testItem.BrowserId))
+                                        {
+                                            <div class="d-flex align-items-center gap-2">
+                                                <code>@_testItem.BrowserId</code>
+                                                <button class="item-copy-button" @onclick="() => CopyToClipboard(_testItem.BrowserId)">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span>N/A</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="session-info-item">
+                                    <div class="session-info-label">WebSocket Endpoint</div>
+                                    <div class="session-info-value">
+                                        @if (!string.IsNullOrEmpty(_testItem.WebSocketEndpoint))
+                                        {
+                                            <div class="d-flex align-items-center gap-2">
+                                                <code class="text-truncate" style="max-width: 300px;">@_testItem.WebSocketEndpoint</code>
+                                                <button class="item-copy-button" @onclick="() => CopyToClipboard(_testItem.WebSocketEndpoint)">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span>N/A</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Infrastructure Status *@
+                        @if (ShowInfrastructureAlert())
+                        {
+                            <div class="session-section">
+                                <h3 class="session-section-title">Infrastructure Status</h3>
+                                <div class="session-alert">
+                                    <div class="session-alert-icon">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                    </div>
+                                    <div class="session-alert-content">
+                                        <h4 class="session-alert-title">Infrastructure Issue</h4>
+                                        <p class="session-alert-message">@GetInfrastructureMessage()</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @* Timeline *@
+                        <div class="session-section">
+                            <h3 class="session-section-title">Session Timeline</h3>
+                            <div class="session-timeline">
+                                <div class="session-timeline-item">
+                                    <div class="session-timeline-icon">
+                                        <i class="bi bi-play-circle-fill"></i>
+                                    </div>
+                                    <div class="session-timeline-info">
+                                        <div class="session-timeline-label">Started</div>
+                                        <div class="session-timeline-value">@_testItem.StartTime.ToString("dd.MM.yyyy HH:mm")</div>
+                                    </div>
+                                </div>
+                                <div class="session-timeline-divider"></div>
+                                <div class="session-timeline-item">
+                                    <div class="session-timeline-icon">
+                                        <i class="bi bi-stop-circle-fill"></i>
+                                    </div>
+                                    <div class="session-timeline-info">
+                                        <div class="session-timeline-label">Completed</div>
+                                        <div class="session-timeline-value">
+                                            @if (_testItem.FinishTime.HasValue)
+                                            {
+                                                @_testItem.FinishTime.Value.ToString("dd.MM.yyyy HH:mm")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Not finished</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_activeTab == "commands")
+        {
+            @* Playwright Server Commands Tab Content *@
+            <div class="test-cases-section">
+                @* Enhanced Stats Header - Compact & Elegant *@
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 rounded-3" style="background: #f8f9fa; border: 1px solid #e9ecef;">
+                    <div class="d-flex align-items-center gap-1 px-2 py-1 rounded-pill" style="background: white; border: 1px solid #e3e8ef;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#667eea" viewBox="0 0 16 16">
+                            <path d="M8.515 1.019A7 7 0 0 0 8 1V0a8 8 0 0 1 .589.022l-.074.997zm2.004.45a7.003 7.003 0 0 0-.985-.299l.219-.976c.383.086.76.2 1.126.342l-.36.933zm1.37.71a7.01 7.01 0 0 0-.439-.27l.493-.87a8.025 8.025 0 0 1 .979.654l-.615.789a6.996 6.996 0 0 0-.418-.302zm1.834 1.79a6.99 6.99 0 0 0-.653-.796l.724-.69c.27.285.52.59.747.91l-.818.576zm.744 1.352a7.08 7.08 0 0 0-.214-.468l.893-.45a7.976 7.976 0 0 1 .45 1.088l-.95.313a7.023 7.023 0 0 0-.179-.483zm.53 2.507a6.991 6.991 0 0 0-.1-1.025l.985-.17c.067.386.106.778.116 1.17l-1 .025zm-.131 1.538c.033-.17.06-.339.081-.51l.993.123a7.957 7.957 0 0 1-.23 1.155l-.964-.267c.046-.165.086-.332.12-.501zm-.952 2.379c.184-.29.346-.594.486-.908l.914.405c-.16.36-.345.706-.555 1.038l-.845-.535zm-.964 1.205c.122-.122.239-.248.35-.378l.758.653a8.073 8.073 0 0 1-.401.432l-.707-.707z"/>
+                            <path d="M8 1a7 7 0 1 0 4.95 11.95l.707.707A8.001 8.001 0 1 1 8 0v1z"/>
+                            <path d="M7.5 3a.5.5 0 0 1 .5.5v5.21l3.248 1.856a.5.5 0 0 1-.496.868l-3.5-2A.5.5 0 0 1 7 9V3.5a.5.5 0 0 1 .5-.5z"/>
+                        </svg>
+                        <span class="small" style="color: #667eea; font-weight: 500;">Duration</span>
+                        <span class="badge rounded-pill" style="background: #667eea; color: white; font-size: 0.7rem; padding: 0.25rem 0.5rem;">@DurationText()</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 px-2 py-1 rounded-pill" style="background: white; border: 1px solid #e3e8ef;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#6c757d" viewBox="0 0 16 16">
+                            <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                        </svg>
+                        <span class="small text-secondary" style="font-weight: 500;">Commands</span>
+                        <span class="badge rounded-pill" style="background: #6c757d; color: white; font-size: 0.7rem; padding: 0.25rem 0.5rem;">@CommandCount</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 px-2 py-1 rounded-pill" style="background: white; border: 1px solid #e3e8ef;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#0d6efd" viewBox="0 0 16 16">
+                            <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
+                        </svg>
+                        <span class="small text-primary" style="font-weight: 500;">Kinds</span>
+                        <span class="badge rounded-pill" style="background: #0d6efd; color: white; font-size: 0.7rem; padding: 0.25rem 0.5rem;">@KindCounts.Count</span>
+                    </div>
+                </div>
+
+                @* Filters and Commands Section with elegant borders *@
+                <div class="rounded-3 mb-3" style="border: 1px solid #e3e8ef; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div class="p-3" style="background: linear-gradient(to bottom, #fafbfc 0%, #ffffff 100%); border-bottom: 1px solid #e3e8ef; border-radius: 0.5rem 0.5rem 0 0;">
+                    <div class="row g-2 mb-2">
+                        <div class="col-sm-3">
+                            <input class="form-control form-control-sm" placeholder="Kind (e.g. Borrow)"
+                                   value="@_cmdKindFilter"
+                                   @oninput="OnKindInput"/>
+                        </div>
+                        <div class="col-sm-3">
+                            <input class="form-control form-control-sm" placeholder="Direction (c2s/s2c/runner)"
+                                   value="@_cmdDirectionFilter"
+                                   @oninput="OnDirectionInput"/>
+                        </div>
+                    </div>
+                    @if (KindCounts.Count > 0)
+                    {
+                        <div class="mb-2">
+                            <span class="small text-muted me-2">Quick filters:</span>
+                            @foreach (var kv in KindCounts.OrderBy(kv => kv.Key))
+                            {
+                                <button
+                                    class="btn btn-sm @(string.Equals(_cmdKindFilter, kv.Key, StringComparison.OrdinalIgnoreCase) ? "btn-primary" : "btn-outline-primary") me-1 mb-1"
+                                    @onclick="() => SetKindFilter(kv.Key)">
+                                    @kv.Key <span class="badge bg-light text-dark ms-1">@kv.Value</span>
+                                </button>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_cmdKindFilter))
+                            {
+                                <button class="btn btn-sm btn-outline-secondary mb-1" @onclick="ClearKindFilter">Clear</button>
+                            }
+                        </div>
+                    }
+                    </div>
+
+                    @if (_commands == null)
+                    {
+                        <div class="text-muted p-3">Loading commands...</div>
+                    }
+                    else if (FilteredCommands.Count == 0)
+                    {
+                        <div class="text-muted p-3">No commands.</div>
+                    }
+                    else
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-0 p-3 border-bottom" style="background: #fafbfc;">
+                            <div class="d-flex align-items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="#667eea" viewBox="0 0 16 16">
+                                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                    <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                                </svg>
+                                <span class="small text-secondary" style="font-weight: 500;">Showing <strong>@PageStart-@PageEnd</strong> of <strong>@CmdTotal</strong></span>
+                            </div>
+                            <nav aria-label="Commands pagination">
+                                <ul class="pagination pagination-sm mb-0">
+                                    <li class="page-item @(_cmdPage <= 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="PrevCmdPage" disabled="@(_cmdPage <= 1)" style="border-radius: 6px 0 0 6px;">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                                            </svg>
+                                            <span class="ms-1">Previous</span>
+                                        </button>
+                                    </li>
+                                    <li class="page-item disabled">
+                                        <span class="page-link bg-white border-start-0 border-end-0">
+                                            Page <strong>@_cmdPage</strong> of <strong>@CmdTotalPages</strong>
+                                        </span>
+                                    </li>
+                                    <li class="page-item @(_cmdPage >= CmdTotalPages ? "disabled" : "")">
+                                        <button class="page-link" @onclick="NextCmdPage" disabled="@(_cmdPage >= CmdTotalPages)" style="border-radius: 0 6px 6px 0;">
+                                            <span class="me-1">Next</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                                                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                                            </svg>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+
+                        @* Commands List *@
+                        <div class="p-3">
+                            @foreach (var ev in PagedCommands)
+                            {
+                                <div class="mb-3 pb-3 small" style="border-bottom: 1px solid #e9ecef;">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <span class="badge bg-secondary me-2" style="font-size: 0.7rem;">@ev.Kind</span>
+                                            <strong style="font-size: 0.875rem;">@ev.Message</strong>
+                                            @if (!string.IsNullOrWhiteSpace(ev.TestId))
+                                            {
+                                                <span class="badge bg-light text-dark ms-2" style="font-size: 0.7rem;">test=@ev.TestId</span>
+                                            }
+                                            @if (ev.Props is not null && ev.Props.Count > 0)
+                                            {
+                                                <div class="mt-1">
+                                                    @foreach (var p in ev.Props)
+                                                    {
+                                                        <span class="badge bg-light text-dark me-1" style="font-size: 0.7rem;">@p.Key=@p.Value</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="text-muted small">@ev.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</div>
+                                            <button class="btn btn-sm btn-outline-secondary mt-1" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;"
+                                                    @onclick="async () => await CopyCommand(ev)">Copy
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    @if (string.Equals(ev.Kind, "PwProtocol", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <div class="mt-2">
+                                            @RenderPlaywrightProtocol(ev)
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        @if (CmdTotalPages > 1)
+                        {
+                            <div class="d-flex justify-content-end align-items-center p-3 border-top" style="background: #fafbfc; border-radius: 0 0 0.5rem 0.5rem;">
+                                <nav aria-label="Commands pagination bottom">
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item @(_cmdPage <= 1 ? "disabled" : "")">
+                                            <button class="page-link" @onclick="PrevCmdPage" disabled="@(_cmdPage <= 1)" style="border-radius: 6px 0 0 6px;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                                                    <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                                                </svg>
+                                                <span class="ms-1">Previous</span>
+                                            </button>
+                                        </li>
+                                        <li class="page-item disabled">
+                                            <span class="page-link bg-white border-start-0 border-end-0">
+                                                Page <strong>@_cmdPage</strong> of <strong>@CmdTotalPages</strong>
+                                            </span>
+                                        </li>
+                                        <li class="page-item @(_cmdPage >= CmdTotalPages ? "disabled" : "")">
+                                            <button class="page-link" @onclick="NextCmdPage" disabled="@(_cmdPage >= CmdTotalPages)" style="border-radius: 0 6px 6px 0;">
+                                                <span class="me-1">Next</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                                                    <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                                                </svg>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+        @* Error Display (Legacy - shown in Stack Trace tab now) *@
+        @if (false && !string.IsNullOrEmpty(_testItem.ErrorMessage))
+        {
+            <div class="card mb-4 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Error</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0"><strong>@_testItem.ErrorMessage</strong></p>
+                    @if (!string.IsNullOrEmpty(_testItem.ErrorStack))
+                    {
+                        <details class="mt-3">
+                            <summary class="text-muted" style="cursor: pointer;">Show stack trace</summary>
+                            <pre class="mt-2 p-3 bg-light rounded small"><code>@_testItem.ErrorStack</code></pre>
+                        </details>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Child Items Tree *@
+        @if (_testItem?.Children != null && _testItem.Children.Count > 0)
+        {
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-diagram-3"></i> Child Items (@_testItem.Children.Count)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <TestItemTree Items="_testItem.Children"
+                                  ShowMetadata="true"
+                                  ShowActions="false"
+                                  ExpandAll="false" />
+                </div>
+            </div>
+        }
+
+        @* Tags *@
+        @if (_testItem?.Tags != null && _testItem.Tags.Length > 0)
+        {
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-tag"></i> Tags</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var tag in _testItem.Tags)
+                        {
+                            <span class="badge bg-info">@tag</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Parameters *@
+        @if (_testItem?.Parameters != null && _testItem.Parameters.Count > 0)
+        {
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-sliders"></i> Parameters</h6>
+                </div>
+                <div class="card-body">
+                    @foreach (var param in _testItem.Parameters)
+                    {
+                        <div class="mb-2">
+                            <code class="small">@param.Key</code><br />
+                            <span class="text-primary">@param.Value</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string ProjectKey { get; set; } = string.Empty;
+    [Parameter] public Guid ItemId { get; set; }
+    [Parameter] public long? LaunchId { get; set; }
+    [Parameter] public long? SuiteId { get; set; }
+    [Parameter] public long? DbId { get; set; }
+
+    private TestItemDto? _testItem;
+    private LaunchDto? _launch;
+    private TestItemDto? _suite;
+    private bool _loading = true;
+    private string? _error;
+
+    // Breadcrumb collapse state
+    private bool _isBreadcrumbCollapsed;
+
+    // Phase 2: Test Navigation Controls
+    private List<TestItemDto>? _siblingTests;
+    private Guid? _previousTestId;
+    private Guid? _nextTestId;
+    private DotNetObjectReference<TestItemDetails>? _dotNetRef;
+
+    // Phase 3: Test History Line
+    private List<TestHistoryItemDto> _historyItems = new();
+    private List<TestHistoryItemDto> _allHistoryItems = new();
+    private int _currentHistoryIndex;
+    private ElementReference _historyScrollRef;
+    private string _historyStatusFilter = "";
+
+    // Tooltip state
+    private bool _tooltipVisible;
+    private TestHistoryItemDto? _tooltipData;
+    private string _tooltipStyle = "";
+
+    // Phase 4: Main Tabs
+    private string _activeTab = "logs";
+
+    // Phase 5: Execution Logs Tab
+    private List<LogEntryDto> _logEntries = new();
+    private string _logFilterText = "";
+    private string _logLevelFilter = "";
+    private string _statusFilter = "";
+    private bool _showOnlyWithAttachments;
+    private bool _showAdvancedFilters;
+    private bool _allExpanded = true;
+    private string _densityMode = "Default";
+    private string _viewMode = "markdown";
+    private string _consoleTheme = "light";
+    private HashSet<Guid> _expandedSteps = new();
+    private readonly HashSet<Guid> _expandedMessages = new();
+    private int _currentPage = 1;
+    private int _itemsPerPage = 50;
+    private int _totalEntries => FilteredLogEntries.Count();
+    private int _totalPages => Math.Max(1, (int)Math.Ceiling(_totalEntries / (double)_itemsPerPage));
+    private int _currentPageStart => _totalEntries == 0 ? 0 : (_currentPage - 1) * _itemsPerPage + 1;
+    private int _currentPageEnd => Math.Min(_currentPage * _itemsPerPage, _totalEntries);
+    private int _activeFiltersCount =>
+        (!string.IsNullOrEmpty(_logLevelFilter) ? 1 : 0) +
+        (!string.IsNullOrEmpty(_statusFilter) ? 1 : 0) +
+        (_showOnlyWithAttachments ? 1 : 0);
+
+    // Phase 6: Stack Trace Tab
+    private readonly List<StackTraceEntryDto> _stackTraceEntries = new();
+    private readonly HashSet<Guid> _expandedStackTraces = new();
+    private readonly HashSet<Guid> _expandedStackTraceDetails = new(); // For "show more" functionality
+
+    // Computed properties for conditional filter visibility
+    private bool HasSteps => _logEntries.Any(e => e.IsStepHeader);
+    private bool HasAttachments => _logEntries.Any(e => e.HasAttachment);
+
+    private List<TestHistoryItemDto> FilteredHistoryItems
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(_historyStatusFilter))
+                return _historyItems;
+
+            return _historyItems
+                .Where(h => h.Status.Equals(_historyStatusFilter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTestItem();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload test item when route parameters change (navigation between tests)
+        await LoadTestItem();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("setupTestNavigationKeyboard", _dotNetRef);
+
+            // Load breadcrumb collapse preference from localStorage
+            try
+            {
+                var collapsedValue = await JS.InvokeAsync<string?>("localStorage.getItem", "breadcrumb-collapsed");
+                _isBreadcrumbCollapsed = collapsedValue == "true";
+                StateHasChanged();
+            }
+            catch
+            {
+                // Ignore if localStorage not available
+            }
+
+            // Phase 3: Setup history keyboard navigation
+            try
+            {
+                await JS.InvokeVoidAsync("setupHistoryKeyboard");
+            }
+            catch
+            {
+                // Ignore JS errors if script not loaded
+            }
+        }
+
+        // Phase 3: Auto-scroll to center active history item
+        if (_historyItems.Count > 0 && firstRender)
+        {
+            await ScrollToActiveHistoryItem();
+        }
+    }
+
+    [JSInvokable]
+    public void HandleKeyPress(string key)
+    {
+        if (key == "ArrowLeft" && _previousTestId.HasValue)
+        {
+            NavigateToPreviousTest();
+        }
+        else if (key == "ArrowRight" && _nextTestId.HasValue)
+        {
+            NavigateToNextTest();
+        }
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
+
+    private async Task LoadTestItem()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            http.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+            var actualItemId = ItemId;
+            LaunchDto? resolvedLaunch = null;
+
+            // If navigated via hierarchical route with db_id, resolve to UUID
+            if (ItemId == Guid.Empty && DbId.HasValue && LaunchId.HasValue)
+            {
+                Logger.LogInformation("Resolving hierarchical route: launch={LaunchId}, suite={SuiteId}, dbId={DbId}",
+                    LaunchId.Value, SuiteId, DbId.Value);
+
+                // First, get launch by db_id to get launch UUID
+                try
+                {
+                    var launchUrl = $"/api/launches/by-db-id/{ProjectKey}/{LaunchId.Value}";
+                    Logger.LogInformation("Fetching launch from: {Url}", launchUrl);
+                    resolvedLaunch = await http.GetFromJsonAsync<LaunchDto>(launchUrl);
+                    if (resolvedLaunch == null)
+                    {
+                        _error = $"Launch #{LaunchId} not found in project {ProjectKey}";
+                        Logger.LogWarning("Launch #{LaunchId} not found (null response)", LaunchId.Value);
+                        return;
+                    }
+
+                    Logger.LogInformation("Resolved launch #{LaunchId} to UUID {LaunchUuid}", LaunchId.Value, resolvedLaunch.Id);
+
+                    // Now lookup test item by db_id using launch UUID
+                    var itemUrl = $"/api/test-items/by-number/{resolvedLaunch.Id}/{DbId.Value}";
+                    Logger.LogInformation("Fetching test item from: {Url}", itemUrl);
+                    var item = await http.GetFromJsonAsync<TestItemDto>(itemUrl);
+                    if (item == null)
+                    {
+                        _error = $"Test item #{DbId} not found in launch #{LaunchId}";
+                        Logger.LogWarning("Test item #{DbId} not found (null response)", DbId.Value);
+                        return;
+                    }
+
+                    Logger.LogInformation("Resolved test item #{DbId} to UUID {ItemUuid}", DbId.Value, item.Id);
+                    actualItemId = item.Id;
+                }
+                catch (HttpRequestException ex)
+                {
+                    _error = $"Failed to resolve hierarchical URL: {ex.Message}";
+                    Logger.LogError(ex, "Failed to resolve hierarchical route for launch={LaunchId}, dbId={DbId}",
+                        LaunchId.Value, DbId.Value);
+                    return;
+                }
+            }
+
+            // Load test item with tree (API returns { item, statistics })
+            var treeResponse = await http.GetFromJsonAsync<TestItemTreeResponse>($"/api/test-items/{actualItemId}/tree?maxDepth=5");
+            _testItem = treeResponse?.Item;
+
+            if (_testItem != null)
+            {
+                Logger.LogInformation("Loaded test item with tree: Id={Id}, Name={Name}, ParentItemId={ParentId}, LaunchId={LaunchId}, ChildCount={ChildCount}",
+                    _testItem.Id, _testItem.Name ?? "(null)", _testItem.ParentItemId, _testItem.LaunchId, _testItem.Children?.Count ?? 0);
+
+                // Load launch details (use already resolved launch if available)
+                if (resolvedLaunch != null)
+                {
+                    _launch = resolvedLaunch;
+                    Logger.LogInformation("Using already resolved launch {LaunchId}", _launch.Id);
+                }
+                else
+                {
+                    try
+                    {
+                        _launch = await http.GetFromJsonAsync<LaunchDto>($"/api/launches/{_testItem.LaunchId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Failed to load launch details for LaunchId={LaunchId}", _testItem.LaunchId);
+                    }
+                }
+
+                // Load parent suite/test item if exists
+                if (_testItem.ParentItemId.HasValue)
+                {
+                    Logger.LogInformation("Loading parent item with ParentItemId={ParentId}", _testItem.ParentItemId.Value);
+                    try
+                    {
+                        _suite = await http.GetFromJsonAsync<TestItemDto>($"/api/test-items/{_testItem.ParentItemId.Value}");
+                        Logger.LogInformation("Loaded parent item: Name={Name}, ItemType={Type}", _suite?.Name ?? "(null)", _suite?.ItemType ?? "(null)");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Failed to load parent item for ParentItemId={ParentItemId}", _testItem.ParentItemId.Value);
+                    }
+                }
+                else
+                {
+                    Logger.LogInformation("Test item has no ParentItemId - no suite breadcrumb");
+                }
+
+                // Phase 2: Load sibling tests for navigation
+                await LoadSiblingTestsAsync();
+
+                // Phase 3: Load test history
+                await LoadTestHistoryAsync();
+
+                // Phase 5: Load artifacts
+                await LoadArtifactsAsync();
+
+                // Phase 6: Load log entries
+                await LoadLogEntriesAsync();
+
+                // Phase 7: Load Playwright server commands
+                await LoadCommandsAsync();
+
+                // Auto-switch to logs tab if current tab is browser/commands but no browser session exists
+                if ((_activeTab == "browser" || _activeTab == "commands") && !HasBrowserSession())
+                {
+                    _activeTab = "logs";
+                    Logger.LogInformation("Auto-switched to logs tab - test item {ItemId} ({ItemType}) has no browser session",
+                        _testItem.Id, _testItem.ItemType);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load test item: {ex.Message}";
+            Logger.LogError(ex, "Error loading test item {ItemId}", ItemId);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadArtifactsAsync()
+    {
+        if (_testItem == null) return;
+
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            http.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+            // Strategy: Use hierarchical logs to find all step IDs (including nested steps)
+            // This is the same approach the Execution Logs tab uses
+            var response = await http.GetAsync($"/api/test-items/{_testItem.Id}/logs/hierarchical?take=1000&maxDepth=5&useCache=true");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Logger.LogWarning("Failed to load hierarchical logs for artifacts: {StatusCode}", response.StatusCode);
+                return;
+            }
+
+            var hierarchicalResponse = await response.Content.ReadFromJsonAsync<HierarchicalLogsResponse>();
+            var hierarchicalLogs = hierarchicalResponse?.Logs ?? new List<HierarchicalLogEntryDto>();
+
+            // Extract unique step IDs from hierarchical logs (these represent all nested steps)
+            var stepIds = hierarchicalLogs
+                .Where(log => log.IsStepHeader && log.Id != Guid.Empty)
+                .Select(log => log.Id)
+                .Distinct()
+                .ToList();
+
+            Logger.LogInformation("Found {StepCount} unique steps from hierarchical logs for test item {ItemId}",
+                stepIds.Count, _testItem.Id);
+
+            // Collect artifacts from root test item + all nested steps
+            var allArtifacts = new List<TestAttachmentDto>();
+
+            // Add root test item ID
+            var allItemIds = new List<Guid> { _testItem.Id };
+            allItemIds.AddRange(stepIds);
+
+            // Query artifacts for each item ID
+            foreach (var itemId in allItemIds)
+            {
+                try
+                {
+                    var artifactsResponse = await http.GetAsync($"/api/test-items/{itemId}/artifacts");
+                    if (artifactsResponse.IsSuccessStatusCode)
+                    {
+                        var artifacts = await artifactsResponse.Content.ReadFromJsonAsync<List<TestAttachmentDto>>();
+                        if (artifacts != null && artifacts.Any())
+                        {
+                            allArtifacts.AddRange(artifacts);
+                            Logger.LogInformation("✓ Found {Count} artifacts for item {ItemId}", artifacts.Count, itemId);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to load artifacts for item {ItemId}", itemId);
+                }
+            }
+
+            if (allArtifacts.Any())
+            {
+                _testItem = _testItem with { Attachments = allArtifacts };
+                Logger.LogInformation("Loaded {Count} total artifacts from {ItemCount} items (root + nested steps)",
+                    allArtifacts.Count, allItemIds.Count);
+            }
+            else
+            {
+                Logger.LogInformation("No artifacts found across {ItemCount} items", allItemIds.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Error loading artifacts for test item {ItemId}", _testItem.Id);
+        }
+    }
+
+    private async Task CollectArtifactsRecursivelyAsync(HttpClient http, TestItemDto item, List<TestAttachmentDto> allArtifacts)
+    {
+        // Load artifacts for current item
+        try
+        {
+            Logger.LogInformation("Checking artifacts for item: {ItemId} ({ItemName}) - Type: {ItemType}",
+                item.Id, item.Name, item.ItemType);
+
+            var response = await http.GetAsync($"/api/test-items/{item.Id}/artifacts");
+            Logger.LogInformation("Artifacts API response for {ItemId}: StatusCode={StatusCode}",
+                item.Id, response.StatusCode);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var artifacts = await response.Content.ReadFromJsonAsync<List<TestAttachmentDto>>();
+                if (artifacts != null && artifacts.Any())
+                {
+                    allArtifacts.AddRange(artifacts);
+                    Logger.LogInformation("✓ Found {Count} artifacts for item {ItemId} ({ItemName})",
+                        artifacts.Count, item.Id, item.Name);
+                }
+                else
+                {
+                    Logger.LogInformation("No artifacts for item {ItemId} ({ItemName})", item.Id, item.Name);
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Logger.LogWarning("Failed to load artifacts for item {ItemId}: {StatusCode} - {Error}",
+                    item.Id, response.StatusCode, errorContent);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Exception loading artifacts for child item {ItemId}", item.Id);
+        }
+
+        // Recursively load artifacts from children
+        if (item.Children != null && item.Children.Any())
+        {
+            Logger.LogInformation("Recursing into {ChildCount} children of {ItemName}", item.Children.Count, item.Name);
+            foreach (var child in item.Children)
+            {
+                await CollectArtifactsRecursivelyAsync(http, child, allArtifacts);
+            }
+        }
+        else
+        {
+            Logger.LogInformation("Item {ItemName} has no children", item.Name);
+        }
+    }
+
+    private async Task LoadCommandsAsync()
+    {
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            http.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+            var cmdsResp = await http.GetAsync($"/results/{_testItem!.Id}/commands?take=200");
+            _commands = (cmdsResp.IsSuccessStatusCode
+                ? await cmdsResp.Content.ReadFromJsonAsync<List<CommandLogEventDto>>()
+                : new List<CommandLogEventDto>()) ?? new List<CommandLogEventDto>();
+
+            ResetCmdPage();
+            Logger.LogInformation("Loaded {Count} commands for test item {ItemId}", _commands.Count, _testItem.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load commands for test item {ItemId}", _testItem?.Id);
+            _commands = new List<CommandLogEventDto>();
+            ResetCmdPage();
+        }
+    }
+
+    // Phase 2: Load Sibling Tests for Navigation
+    private async Task LoadSiblingTestsAsync()
+    {
+        if (_testItem?.ParentItemId == null)
+        {
+            // Root level test, no siblings
+            _siblingTests = null;
+            _previousTestId = null;
+            _nextTestId = null;
+            return;
+        }
+
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            http.DefaultRequestHeaders.Add("X-Project-Key", ProjectKey);
+
+            var response = await http.GetAsync(
+                $"/api/test-items/{_testItem.ParentItemId}/children?itemType=Test"
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Backend returns wrapper: { parentId, parentName, parentItemType, childCount, children }
+                var wrapper = await response.Content
+                    .ReadFromJsonAsync<ChildItemsResponse>();
+
+                _siblingTests = wrapper?.Children ?? [];
+
+                CalculatePreviousNextIds();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load sibling tests for parent {ParentItemId}", _testItem.ParentItemId);
+            _siblingTests = null;
+        }
+    }
+
+    private void CalculatePreviousNextIds()
+    {
+        if (_siblingTests == null || _testItem == null)
+        {
+            _previousTestId = null;
+            _nextTestId = null;
+            return;
+        }
+
+        // Sort to match UI display order: newest first (descending by StartTime)
+        // This matches TestRunDetails default sort order
+        var sortedTests = _siblingTests
+            .OrderByDescending(t => t.StartTime)
+            .ToList();
+
+        var currentIndex = sortedTests.FindIndex(t => t.Id == _testItem.Id);
+
+        if (currentIndex < 0)
+        {
+            // Current test not found in siblings list
+            Logger.LogWarning("Current test {ItemId} not found in sibling list", _testItem.Id);
+            _previousTestId = null;
+            _nextTestId = null;
+            return;
+        }
+
+        // Previous test (earlier in the list = newer test)
+        _previousTestId = currentIndex > 0
+            ? sortedTests[currentIndex - 1].Id
+            : null;
+
+        // Next test (later in the list = older test)
+        _nextTestId = currentIndex < sortedTests.Count - 1
+            ? sortedTests[currentIndex + 1].Id
+            : null;
+
+        Logger.LogInformation("Navigation: current={Current} (DbId={DbId}, {Index}/{Total}), previous={PrevDbId}, next={NextDbId}",
+            _testItem.Name, _testItem.DbId ?? 0, currentIndex + 1, sortedTests.Count,
+            sortedTests.ElementAtOrDefault(currentIndex - 1)?.DbId ?? 0,
+            sortedTests.ElementAtOrDefault(currentIndex + 1)?.DbId ?? 0);
+    }
+
+    private void NavigateToPreviousTest()
+    {
+        if (_previousTestId.HasValue && _siblingTests != null)
+        {
+            var previousTest = _siblingTests.FirstOrDefault(t => t.Id == _previousTestId.Value);
+            if (previousTest != null)
+            {
+                NavigateToTest(previousTest);
+            }
+        }
+    }
+
+    private void NavigateToNextTest()
+    {
+        if (_nextTestId.HasValue && _siblingTests != null)
+        {
+            var nextTest = _siblingTests.FirstOrDefault(t => t.Id == _nextTestId.Value);
+            if (nextTest != null)
+            {
+                NavigateToTest(nextTest);
+            }
+        }
+    }
+
+    private void NavigateToTest(TestItemDto test)
+    {
+        // Preserve URL format: use hierarchical URL if we came via hierarchical route
+        if (LaunchId.HasValue && test.DbId.HasValue && _launch?.DbId.HasValue == true && _suite?.DbId.HasValue == true)
+        {
+            // Use hierarchical URL format: /launches/{launchDbId}/suites/{suiteDbId}/tests/{testDbId}/test-item
+            Navigation.NavigateTo($"/{ProjectKey}/launches/{_launch.DbId}/suites/{_suite.DbId}/tests/{test.DbId}/test-item");
+        }
+        else
+        {
+            // Fallback to GUID URL format
+            Navigation.NavigateTo($"/{ProjectKey}/test-items/{test.Id}");
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadTestItem();
+        StateHasChanged();
+    }
+
+    private void NavigateBack()
+    {
+        if (_suite != null && _launch != null)
+        {
+            // Navigate to parent suite/test runs page (prefer db_id URLs)
+            var suiteUrl = _launch.DbId.HasValue && _suite.DbId.HasValue
+                ? $"/{ProjectKey}/launches/{_launch.DbId}/suites/{_suite.DbId}/tests"  // Numeric URL (preferred)
+                : $"/{ProjectKey}/launches/{_launch.Id}/suites/{_suite.Id}/runs";       // GUID URL (fallback)
+            Navigation.NavigateTo(suiteUrl);
+        }
+        else if (_launch != null)
+        {
+            // Navigate to launch suites page (prefer db_id URL)
+            var launchUrl = _launch.DbId.HasValue
+                ? $"/{ProjectKey}/launches/{_launch.DbId}/suites"  // Numeric URL (preferred)
+                : $"/{ProjectKey}/launches/{_launch.Id}/suites";    // GUID URL (fallback)
+            Navigation.NavigateTo(launchUrl);
+        }
+        else
+        {
+            // Fallback to launches list
+            Navigation.NavigateTo($"/{ProjectKey}/launches");
+        }
+    }
+
+    private LaunchActionPanel.LaunchInfo GetLaunchInfo()
+    {
+        if (_testItem == null)
+        {
+            return new LaunchActionPanel.LaunchInfo
+            {
+                Name = "Loading...",
+                LaunchNumber = null,
+                StartTime = DateTimeOffset.UtcNow
+            };
+        }
+
+        // Calculate duration if not provided
+        double? duration = null;
+        if (_testItem.FinishTime.HasValue)
+        {
+            duration = (_testItem.FinishTime.Value - _testItem.StartTime).TotalSeconds;
+        }
+        else if (_testItem.DurationMs.HasValue)
+        {
+            duration = _testItem.DurationMs.Value / 1000.0;
+        }
+
+        return new LaunchActionPanel.LaunchInfo
+        {
+            Name = _testItem.Name,
+            LaunchNumber = _launch?.LaunchNumber, // Null if launch unavailable
+            Description = _testItem.Description,
+            Attributes = _testItem.Attributes ?? Array.Empty<string>(),
+            OwnerUsername = _launch?.OwnerUsername,
+            StartTime = _testItem.StartTime,
+            FinishTime = _testItem.FinishTime,
+            DurationSeconds = duration
+        };
+    }
+
+    private List<LaunchActionPanel.BreadcrumbItem> GetBreadcrumbs()
+    {
+        Logger.LogInformation("Building breadcrumbs: _launch={Launch}, _suite={Suite}, _testItem={TestItem}",
+            _launch?.Name ?? "null", _suite?.Name ?? "null", _testItem?.Name ?? "null");
+
+        var breadcrumbs = new List<LaunchActionPanel.BreadcrumbItem>
+        {
+            new() { Text = "All", Url = $"/{ProjectKey}/launches" }
+        };
+
+        // Add Launch breadcrumb (prefer numeric db_id URLs)
+        if (_launch != null)
+        {
+            // Use db_id URL if launch has db_id value (preferred)
+            var launchUrl = _launch.DbId.HasValue
+                ? $"/{ProjectKey}/launches/{_launch.DbId}/suites"  // Numeric URL (preferred)
+                : $"/{ProjectKey}/launches/{_launch.Id}/suites";    // GUID URL (fallback)
+
+            breadcrumbs.Add(new LaunchActionPanel.BreadcrumbItem
+            {
+                Text = $"{_launch.Name} #{_launch.LaunchNumber}",
+                Url = launchUrl
+            });
+        }
+        else if (_testItem?.LaunchId != null)
+        {
+            // Launch data unavailable - show placeholder
+            breadcrumbs.Add(new LaunchActionPanel.BreadcrumbItem
+            {
+                Text = "Unknown Launch",
+                Url = null // No link since we don't have launch data
+            });
+        }
+
+        // Add Suite/Parent Item breadcrumb (prefer numeric db_id URLs)
+        if (_suite != null && _launch != null)
+        {
+            // Use db_id URLs if both launch and suite have db_id values (preferred)
+            var suiteUrl = _launch.DbId.HasValue && _suite.DbId.HasValue
+                ? $"/{ProjectKey}/launches/{_launch.DbId}/suites/{_suite.DbId}/tests"  // Numeric URL (preferred)
+                : $"/{ProjectKey}/launches/{_launch.Id}/suites/{_suite.Id}/runs";       // GUID URL (fallback)
+
+            breadcrumbs.Add(new LaunchActionPanel.BreadcrumbItem
+            {
+                Text = _suite.Name,
+                ItemType = _suite.ItemType, // Display icon based on parent type
+                Url = suiteUrl
+            });
+        }
+        else if (_suite != null)
+        {
+            // Parent item available but no launch
+            breadcrumbs.Add(new LaunchActionPanel.BreadcrumbItem
+            {
+                Text = _suite.Name,
+                ItemType = _suite.ItemType,
+                Url = null // No URL without launch context
+            });
+        }
+
+        // Add current test item (no link - current page)
+        if (_testItem != null)
+        {
+            breadcrumbs.Add(new LaunchActionPanel.BreadcrumbItem
+            {
+                Text = _testItem.Name,
+                ItemType = _testItem.ItemType, // Display icon for test item type
+                Url = null // Current page - no link
+            });
+        }
+
+        return breadcrumbs;
+    }
+
+    private string GetItemDuration()
+    {
+        if (_testItem == null)
+            return "N/A";
+
+        double? durationMs = null;
+
+        // Try to get duration from various sources
+        if (_testItem.FinishTime.HasValue)
+        {
+            durationMs = (_testItem.FinishTime.Value - _testItem.StartTime).TotalMilliseconds;
+        }
+        else if (_testItem.DurationMs.HasValue)
+        {
+            durationMs = _testItem.DurationMs.Value;
+        }
+
+        if (!durationMs.HasValue)
+            return "N/A";
+
+        // Format duration
+        if (durationMs.Value < 1000)
+            return $"{durationMs.Value:F0}ms";
+        if (durationMs.Value < 60000)
+            return $"{durationMs.Value / 1000:F1}s";
+        return $"{durationMs.Value / 60000:F1}m";
+    }
+
+    private static string RenderMarkdown(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var html = text;
+
+        // Escape HTML entities first
+        html = WebUtility.HtmlEncode(html);
+
+        // Bold: **text** or __text__
+        html = Regex.Replace(html, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+        html = Regex.Replace(html, @"__(.+?)__", "<strong>$1</strong>");
+
+        // Italic: *text* or _text_
+        html = Regex.Replace(html, @"\*(.+?)\*", "<em>$1</em>");
+        html = Regex.Replace(html, @"(?<!\w)_(.+?)_(?!\w)", "<em>$1</em>");
+
+        // Strikethrough: ~~text~~
+        html = Regex.Replace(html, @"~~(.+?)~~", "<del>$1</del>");
+
+        // Inline code: `code`
+        html = Regex.Replace(html, @"`(.+?)`", "<code>$1</code>");
+
+        // Links: [text](url)
+        html = Regex.Replace(html, @"\[([^\]]+)\]\(([^\)]+)\)", "<a href=\"$2\" target=\"_blank\" rel=\"noopener noreferrer\">$1</a>");
+
+        // Line breaks
+        html = html.Replace("\r\n", "<br />").Replace("\n", "<br />");
+
+        return html;
+    }
+
+    // Response wrapper for /api/test-items/{id}/tree endpoint
+    private class TestItemTreeResponse
+    {
+        public TestItemDto? Item { get; set; }
+        public object? Statistics { get; set; }
+    }
+
+    // Response wrapper for /api/test-items/{id}/children endpoint
+    private class ChildItemsResponse
+    {
+        public Guid ParentId { get; set; }
+        public string? ParentName { get; set; }
+        public string? ParentItemType { get; set; }
+        public int ChildCount { get; set; }
+        public List<TestItemDto> Children { get; set; } = new();
+    }
+
+    // LaunchDto class for API calls
+    private class LaunchDto
+    {
+        public Guid Id { get; set; }
+        public long? DbId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int LaunchNumber { get; set; }
+        public string? Description { get; set; }
+        public string[] AttributesArray { get; set; } = Array.Empty<string>();
+        public string? OwnerUsername { get; set; }
+        public DateTimeOffset StartTime { get; set; }
+        public DateTimeOffset? FinishTime { get; set; }
+        public double? DurationSeconds { get; set; }
+    }
+
+    private static string GetItemTypeIcon(string itemType)
+    {
+        return itemType switch
+        {
+            "Test" => "🧪",
+            "Step" => "→",
+            "Suite" => "📁",
+            "Scenario" => "📋",
+            "Story" => "📖",
+            "BeforeTest" or "BeforeMethod" or "BeforeClass" or "BeforeSuite" => "⚙️",
+            "AfterTest" or "AfterMethod" or "AfterClass" or "AfterSuite" => "🧹",
+            _ => "•"
+        };
+    }
+
+    private static string GetComputedStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Passed" => "bg-success",
+            "Failed" => "bg-danger",
+            "Skipped" => "bg-warning text-dark",
+            "Timedout" => "bg-secondary",
+            "Errored" => "bg-danger",
+            "InProgress" => "bg-info",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string GetSessionStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Running" => "bg-primary",
+            "Queued" => "bg-secondary",
+            "Completed" => "bg-success",
+            "Stopped" => "bg-warning text-dark",
+            "AutoStopped" => "bg-warning text-dark",
+            "Aborted" => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private static string FormatDuration(double ms)
+    {
+        if (ms < 1000)
+            return $"{ms:F0}ms";
+        if (ms < 60000)
+            return $"{ms / 1000:F2}s";
+        return $"{ms / 60000:F1}m";
+    }
+
+    private static string FormatRelativeTime(DateTimeOffset startTime)
+    {
+        var elapsed = DateTimeOffset.UtcNow - startTime.ToUniversalTime();
+
+        if (elapsed.TotalMinutes < 1)
+            return "just now";
+        if (elapsed.TotalMinutes < 60)
+            return $"{(int)elapsed.TotalMinutes} minute{((int)elapsed.TotalMinutes == 1 ? "" : "s")} ago";
+        if (elapsed.TotalHours < 24)
+            return $"{(int)elapsed.TotalHours} hour{((int)elapsed.TotalHours == 1 ? "" : "s")} ago";
+        if (elapsed.TotalDays < 30)
+            return $"{(int)elapsed.TotalDays} day{((int)elapsed.TotalDays == 1 ? "" : "s")} ago";
+        if (elapsed.TotalDays < 365)
+            return $"{(int)(elapsed.TotalDays / 30)} month{((int)(elapsed.TotalDays / 30) == 1 ? "" : "s")} ago";
+        return $"{(int)(elapsed.TotalDays / 365)} year{((int)(elapsed.TotalDays / 365) == 1 ? "" : "s")} ago";
+    }
+
+    // ===== Browser Session Helper Methods =====
+
+    private bool ShowInfrastructureAlert()
+    {
+        // Show alert for AutoStopped, Stopped, or Aborted sessions
+        return _testItem?.SessionStatus is "AutoStopped" or "Stopped" or "Aborted";
+    }
+
+    private string GetInfrastructureMessage()
+    {
+        return _testItem?.SessionStatus switch
+        {
+            "AutoStopped" => "Browser session was automatically stopped due to timeout or inactivity",
+            "Stopped" => "Browser session was manually stopped before completion",
+            "Aborted" => "Browser session was aborted due to an infrastructure error",
+            _ => "Browser session did not close cleanly"
+        };
+    }
+
+    // ===== Phase 3: Test History Line Methods =====
+
+    private async Task LoadTestHistoryAsync()
+    {
+        if (_testItem == null) return;
+
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var response = await http.GetAsync($"/api/test-items/{_testItem.Id}/history?limit=20");
+
+            if (response.IsSuccessStatusCode)
+            {
+                _allHistoryItems = await response.Content.ReadFromJsonAsync<List<TestHistoryItemDto>>() ?? new List<TestHistoryItemDto>();
+
+                // Reverse the list to display chronologically (oldest → newest)
+                // API returns newest first, but UI should show: #18 → #19 → #20
+                _allHistoryItems.Reverse();
+                _historyItems = _allHistoryItems;
+
+                Logger.LogInformation("Loaded {Count} history items for test {ItemId} (TestCaseId: {TestCaseId}, Name: {Name})",
+                    _historyItems.Count, _testItem.Id, _testItem.TestCaseId, _testItem.Name);
+
+                // Find current test's position in history
+                _currentHistoryIndex = _historyItems.FindIndex(h => h.TestItemId == _testItem.Id);
+
+                if (_currentHistoryIndex < 0)
+                    _currentHistoryIndex = 0;
+            }
+            else
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                Logger.LogWarning("Failed to load test history: HTTP {StatusCode}, Body: {ErrorBody}", response.StatusCode, errorBody);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load test history for item {ItemId}", _testItem.Id);
+            _historyItems = new List<TestHistoryItemDto>();
+        }
+    }
+
+    private void ApplyHistoryFilter()
+    {
+        // Reset to first item when filter changes
+        _currentHistoryIndex = 0;
+        StateHasChanged();
+    }
+
+    private string GetHistoryItemClass(int index)
+    {
+        var classes = new List<string>();
+
+        if (index == _currentHistoryIndex)
+            classes.Add("history-item-active");
+
+        if (index == FilteredHistoryItems.Count - 1)
+            classes.Add("history-item-last");
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status.ToLower() switch
+        {
+            "passed" => "status-passed",
+            "failed" => "status-failed",
+            "skipped" => "status-skipped",
+            "stopped" => "status-stopped",
+            _ => "status-failed"
+        };
+    }
+
+    private async Task NavigateToPreviousLaunch()
+    {
+        if (_currentHistoryIndex > 0)
+        {
+            await NavigateToHistoryLaunch(_currentHistoryIndex - 1);
+        }
+    }
+
+    private async Task NavigateToNextLaunch()
+    {
+        if (_currentHistoryIndex < FilteredHistoryItems.Count - 1)
+        {
+            await NavigateToHistoryLaunch(_currentHistoryIndex + 1);
+        }
+    }
+
+    private async Task NavigateToHistoryLaunch(int index)
+    {
+        if (index < 0 || index >= FilteredHistoryItems.Count) return;
+
+        var historyItem = FilteredHistoryItems[index];
+        Navigation.NavigateTo($"/{ProjectKey}/test-items/{historyItem.TestItemId}");
+        await Task.CompletedTask;
+    }
+
+    private string FormatDuration(TimeSpan? duration)
+    {
+        if (!duration.HasValue) return "N/A";
+
+        var d = duration.Value;
+        if (d.TotalSeconds < 1)
+            return $"{d.Milliseconds}ms";
+        if (d.TotalMinutes < 1)
+            return $"{d.TotalSeconds:F1}s";
+        return $"{d.TotalMinutes:F1}m";
+    }
+
+    private async Task ScrollToActiveHistoryItem()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("scrollHistoryToActive", _currentHistoryIndex);
+        }
+        catch
+        {
+            // Ignore JS errors
+        }
+    }
+
+    // Tooltip methods
+    private async void ShowTooltip(MouseEventArgs e, TestHistoryItemDto historyItem)
+    {
+        _tooltipData = historyItem;
+
+        // Use JavaScript to get element position
+        try
+        {
+            var element = await JS.InvokeAsync<JsonElement>("eval", $@"
+                (function() {{
+                    var badges = document.querySelectorAll('.history-status-block');
+                    var targetBadge = null;
+                    for (var i = 0; i < badges.length; i++) {{
+                        if (badges[i].textContent.trim() === '#{historyItem.LaunchNumber}') {{
+                            targetBadge = badges[i];
+                            break;
+                        }}
+                    }}
+                    if (!targetBadge) return null;
+                    var rect = targetBadge.getBoundingClientRect();
+                    return {{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }};
+                }})()
+            ");
+
+            if (element.ValueKind != JsonValueKind.Null && element.ValueKind != JsonValueKind.Undefined)
+            {
+                var left = element.GetProperty("left").GetDouble();
+                var top = element.GetProperty("top").GetDouble();
+                var width = element.GetProperty("width").GetDouble();
+                var height = element.GetProperty("height").GetDouble();
+
+                // Position tooltip below the badge, centered horizontally
+                var tooltipLeft = left + width / 2;
+                var tooltipTop = top + height + 15; // 15px gap below badge (closer to history line)
+
+                _tooltipStyle = $"position: fixed; left: {tooltipLeft}px; top: {tooltipTop}px; transform: translateX(-50%); z-index: 1050; display: block;";
+                _tooltipVisible = true;
+                StateHasChanged();
+            }
+            else
+            {
+                // Element not found, hide tooltip
+                _tooltipVisible = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error and hide tooltip
+            Logger.LogWarning(ex, "Failed to position tooltip for launch #{LaunchNumber}", historyItem.LaunchNumber);
+            _tooltipVisible = false;
+            StateHasChanged();
+        }
+    }
+
+    private void HideTooltip()
+    {
+        _tooltipVisible = false;
+        _tooltipData = null;
+        _tooltipStyle = "";
+        StateHasChanged();
+    }
+
+    // ===== Phase 5: Execution Logs Tab Methods =====
+
+    private async Task LoadLogEntriesAsync()
+    {
+        if (_testItem == null) return;
+
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var response = await http.GetAsync($"/api/test-items/{_testItem.Id}/logs/hierarchical?take=1000&maxDepth=5&useCache=true");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var hierarchicalResponse = await response.Content.ReadFromJsonAsync<HierarchicalLogsResponse>();
+                var hierarchicalLogs = hierarchicalResponse?.Logs ?? new List<HierarchicalLogEntryDto>();
+                _logEntries = hierarchicalLogs.Select(hl => new LogEntryDto
+                {
+                    Id = hl.Id,
+                    ParentId = hl.ParentId,
+                    IsStepHeader = hl.IsStepHeader,
+                    IsNested = hl.IsNested,
+                    NestLevel = hl.NestLevel,
+                    Timestamp = hl.Timestamp,
+                    Level = hl.Level,
+                    Source = hl.Source,
+                    Message = hl.Message,
+                    Name = hl.Name,
+                    Description = hl.Description,
+                    Status = hl.Status,
+                    DurationMs = hl.DurationMs,
+                    AttachmentCount = hl.AttachmentCount,
+                    HasAttachment = hl.HasAttachment,
+                    AttachmentType = hl.AttachmentType,
+                    AttachmentName = hl.AttachmentName,
+                    ArtifactId = hl.ArtifactId
+                }).ToList();
+
+                // Sort log entries in hierarchical order: parent followed immediately by children
+                _logEntries = SortLogEntriesHierarchically(_logEntries);
+
+                var stepHeaders = _logEntries.Count(e => e.IsStepHeader);
+                var logMessages = _logEntries.Count(e => !e.IsStepHeader);
+                Logger.LogInformation("Loaded {Count} hierarchical log entries for test item {ItemId}: {StepHeaders} step headers, {LogMessages} log messages",
+                    _logEntries.Count, _testItem.Id, stepHeaders, logMessages);
+
+                // Debug: Log step header names
+                foreach (var step in _logEntries.Where(e => e.IsStepHeader))
+                {
+                    Logger.LogDebug("Step header found: {Name} (ID: {Id}, IsNested: {IsNested}, NestLevel: {NestLevel}, ParentId: {ParentId})",
+                        step.Name, step.Id, step.IsNested, step.NestLevel, step.ParentId);
+                }
+
+                // Debug: Log ERROR/FATAL entries specifically
+                var errorLogs = _logEntries.Where(e => !e.IsStepHeader && (e.Level.ToLower() == "error" || e.Level.ToLower() == "fatal")).ToList();
+                Logger.LogInformation("Found {ErrorCount} ERROR/FATAL log entries", errorLogs.Count);
+                foreach (var errorLog in errorLogs)
+                {
+                    Logger.LogInformation("ERROR/FATAL Log: Level={Level}, ParentId={ParentId}, Message={MessagePreview}",
+                        errorLog.Level, errorLog.ParentId, errorLog.Message.Length > 100 ? errorLog.Message.Substring(0, 100) + "..." : errorLog.Message);
+                }
+
+                // Extract stack trace entries from ERROR/FATAL logs
+                ExtractStackTraceFromLogs();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load hierarchical log entries for test item {ItemId}", _testItem?.Id);
+        }
+    }
+
+    private void ExtractStackTraceFromLogs()
+    {
+        _stackTraceEntries.Clear();
+
+        // Get all ERROR and FATAL level logs (excluding step headers)
+        var errorLogs = _logEntries
+            .Where(e => !e.IsStepHeader && (e.Level.ToLower() == "error" || e.Level.ToLower() == "fatal"))
+            .OrderBy(e => e.Timestamp)
+            .ToList();
+
+        foreach (var log in errorLogs)
+        {
+            // Split message into lines for stack trace parsing
+            var lines = log.Message.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim())
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .ToList();
+
+            if (lines.Count == 0) continue;
+
+            // First line is the error message (may contain exception class)
+            var firstLine = lines[0];
+            var exceptionClass = "";
+            var errorMessageLines = new List<string>();
+
+            // Try to extract exception class if message starts with a class name pattern
+            // e.g., "System.InvalidOperationException: message" or "c.e.t.r.FailureLoggingListener - message"
+            var colonIndex = firstLine.IndexOf(':');
+            var dashIndex = firstLine.IndexOf(" - ");
+
+            if (colonIndex > 0 && colonIndex < 100) // Exception format: "Class: message"
+            {
+                var potentialClass = firstLine.Substring(0, colonIndex).Trim();
+                if (potentialClass.Contains('.') || potentialClass.Contains('$'))
+                {
+                    exceptionClass = potentialClass;
+                    errorMessageLines.Add(firstLine.Substring(colonIndex + 1).Trim());
+                }
+                else
+                {
+                    errorMessageLines.Add(firstLine);
+                }
+            }
+            else if (dashIndex > 0 && dashIndex < 100) // Logger format: "Class - message"
+            {
+                var potentialClass = firstLine.Substring(0, dashIndex).Trim();
+                if (potentialClass.Contains('.'))
+                {
+                    exceptionClass = potentialClass;
+                    errorMessageLines.Add(firstLine.Substring(dashIndex + 2).Trim());
+                }
+                else
+                {
+                    errorMessageLines.Add(firstLine);
+                }
+            }
+            else
+            {
+                errorMessageLines.Add(firstLine);
+            }
+
+            // Separate exception messages from stack trace lines
+            var exceptionMessages = new List<string>();
+            var stackTraceLines = new List<string>();
+
+            foreach (var line in lines.Skip(1))
+            {
+                // Stack trace line patterns: starts with "at " or contains file paths
+                if (line.StartsWith("at ") || line.Contains(".cs:") || line.Contains(".java:") || line.Contains(".js:") || line.Contains(".ts:"))
+                {
+                    stackTraceLines.Add(line);
+                }
+                // Exception message patterns: "Caused by:", exception class names, or plain error messages
+                else if (line.StartsWith("Caused by:") ||
+                         line.Contains("Exception") ||
+                         line.Contains("Error") ||
+                         (line.Contains('.') && line.Contains(':')))
+                {
+                    exceptionMessages.Add(line);
+                }
+                // If it doesn't match above patterns but we haven't found stack traces yet, treat as exception message
+                else if (stackTraceLines.Count == 0)
+                {
+                    exceptionMessages.Add(line);
+                }
+            }
+
+            // Try to extract HTTP details from error message
+            string? httpMethod = null;
+            string? url = null;
+            int? statusCode = null;
+            string? statusMessage = null;
+
+            // Combine errorMessageLines into single string for pattern matching
+            var fullErrorMessage = string.Join(" ", errorMessageLines);
+
+            // Look for HTTP method keywords
+            var httpMethods = new[] { "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS" };
+            foreach (var method in httpMethods)
+            {
+                if (fullErrorMessage.Contains(method))
+                {
+                    httpMethod = method;
+                    break;
+                }
+            }
+
+            // Look for status codes (3-digit numbers in 200-599 range) and extract status message
+            var statusCodeMatch = Regex.Match(fullErrorMessage, @"\b([2-5]\d{2})\b\s*(.*)");
+            if (statusCodeMatch.Success)
+            {
+                statusCode = int.Parse(statusCodeMatch.Groups[1].Value);
+
+                // Extract status message (text after status code)
+                var remainingText = statusCodeMatch.Groups[2].Value.Trim();
+                if (!string.IsNullOrEmpty(remainingText))
+                {
+                    // Common status messages
+                    var statusMessages = new Dictionary<int, string>
+                    {
+                        { 200, "OK" }, { 201, "Created" }, { 204, "No Content" },
+                        { 400, "Bad Request" }, { 401, "Unauthorized" }, { 403, "Forbidden" }, { 404, "Not Found" },
+                        { 409, "Conflict" }, { 422, "Unprocessable Entity" },
+                        { 500, "Internal Server Error" }, { 502, "Bad Gateway" }, { 503, "Service Unavailable" }
+                    };
+
+                    // Try to find known status message in remaining text
+                    foreach (var kvp in statusMessages)
+                    {
+                        if (remainingText.Contains(kvp.Value, StringComparison.OrdinalIgnoreCase))
+                        {
+                            statusMessage = kvp.Value;
+                            break;
+                        }
+                    }
+
+                    // If no known status found, use first word(s) as status message
+                    if (string.IsNullOrEmpty(statusMessage))
+                    {
+                        var words = remainingText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (words.Length > 0)
+                        {
+                            statusMessage = string.Join(" ", words.Take(3)); // Take up to 3 words
+                        }
+                    }
+                }
+            }
+
+            // Look for URLs (simplified)
+            var urlMatch = Regex.Match(fullErrorMessage, @"https?://[^\s]+");
+            if (urlMatch.Success)
+            {
+                url = urlMatch.Value;
+            }
+
+            // Determine context (thread name) from source or extract from message
+            var context = log.Source;
+            if (string.IsNullOrEmpty(context))
+            {
+                // Try to extract thread name from message (e.g., [thread-name])
+                var threadMatch = Regex.Match(fullErrorMessage, @"\[([^\]]+)\]");
+                if (threadMatch.Success)
+                {
+                    context = threadMatch.Groups[1].Value;
+                }
+            }
+
+            _stackTraceEntries.Add(new StackTraceEntryDto
+            {
+                Id = Guid.NewGuid(),
+                LogEntryId = log.Id,
+                Timestamp = log.Timestamp,
+                Context = context,
+                Level = log.Level.ToUpper(),
+                ExceptionClass = string.IsNullOrEmpty(exceptionClass) ? "Error" : exceptionClass,
+                Message = string.Join("\n", errorMessageLines), // Store as multi-line string
+                HttpMethod = httpMethod,
+                Url = url,
+                StatusCode = statusCode,
+                StatusMessage = statusMessage,
+                ExceptionMessages = exceptionMessages,
+                StackTraceLines = stackTraceLines
+            });
+        }
+
+        Logger.LogInformation("Extracted {Count} stack trace entries from error logs", _stackTraceEntries.Count);
+    }
+
+    private IEnumerable<LogEntryDto> FilteredLogEntries
+    {
+        get
+        {
+            var query = _logEntries.AsEnumerable();
+            var beforeFilter = query.Count();
+
+            Logger.LogDebug("FilteredLogEntries: Starting with {Count} entries (LogLevelFilter='{LogLevelFilter}', LogFilterText='{LogFilterText}', StatusFilter='{StatusFilter}')",
+                beforeFilter, _logLevelFilter ?? "(none)", _logFilterText ?? "(none)", _statusFilter ?? "(none)");
+
+            // Text filter: Search everywhere by contains
+            // For step headers: search in Name and Description
+            // For log entries: search in Message and Source
+            if (!string.IsNullOrWhiteSpace(_logFilterText))
+            {
+                var filter = _logFilterText.ToLower();
+                query = query.Where(e =>
+                {
+                    if (e.IsStepHeader)
+                    {
+                        // Search in step name and description
+                        return e.Name.ToLower().Contains(filter) ||
+                               (!string.IsNullOrEmpty(e.Description) && e.Description.ToLower().Contains(filter));
+                    }
+
+                    // Search in log message and source
+                    return e.Message.ToLower().Contains(filter) ||
+                           e.Source.ToLower().Contains(filter);
+                });
+                Logger.LogDebug("FilteredLogEntries: After text filter: {Count} entries", query.Count());
+            }
+
+            // Log level filter: Only applies to log entries, not step headers
+            if (!string.IsNullOrWhiteSpace(_logLevelFilter))
+            {
+                query = _logLevelFilter.ToLower() switch
+                {
+                    "fatal" => query.Where(e => e.IsStepHeader || e.Level.ToLower() == "fatal"),
+                    "error" => query.Where(e => e.IsStepHeader || e.Level.ToLower() == "error"),
+                    "warn" => query.Where(e => e.IsStepHeader || e.Level.ToLower() is "warn" or "error" or "fatal"),
+                    "info" => query.Where(e => e.IsStepHeader || e.Level.ToLower() is not "debug" and not "trace"),
+                    _ => query
+                };
+                Logger.LogDebug("FilteredLogEntries: After level filter: {Count} entries", query.Count());
+            }
+
+            // Status filter: Applies to step headers (they have Status property)
+            if (!string.IsNullOrWhiteSpace(_statusFilter))
+            {
+                query = query.Where(e => e.Status.ToLower() == _statusFilter.ToLower());
+                Logger.LogDebug("FilteredLogEntries: After status filter: {Count} entries", query.Count());
+            }
+
+            // Attachment filter: Step headers may have AttachmentCount > 0
+            if (_showOnlyWithAttachments)
+            {
+                query = query.Where(e => e.HasAttachment || (e.IsStepHeader && e.AttachmentCount > 0));
+                Logger.LogDebug("FilteredLogEntries: After attachment filter: {Count} entries", query.Count());
+            }
+
+            // Backend already returns data in correct hierarchical order
+            // (step headers followed by their logs, then nested steps, etc.)
+            // Don't re-sort - just apply pagination
+            var result = query
+                .Skip((_currentPage - 1) * _itemsPerPage)
+                .Take(_itemsPerPage)
+                .ToList();
+
+            Logger.LogDebug("FilteredLogEntries: Final result after pagination (page {Page}, size {PageSize}): {Count} entries", _currentPage, _itemsPerPage, result.Count);
+
+            // Debug: Log ERROR/FATAL entries in final result
+            var errorLogsInResult = result.Where(e => !e.IsStepHeader && (e.Level.ToLower() == "error" || e.Level.ToLower() == "fatal")).ToList();
+            if (errorLogsInResult.Any())
+            {
+                Logger.LogInformation("FilteredLogEntries: Final result contains {ErrorCount} ERROR/FATAL logs", errorLogsInResult.Count);
+            }
+
+            return result;
+        }
+    }
+
+    private async Task ToggleBreadcrumbCollapse()
+    {
+        _isBreadcrumbCollapsed = !_isBreadcrumbCollapsed;
+
+        // Save preference to localStorage
+        await JS.InvokeVoidAsync("localStorage.setItem", "breadcrumb-collapsed", _isBreadcrumbCollapsed.ToString().ToLower());
+    }
+
+    private void ToggleAdvancedFilters()
+    {
+        _showAdvancedFilters = !_showAdvancedFilters;
+    }
+
+    private void ToggleExpandAll()
+    {
+        _allExpanded = !_allExpanded;
+
+        if (_allExpanded)
+        {
+            _expandedSteps = _logEntries
+                .Where(e => e.IsStepHeader)
+                .Select(e => e.Id)
+                .ToHashSet();
+        }
+        else
+        {
+            _expandedSteps.Clear();
+        }
+    }
+
+    private void CycleDensity()
+    {
+        _densityMode = _densityMode switch
+        {
+            "Default" => "Comfortable",
+            "Comfortable" => "Compact",
+            "Compact" => "Default",
+            _ => "Default"
+        };
+    }
+
+    private string GetDensityClass()
+    {
+        return _densityMode.ToLower() switch
+        {
+            "comfortable" => "density-comfortable",
+            "compact" => "density-compact",
+            _ => ""
+        };
+    }
+
+    private void NextPage()
+    {
+        if (_currentPage < _totalPages)
+            _currentPage++;
+    }
+
+    private void PreviousPage()
+    {
+        if (_currentPage > 1)
+            _currentPage--;
+    }
+
+    private void ToggleExpand(Guid stepId)
+    {
+        if (_expandedSteps.Contains(stepId))
+        {
+            // Collapsing: remove this step AND all its descendants
+            _expandedSteps.Remove(stepId);
+            CollapseAllChildren(stepId);
+        }
+        else
+        {
+            // Expanding: add this step
+            _expandedSteps.Add(stepId);
+        }
+    }
+
+    private void CollapseAllChildren(Guid parentId)
+    {
+        // Find all direct children of this parent
+        var children = _logEntries
+            .Where(e => e.IsStepHeader && e.ParentId == parentId)
+            .ToList();
+
+        foreach (var child in children)
+        {
+            // Remove child from expanded set
+            _expandedSteps.Remove(child.Id);
+
+            // Recursively collapse the child's children
+            CollapseAllChildren(child.Id);
+        }
+    }
+
+    private bool IsExpanded(Guid stepId)
+    {
+        return _expandedSteps.Contains(stepId);
+    }
+
+    private void ToggleMessageExpansion(Guid messageId)
+    {
+        if (_expandedMessages.Contains(messageId))
+            _expandedMessages.Remove(messageId);
+        else
+            _expandedMessages.Add(messageId);
+
+        StateHasChanged(); // Trigger UI update
+    }
+
+    private bool IsMessageExpanded(Guid messageId)
+    {
+        return _expandedMessages.Contains(messageId);
+    }
+
+    private string FormatDuration(long? durationMs)
+    {
+        if (!durationMs.HasValue) return "0ms";
+
+        if (durationMs.Value < 1000)
+            return $"{durationMs.Value}ms";
+        if (durationMs.Value < 60000)
+            return $"{durationMs.Value / 1000.0:F2}s";
+        return $"{durationMs.Value / 60000.0:F1}m";
+    }
+
+    private string GetSessionStatusClass(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "running" => "bg-primary",
+            "queued" => "bg-secondary",
+            "completed" => "bg-success",
+            "stopped" => "bg-warning",
+            "autostopped" => "bg-warning",
+            "aborted" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetComputedStatusClass(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "passed" => "bg-success",
+            "failed" => "bg-danger",
+            "skipped" => "bg-warning",
+            "timedout" => "bg-secondary",
+            "cancelled" => "bg-secondary",
+            "errored" => "bg-danger",
+            "inprogress" => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+
+    private async Task CopyToClipboard(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to copy to clipboard");
+        }
+    }
+
+    private string GetAttachmentClass(string type)
+    {
+        return type.ToLower() switch
+        {
+            "image" => "attachment-image",
+            "video" => "attachment-video",
+            "warning" => "attachment-warning",
+            "error" => "attachment-error",
+            _ => "attachment-file"
+        };
+    }
+
+    private string GetAttachmentIcon(string type)
+    {
+        return type.ToLower() switch
+        {
+            "image" => "bi-image",
+            "video" => "bi-film",
+            "warning" => "bi-exclamation-triangle",
+            "error" => "bi-x-circle",
+            _ => "bi-paperclip"
+        };
+    }
+
+    private string GetFileTypeIcon(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".txt" or ".log" => "bi-file-text",
+            ".json" or ".xml" or ".yaml" or ".yml" => "bi-braces",
+            ".html" or ".htm" => "bi-file-code",
+            ".pdf" => "bi-file-pdf",
+            ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".svg" or ".webp" => "bi-file-image",
+            ".mp4" or ".webm" or ".avi" or ".mov" => "bi-file-play",
+            ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "bi-file-zip",
+            ".csv" or ".xls" or ".xlsx" => "bi-file-earmark-spreadsheet",
+            ".doc" or ".docx" => "bi-file-word",
+            ".ppt" or ".pptx" => "bi-file-ppt",
+            _ => "bi-paperclip"
+        };
+    }
+
+    private string GetInlineArtifactUrl(Guid artifactId)
+    {
+        // Use relative URL - dashboard proxies artifact requests to Hub
+        return $"/api/artifacts/{artifactId}?inline=true";
+    }
+
+    private async Task DownloadArtifact(Guid artifactId, string fileName)
+    {
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var response = await http.GetAsync($"/api/artifacts/{artifactId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsByteArrayAsync();
+                var base64 = Convert.ToBase64String(content);
+                var mimeType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+
+                await JS.InvokeVoidAsync("downloadFile", fileName, base64, mimeType);
+            }
+            else
+            {
+                Logger.LogWarning("Failed to download artifact {ArtifactId}: {StatusCode}", artifactId, response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error downloading artifact {ArtifactId}", artifactId);
+        }
+    }
+
+    // ===== Phase 6: Stack Trace Tab Methods =====
+
+    private void ToggleStackTraceExpand(Guid entryId)
+    {
+        if (_expandedStackTraces.Contains(entryId))
+            _expandedStackTraces.Remove(entryId);
+        else
+            _expandedStackTraces.Add(entryId);
+    }
+
+    private bool IsStackTraceExpanded(Guid entryId)
+    {
+        return _expandedStackTraces.Contains(entryId);
+    }
+
+    private void ToggleStackTraceDetails(Guid entryId)
+    {
+        if (_expandedStackTraceDetails.Contains(entryId))
+            _expandedStackTraceDetails.Remove(entryId);
+        else
+            _expandedStackTraceDetails.Add(entryId);
+    }
+
+    private bool IsStackTraceDetailsExpanded(Guid entryId)
+    {
+        return _expandedStackTraceDetails.Contains(entryId);
+    }
+
+    private async Task JumpToLogEntry(Guid logEntryId)
+    {
+        // Switch to logs tab
+        _activeTab = "logs";
+
+        // Find the log entry
+        var logEntry = _logEntries.FirstOrDefault(e => e.Id == logEntryId);
+        if (logEntry != null)
+        {
+            // Expand all parent steps in the hierarchy
+            ExpandParentSteps(logEntry.ParentId);
+        }
+
+        StateHasChanged();
+
+        // Wait for tab rendering and expansion animations to complete
+        await Task.Delay(200);
+
+        // Scroll to the log entry and highlight it
+        try
+        {
+            await JS.InvokeVoidAsync("window.scrollToElement", $"log-entry-{logEntryId}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to scroll to log entry {LogEntryId}", logEntryId);
+        }
+    }
+
+    /// <summary>
+    ///     Recursively expands all parent steps up to the root
+    /// </summary>
+    private void ExpandParentSteps(Guid? stepId)
+    {
+        if (!stepId.HasValue) return;
+
+        // Expand this step
+        if (!_expandedSteps.Contains(stepId.Value))
+        {
+            _expandedSteps.Add(stepId.Value);
+        }
+
+        // Find the parent of this step and recursively expand it
+        var parentStep = _logEntries.FirstOrDefault(e => e.Id == stepId.Value);
+        if (parentStep != null && parentStep.ParentId.HasValue)
+        {
+            ExpandParentSteps(parentStep.ParentId);
+        }
+    }
+
+    /// <summary>
+    ///     Switches to a different tab and clears any persistent highlights
+    /// </summary>
+    private async Task SwitchTabAsync(string tabName)
+    {
+        // Clear any persistent highlights when switching tabs
+        try
+        {
+            await JS.InvokeVoidAsync("window.clearHighlights");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to clear highlights when switching to tab {TabName}", tabName);
+        }
+
+        // Prevent switching to browser/commands tabs if no browser session exists
+        if ((tabName == "browser" || tabName == "commands") && !HasBrowserSession())
+        {
+            _activeTab = "logs";
+            return;
+        }
+
+        _activeTab = tabName;
+
+        // Preload artifact URLs when switching to artifacts tab
+        if (tabName == "artifacts")
+        {
+            _ = Task.Run(async () => await PreloadArtifactUrlsAsync());
+        }
+    }
+
+    /// <summary>
+    ///     Determines if the current test item has an associated browser session.
+    ///     Only Test and Scenario item types can have browser sessions.
+    /// </summary>
+    private bool HasBrowserSession()
+    {
+        if (_testItem == null) return false;
+
+        // Only Test and Scenario types can have browser sessions
+        if (_testItem.ItemType != "Test" && _testItem.ItemType != "Scenario")
+            return false;
+
+        // Check if browser was actually borrowed
+        return !string.IsNullOrEmpty(_testItem.BrowserId) ||
+               !string.IsNullOrEmpty(_testItem.WebSocketEndpoint);
+    }
+
+    /// <summary>
+    ///     Checks if a step contains any ERROR or FATAL logs among its children
+    /// </summary>
+    private bool StepContainsErrorLogs(Guid stepId)
+    {
+        return _logEntries.Any(e =>
+            !e.IsStepHeader &&
+            e.ParentId == stepId &&
+            (e.Level.ToLower() == "error" || e.Level.ToLower() == "fatal"));
+    }
+
+    /// <summary>
+    ///     Sorts log entries in hierarchical order: each parent is immediately followed by its children and their logs
+    /// </summary>
+    private List<LogEntryDto> SortLogEntriesHierarchically(List<LogEntryDto> entries)
+    {
+        var result = new List<LogEntryDto>();
+        var entriesById = entries.ToDictionary(e => e.Id);
+
+        // Helper function to recursively add a parent and all its descendants
+        void AddEntryAndDescendants(LogEntryDto entry)
+        {
+            // Add the current entry
+            result.Add(entry);
+
+            // If this is a step header, add its child logs first (non-step-header children)
+            var childLogs = entries
+                .Where(e => !e.IsStepHeader && e.ParentId == entry.Id)
+                .OrderBy(e => e.Timestamp)
+                .ToList();
+
+            foreach (var childLog in childLogs)
+            {
+                result.Add(childLog);
+            }
+
+            // Then add nested step headers (child steps) and their descendants recursively
+            var childSteps = entries
+                .Where(e => e.IsStepHeader && e.ParentId == entry.Id)
+                .OrderBy(e => e.Timestamp)
+                .ToList();
+
+            foreach (var childStep in childSteps)
+            {
+                AddEntryAndDescendants(childStep); // Recursive call
+            }
+        }
+
+        // Start with top-level entries (no parent or parent not in the list)
+        var topLevelEntries = entries
+            .Where(e => !e.ParentId.HasValue || !entriesById.ContainsKey(e.ParentId.Value))
+            .OrderBy(e => e.Timestamp)
+            .ToList();
+
+        foreach (var entry in topLevelEntries)
+        {
+            AddEntryAndDescendants(entry);
+        }
+
+        Logger.LogInformation("Sorted {Original} log entries into hierarchical order: {Sorted} entries",
+            entries.Count, result.Count);
+
+        return result;
+    }
+
+    // DTO for log entries
+    private class LogEntryDto
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid? ParentId { get; set; }
+        public bool IsStepHeader { get; set; }
+        public bool IsNested { get; set; }
+        public int NestLevel { get; set; }
+        public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+        public string Level { get; set; } = "INFO";
+        public string Source { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Status { get; set; } = "InProgress";
+        public long? DurationMs { get; set; }
+        public int AttachmentCount { get; set; }
+        public bool HasAttachment { get; set; }
+        public string AttachmentType { get; set; } = "";
+        public string AttachmentName { get; set; } = "";
+        public Guid? ArtifactId { get; set; }
+        public bool IsTruncated => Message.Length > 300;
+    }
+
+    // DTO for stack trace entries
+    private class StackTraceEntryDto
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid? LogEntryId { get; set; }
+        public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+        public string Context { get; set; } = "";
+        public string Level { get; set; } = "ERROR";
+        public string ExceptionClass { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string? HttpMethod { get; set; }
+        public string? Url { get; set; }
+        public int? StatusCode { get; set; }
+        public string? StatusMessage { get; set; } // HTTP status text (e.g., "Conflict", "Internal Server Error")
+        public List<string> ExceptionMessages { get; set; } = new(); // Exception messages and "Caused by:" chains
+        public List<string> StackTraceLines { get; set; } = new(); // Stack trace code lines
+    }
+
+    // Export methods
+    private async Task ExportLogsAsJson()
+    {
+        var json = JsonSerializer.Serialize(FilteredLogEntries, new JsonSerializerOptions { WriteIndented = true });
+        await JS.InvokeVoidAsync("downloadFile", "logs.json", "application/json", json);
+    }
+
+    private async Task ExportLogsAsCsv()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Timestamp,Level,Source,Message,Status,Duration");
+        foreach (var entry in FilteredLogEntries)
+        {
+            if (entry.IsStepHeader)
+            {
+                sb.AppendLine($"\"{entry.Timestamp:yyyy-MM-dd HH:mm:ss}\",STEP,{entry.Source},\"{entry.Name}\",{entry.Status},{entry.DurationMs}");
+            }
+            else
+            {
+                var escapedMessage = entry.Message.Replace("\"", "\"\"");
+                sb.AppendLine($"\"{entry.Timestamp:yyyy-MM-dd HH:mm:ss}\",{entry.Level},{entry.Source},\"{escapedMessage}\",,,");
+            }
+        }
+        await JS.InvokeVoidAsync("downloadFile", "logs.csv", "text/csv", sb.ToString());
+    }
+
+    // ==== Playwright Server Commands Tab ====
+    private List<CommandLogEventDto>? _commands;
+    private string _cmdKindFilter = string.Empty;
+    private string _cmdDirectionFilter = string.Empty;
+    private int _cmdPage = 1;
+    private readonly int _cmdPageSize = 50;
+
+    private int CmdTotal => FilteredCommands.Count;
+    private int CmdTotalPages => Math.Max(1, (int)Math.Ceiling(CmdTotal / (double)_cmdPageSize));
+    private int PageStart => CmdTotal == 0 ? 0 : (_cmdPage - 1) * _cmdPageSize + 1;
+    private int PageEnd => Math.Min(_cmdPage * _cmdPageSize, CmdTotal);
+
+    private List<CommandLogEventDto> PagedCommands
+    {
+        get
+        {
+            var list = FilteredCommands;
+            var skip = Math.Max(0, (_cmdPage - 1) * _cmdPageSize);
+            return list.Skip(skip).Take(_cmdPageSize).ToList();
+        }
+    }
+
+    private List<CommandLogEventDto> FilteredCommands
+    {
+        get
+        {
+            var commands = _commands ?? new List<CommandLogEventDto>();
+            return commands
+                .Where(c => string.IsNullOrWhiteSpace(_cmdKindFilter) ||
+                           c.Kind?.Contains(_cmdKindFilter, StringComparison.OrdinalIgnoreCase) == true)
+                .Where(c =>
+                {
+                    if (string.IsNullOrWhiteSpace(_cmdDirectionFilter)) return true;
+                    var dir = string.Empty;
+                    if (c.Props != null && c.Props.TryGetValue("direction", out var d) && d != null)
+                        dir = d;
+                    return dir.Contains(_cmdDirectionFilter, StringComparison.OrdinalIgnoreCase);
+                })
+                .OrderBy(c => c.TimestampUtc)
+                .ToList();
+        }
+    }
+
+    private int CommandCount => _commands?.Count ?? 0;
+
+    private Dictionary<string, int> KindCounts
+    {
+        get
+        {
+            var commands = _commands ?? new List<CommandLogEventDto>();
+            return commands
+                .GroupBy(c => string.IsNullOrWhiteSpace(c.Kind) ? "(none)" : c.Kind)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private string DurationText()
+    {
+        if (_testItem == null) return "-";
+        var start = _testItem.StartTime;
+        var end = _testItem.FinishTime ?? DateTimeOffset.UtcNow;
+        if (end < start) end = start;
+        var span = end - start;
+        if (span.TotalSeconds < 1) return "<1s";
+        if (span.TotalMinutes < 1) return $"{(int)span.TotalSeconds}s";
+        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+        return $"{(int)span.TotalHours}h {span.Minutes}m";
+    }
+
+    private async Task PrevCmdPage()
+    {
+        if (_cmdPage > 1)
+        {
+            _cmdPage--;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task NextCmdPage()
+    {
+        if (_cmdPage < CmdTotalPages)
+        {
+            _cmdPage++;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    private void ResetCmdPage()
+    {
+        _cmdPage = 1;
+    }
+
+    private void OnKindInput(ChangeEventArgs e)
+    {
+        _cmdKindFilter = e.Value?.ToString() ?? string.Empty;
+        ResetCmdPage();
+        StateHasChanged();
+    }
+
+    private void OnDirectionInput(ChangeEventArgs e)
+    {
+        _cmdDirectionFilter = e.Value?.ToString() ?? string.Empty;
+        ResetCmdPage();
+        StateHasChanged();
+    }
+
+    private void SetKindFilter(string kind)
+    {
+        _cmdKindFilter = kind ?? string.Empty;
+        ResetCmdPage();
+        StateHasChanged();
+    }
+
+    private void ClearKindFilter()
+    {
+        _cmdKindFilter = string.Empty;
+        ResetCmdPage();
+        StateHasChanged();
+    }
+
+    private async Task CopyCommand(CommandLogEventDto ev)
+    {
+        var props = ev.Props is null || ev.Props.Count == 0
+            ? string.Empty
+            : string.Join(" ", ev.Props.Select(kv => $"{kv.Key}={kv.Value}"));
+        var text = $"{ev.TimestampUtc:o} [{ev.Kind}] {ev.Message} {props}".Trim();
+        try
+        {
+            await JS.InvokeVoidAsync("copyText", text);
+            await JS.InvokeVoidAsync("alert", "Command copied to clipboard");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Copy command failed for test item {ItemId}", _testItem?.Id);
+        }
+    }
+
+    private MarkupString RenderPlaywrightProtocol(CommandLogEventDto ev)
+    {
+        var dir = "";
+        if (ev.Props != null && ev.Props.TryGetValue("direction", out var d)) dir = d ?? "";
+        var badgeClass = string.Equals(dir, "c2s", StringComparison.OrdinalIgnoreCase) ? "primary" : "info";
+        var dirBadge = string.IsNullOrWhiteSpace(dir) ? string.Empty : $"<span class=\"badge bg-{badgeClass} me-2\">{dir}</span>";
+
+        var text = ev.Message ?? string.Empty;
+        var pretty = text;
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            pretty = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch
+        {
+            /* leave as-is if not JSON */
+        }
+
+        // Encode content to avoid HTML injection; keep our own badges unencoded
+        var encoded = WebUtility.HtmlEncode(pretty);
+        var html = $"{dirBadge}<pre class=\"mb-0 small\" style=\"white-space:pre-wrap; overflow:auto; max-height:24rem;\">{encoded}</pre>";
+        return new MarkupString(html);
+    }
+
+    // ==== Artifacts Tab ====
+    private int _currentArtifactIndex;
+    private readonly Dictionary<Guid, string> _artifactUrlCache = new();
+
+    private void NavigateToPreviousArtifact()
+    {
+        if (_currentArtifactIndex > 0)
+        {
+            _currentArtifactIndex--;
+            StateHasChanged();
+        }
+    }
+
+    private void NavigateToNextArtifact()
+    {
+        if (_testItem?.Attachments != null && _currentArtifactIndex < _testItem.Attachments.Count - 1)
+        {
+            _currentArtifactIndex++;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectArtifact(int index)
+    {
+        if (_testItem?.Attachments != null && index >= 0 && index < _testItem.Attachments.Count)
+        {
+            _currentArtifactIndex = index;
+            StateHasChanged();
+        }
+    }
+
+    private void ScrollThumbnailsLeft()
+    {
+        NavigateToPreviousArtifact();
+    }
+
+    private void ScrollThumbnailsRight()
+    {
+        NavigateToNextArtifact();
+    }
+
+    private async Task PreloadArtifactUrlsAsync()
+    {
+        if (_testItem?.Attachments == null) return;
+
+        foreach (var artifact in _testItem.Attachments)
+        {
+            if (!_artifactUrlCache.ContainsKey(artifact.Id))
+            {
+                var url = await GetArtifactUrlAsync(artifact.Id);
+                _artifactUrlCache[artifact.Id] = url;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task<string> GetArtifactUrlAsync(Guid artifactId)
+    {
+        // Try SessionStorage cache first
+        var cachedUrl = await JS.InvokeAsync<string>("ArtifactCache.getCachedUrl", new object[] { artifactId.ToString() });
+        if (!string.IsNullOrEmpty(cachedUrl))
+        {
+            return cachedUrl;
+        }
+
+        // Cache miss - get pre-signed URL from backend
+        try
+        {
+            var http = HttpFactory.CreateClient(HttpClientNames.Hub);
+            var response = await http.GetAsync($"/api/artifacts/{artifactId}/url?expirySeconds=3600");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var urlResponse = await response.Content.ReadFromJsonAsync<ArtifactUrlResponse>();
+                if (urlResponse != null)
+                {
+                    // Cache the pre-signed URL
+                    await JS.InvokeAsync<object>("ArtifactCache.cacheUrl", new object[]
+                    {
+                        artifactId.ToString(),
+                        urlResponse.Url,
+                        urlResponse.ExpiresAt.ToString("o")
+                    });
+
+                    return urlResponse.Url;
+                }
+            }
+        }
+        catch
+        {
+            // Fallback to direct download endpoint
+        }
+
+        // Fallback: use dashboard proxy endpoint (relative URL)
+        return $"/api/artifacts/{artifactId}";
+    }
+
+    private string GetArtifactUrl(Guid artifactId)
+    {
+        // Return cached URL if available
+        if (_artifactUrlCache.TryGetValue(artifactId, out var url))
+        {
+            return url;
+        }
+
+        // Fallback: use dashboard proxy endpoint (relative URL)
+        // Will be replaced when preload completes
+        return $"/api/artifacts/{artifactId}";
+    }
+
+    private string GetInlineArtifactUrl(string artifactUrl)
+    {
+        // Add inline=true query parameter for browser inline display
+        if (artifactUrl.Contains("?"))
+        {
+            // URL already has query parameters (e.g., pre-signed MinIO URL)
+            return $"{artifactUrl}&inline=true";
+        }
+
+        // Direct endpoint URL - add first query parameter
+        return $"{artifactUrl}?inline=true";
+    }
+
+    private string GetDownloadArtifactUrl(string artifactUrl)
+    {
+        // Remove inline=true if present (forces attachment disposition)
+        return artifactUrl.Replace("?inline=true", "").Replace("&inline=true", "");
+    }
+
+    private async Task DownloadArtifact(string url, string filename)
+    {
+        // Simple direct download link (preserves auth, works for all file types)
+        await JS.InvokeVoidAsync("eval", $@"
+            const a = document.createElement('a');
+            a.href = '{url}';
+            a.download = '{filename}';
+            a.click();
+        ");
+    }
+
+    private async Task DownloadAllArtifactsAsZip()
+    {
+        if (_testItem == null) return;
+
+        // Use relative URL - dashboard proxies zip download to Hub
+        var url = $"/api/test-items/{_testItem.Id}/artifacts/download-zip";
+
+        await JS.InvokeVoidAsync("eval", $"window.location.href = '{url}';");
+    }
+
+    private record ArtifactUrlResponse(Guid ArtifactId, string Url, int ExpiresInSeconds, DateTime ExpiresAt, string FileName, string ContentType, long FileSize);
+
+    private static bool IsImage(string contentType)
+    {
+        return contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetFileExtension(string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName))
+            return "FILE";
+
+        var extension = Path.GetExtension(fileName);
+        return string.IsNullOrEmpty(extension) ? "FILE" : extension.TrimStart('.');
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+}

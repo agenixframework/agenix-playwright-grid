@@ -1,0 +1,75 @@
+@inject ToastService Toasts
+
+<div class="pg-toast-container">
+    @foreach (var t in _messages)
+    {
+        var css = t.Level switch
+        {
+            ToastLevel.Success => "pg-toast success",
+            ToastLevel.Error => "pg-toast error",
+            ToastLevel.Warning => "pg-toast warn",
+            _ => "pg-toast info"
+        };
+        <div class="@css" role="status" aria-live="polite">
+            <span class="icon" aria-hidden="true">
+                @if (t.Level == ToastLevel.Success)
+                {
+                    @:✔
+                }
+                else if (t.Level == ToastLevel.Error)
+                {
+                    @:⚠
+                }
+                else if (t.Level == ToastLevel.Warning)
+                {
+                    @:!
+                }
+                else
+                {
+                    @:"i"
+                }
+            </span>
+            <span class="msg">@t.Message</span>
+            <button class="close" @onclick="() => Close(t.Id)" aria-label="Dismiss">×</button>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ToastMessage> _messages = Array.Empty<ToastMessage>();
+
+    protected override void OnInitialized()
+    {
+        _messages = Toasts.Current;
+        Toasts.Changed += OnChanged;
+    }
+
+    private void OnChanged()
+    {
+        try
+        {
+            _messages = Toasts.Current;
+            InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
+    }
+
+    private void Close(Guid id)
+    {
+        Toasts.Dismiss(id);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            Toasts.Changed -= OnChanged;
+        }
+        catch
+        {
+        }
+    }
+
+}

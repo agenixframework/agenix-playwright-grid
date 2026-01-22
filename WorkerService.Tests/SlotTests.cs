@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -28,7 +28,7 @@ public class SlotTests
     public void Slot_Record_AssignsProperties()
     {
         using var proc = new Process();
-        var started = TestTime.FixedUtc(2025, 1, 1, 0, 0, 0);
+        var started = TestTime.FixedUtc();
         var slot = new Slot(proc, "Chromium", "ws://internal", "ws://public", started);
 
         Assert.That(slot.Proc, Is.SameAs(proc));

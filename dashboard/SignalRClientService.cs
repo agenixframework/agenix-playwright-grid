@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -29,10 +29,10 @@ internal sealed class SignalRClientService(
     : BackgroundService
 {
     private const string PoolStateMessageName = "PoolState";
+    private bool _connectionEventsWired;
 
     // Keep subscription so we can avoid duplicates and dispose on shutdown
     private IDisposable? _poolStateSubscription;
-    private bool _connectionEventsWired;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -80,7 +80,17 @@ internal sealed class SignalRClientService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to start SignalR connection; will retry.");
+                // Only log as warning after several attempts, otherwise debug level
+                if (attempt >= 3)
+                {
+                    logger.LogWarning(
+                        "Failed to start SignalR connection after {Attempt} attempts; will retry. Error: {Error}",
+                        attempt + 1, ex.Message);
+                }
+                else
+                {
+                    logger.LogDebug(ex, "Failed to start SignalR connection; will retry.");
+                }
             }
 
             if (stoppingToken.IsCancellationRequested)
@@ -91,7 +101,7 @@ internal sealed class SignalRClientService(
 
             // exponential backoff with jitter: 1s * 2^attempt (max 30s)
             var baseDelayMs = (int)Math.Min(30000, 1000 * Math.Pow(2, Math.Min(6, attempt)));
-            var jitterFactor = 0.8 + (rng.NextDouble() * 0.4); // 0.8 .. 1.2
+            var jitterFactor = 0.8 + rng.NextDouble() * 0.4; // 0.8 .. 1.2
             var delay = TimeSpan.FromMilliseconds(Math.Max(500, baseDelayMs * jitterFactor));
             attempt++;
 

@@ -1,0 +1,68 @@
+@using System.Timers
+@* Reusable accessible search box with clear and debounce. *@
+@namespace Dashboard.Shared
+
+<input id="@Id" class="form-control" placeholder="@Placeholder" value="@Value" @oninput="OnInput" @onkeydown="OnKeyDown"
+       aria-label="@AriaLabel"/>
+
+@if (!string.IsNullOrWhiteSpace(Value))
+{
+    <div class="form-text">
+        <button type="button" class="btn btn-link btn-sm p-0" @onclick="Clear" aria-label="Clear search">Clear</button>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnSearch { get; set; }
+
+    private Timer? _debounce;
+
+    protected override void OnInitialized()
+    {
+        _debounce = new Timer(250);
+        _debounce.AutoReset = false;
+        _debounce.Elapsed += async (_, _) => await InvokeAsync(() => ValueChanged.InvokeAsync(Value));
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        Value = e?.Value?.ToString() ?? string.Empty;
+        _debounce?.Stop();
+        _debounce?.Start();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e?.Key == "Enter")
+        {
+            await ValueChanged.InvokeAsync(Value);
+            await OnSearch.InvokeAsync();
+        }
+        else if (e?.Key == "Escape")
+        {
+            await Clear();
+        }
+    }
+
+    private async Task Clear()
+    {
+        Value = string.Empty;
+        await ValueChanged.InvokeAsync(Value);
+        await OnSearch.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_debounce is not null)
+        {
+            _debounce.Elapsed -= async (_, _) => await InvokeAsync(() => ValueChanged.InvokeAsync(Value));
+            _debounce.Dispose();
+        }
+    }
+
+}

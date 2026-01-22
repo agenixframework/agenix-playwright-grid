@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Playwright Grid Dashboard - HTML Prototypes</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 3rem 0;
+    }
+
+    .container {
+      max-width: 1000px;
+    }
+
+    .header-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      margin-bottom: 2rem;
+    }
+
+    .prototype-card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .prototype-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .prototype-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .badge-category {
+      font-size: 0.75rem;
+      padding: 0.35rem 0.65rem;
+    }
+
+    .section-title {
+      color: white;
+      font-weight: 600;
+      margin: 2rem 0 1rem 0;
+      padding: 0.5rem 1rem;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <div class="header-card text-center">
+    <h1 class="display-4 mb-3">
+      <i class="bi bi-grid-3x3-gap text-primary"></i>
+      Playwright Grid Dashboard
+    </h1>
+    <h2 class="h4 text-muted mb-4">HTML Prototypes</h2>
+    <p class="lead mb-0">
+      Static HTML prototypes for Blazor components and pages.
+      These demonstrate the UI structure, styling, and interactions before integration.
+    </p>
+  </div>
+
+  <!-- Components Section -->
+  <h3 class="section-title">
+    <i class="bi bi-puzzle me-2"></i>
+    Components
+  </h3>
+
+  <a class="prototype-card" href="test-item-tree.html">
+    <div class="d-flex align-items-start">
+      <div class="prototype-icon me-3">🌲</div>
+      <div class="flex-grow-1">
+        <h5 class="mb-2">
+          Test Item Tree
+          <span class="badge bg-primary badge-category ms-2">Component</span>
+        </h5>
+        <p class="text-muted mb-2">
+          Hierarchical test item display with ReportPortal-style structure.
+          Supports multiple item types (Test, Step, Suite, Scenario) with recursive nesting.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge bg-light text-dark">Recursive</span>
+          <span class="badge bg-light text-dark">Collapsible</span>
+          <span class="badge bg-light text-dark">Status Badges</span>
+          <span class="badge bg-light text-dark">Metadata</span>
+        </div>
+      </div>
+      <i class="bi bi-arrow-right-circle text-primary" style="font-size: 1.5rem;"></i>
+    </div>
+  </a>
+
+  <a class="prototype-card" href="test-item-card.html">
+    <div class="d-flex align-items-start">
+      <div class="prototype-icon me-3">🎴</div>
+      <div class="flex-grow-1">
+        <h5 class="mb-2">
+          Test Item Card
+          <span class="badge bg-primary badge-category ms-2">Component</span>
+        </h5>
+        <p class="text-muted mb-2">
+          Card-based layout for individual test item display.
+          Shows rich metadata, test statistics, browser info, and error details.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge bg-light text-dark">Grid Layout</span>
+          <span class="badge bg-light text-dark">Progress Bars</span>
+          <span class="badge bg-light text-dark">Responsive</span>
+          <span class="badge bg-light text-dark">Actions</span>
+        </div>
+      </div>
+      <i class="bi bi-arrow-right-circle text-primary" style="font-size: 1.5rem;"></i>
+    </div>
+  </a>
+
+  <a class="prototype-card" href="test-step-tree.html">
+    <div class="d-flex align-items-start">
+      <div class="prototype-icon me-3">📝</div>
+      <div class="flex-grow-1">
+        <h5 class="mb-2">
+          Test Step Tree
+          <span class="badge bg-primary badge-category ms-2">Component</span>
+        </h5>
+        <p class="text-muted mb-2">
+          Hierarchical test step display with execution details.
+          Shows step categories, durations, code snippets, and error information.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge bg-light text-dark">Nested Steps</span>
+          <span class="badge bg-light text-dark">Code Snippets</span>
+          <span class="badge bg-light text-dark">Timing Info</span>
+          <span class="badge bg-light text-dark">Expandable</span>
+        </div>
+      </div>
+      <i class="bi bi-arrow-right-circle text-primary" style="font-size: 1.5rem;"></i>
+    </div>
+  </a>
+
+  <!-- Pages Section -->
+  <h3 class="section-title">
+    <i class="bi bi-file-earmark-text me-2"></i>
+    Pages
+  </h3>
+
+  <a class="prototype-card" href="results-run.html">
+    <div class="d-flex align-items-start">
+      <div class="prototype-icon me-3">📊</div>
+      <div class="flex-grow-1">
+        <h5 class="mb-2">
+          Results Run (Test Details)
+          <span class="badge bg-success badge-category ms-2">Page</span>
+        </h5>
+        <p class="text-muted mb-2">
+          Detailed test execution page showing test overview, metadata, execution steps, and artifacts.
+          Supports view mode toggle between legacy and hierarchical views.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge bg-light text-dark">Test Overview</span>
+          <span class="badge bg-light text-dark">Execution Steps</span>
+          <span class="badge bg-light text-dark">Artifacts</span>
+          <span class="badge bg-light text-dark">Screenshots</span>
+        </div>
+      </div>
+      <i class="bi bi-arrow-right-circle text-success" style="font-size: 1.5rem;"></i>
+    </div>
+  </a>
+
+  <a class="prototype-card" href="test-case-details.html">
+    <div class="d-flex align-items-start">
+      <div class="prototype-icon me-3">🔍</div>
+      <div class="flex-grow-1">
+        <h5 class="mb-2">
+          Test Case Details
+          <span class="badge bg-success badge-category ms-2">Page</span>
+        </h5>
+        <p class="text-muted mb-2">
+          Comprehensive test case view with execution details, error information, stack traces,
+          console output, and test artifacts.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge bg-light text-dark">Error Details</span>
+          <span class="badge bg-light text-dark">Stack Traces</span>
+          <span class="badge bg-light text-dark">Console Output</span>
+          <span class="badge bg-light text-dark">Test Steps</span>
+        </div>
+      </div>
+      <i class="bi bi-arrow-right-circle text-success" style="font-size: 1.5rem;"></i>
+    </div>
+  </a>
+
+  <a class="prototype-card" href="test-item-details.html">
+    <div class="d-flex align-items-start">
+      <div class="prototype-icon me-3">📋</div>
+      <div class="flex-grow-1">
+        <h5 class="mb-2">
+          Test Item Details
+          <span class="badge bg-success badge-category ms-2">Page</span>
+        </h5>
+        <p class="text-muted mb-2">
+          Full-page ReportPortal-style test item view with overview, statistics, child items,
+          attachments, and hierarchy information.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="badge bg-light text-dark">Test Statistics</span>
+          <span class="badge bg-light text-dark">Child Items</span>
+          <span class="badge bg-light text-dark">Hierarchy</span>
+          <span class="badge bg-light text-dark">Attachments</span>
+        </div>
+      </div>
+      <i class="bi bi-arrow-right-circle text-success" style="font-size: 1.5rem;"></i>
+    </div>
+  </a>
+
+  <!-- Footer -->
+  <div class="header-card text-center mt-5">
+    <h5 class="mb-3">About These Prototypes</h5>
+    <p class="text-muted mb-0">
+      These HTML prototypes serve as design references for the Blazor implementation.
+      They use Bootstrap 5 and Bootstrap Icons for styling, with custom CSS for component-specific designs.
+    </p>
+    <hr class="my-3">
+    <p class="small text-muted mb-0">
+      <i class="bi bi-github me-1"></i>
+      Agenix Playwright Grid Dashboard |
+      Created: 2025-01-28 |
+      <a class="text-decoration-none" href="https://github.com/anthropics/claude-code" target="_blank">
+        Built with Claude Code
+      </a>
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Moq" Version="4.20.70"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ingestion\IngestionService.csproj"/>
+    <ProjectReference Include="..\Agenix.PlaywrightGrid.Domain\Agenix.PlaywrightGrid.Domain.csproj"/>
+    <ProjectReference Include="..\Agenix.PlaywrightGrid.Shared\Agenix.PlaywrightGrid.Shared.csproj"/>
+  </ItemGroup>
+</Project>

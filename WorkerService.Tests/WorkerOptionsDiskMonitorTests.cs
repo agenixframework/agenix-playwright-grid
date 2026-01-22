@@ -1,9 +1,9 @@
 #region License
-// Copyright (c) 2025 Agenix
+// Copyright (c) 2026 Agenix
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License") -
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -36,7 +36,10 @@ public class WorkerOptionsDiskMonitorTests
             ["INODE_USAGE_CRITICAL_PCT"] = Environment.GetEnvironmentVariable("INODE_USAGE_CRITICAL_PCT"),
             ["CLEANUP_TARGET_DIRS"] = Environment.GetEnvironmentVariable("CLEANUP_TARGET_DIRS"),
             ["CLEANUP_MIN_FILE_AGE_MINUTES"] = Environment.GetEnvironmentVariable("CLEANUP_MIN_FILE_AGE_MINUTES"),
-            ["CLEANUP_MAX_DELETE_MB_PER_SWEEP"] = Environment.GetEnvironmentVariable("CLEANUP_MAX_DELETE_MB_PER_SWEEP")
+            ["CLEANUP_MAX_DELETE_MB_PER_SWEEP"] =
+                Environment.GetEnvironmentVariable("CLEANUP_MAX_DELETE_MB_PER_SWEEP"),
+            ["AGENIX_WORKER_PUBLIC_WS_HOST"] = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST"),
+            ["AGENIX_WORKER_PUBLIC_WS_PORT"] = Environment.GetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT")
         };
         try
         {
@@ -49,6 +52,8 @@ public class WorkerOptionsDiskMonitorTests
             Environment.SetEnvironmentVariable("CLEANUP_TARGET_DIRS", "/tmp/a,/tmp/b");
             Environment.SetEnvironmentVariable("CLEANUP_MIN_FILE_AGE_MINUTES", "0"); // clamp to 1
             Environment.SetEnvironmentVariable("CLEANUP_MAX_DELETE_MB_PER_SWEEP", "999999"); // clamp to 102400
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_HOST", null);
+            Environment.SetEnvironmentVariable("AGENIX_WORKER_PUBLIC_WS_PORT", null);
 
             var opts = WorkerOptions.FromEnvironment();
 
